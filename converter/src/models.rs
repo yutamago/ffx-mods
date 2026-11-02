@@ -752,14 +752,23 @@ pub fn convert_bytes(
     let name = dir.rsplit('/').next().context("model path")?;
     let first = slots.values().next().context("no slot")?;
     let old_id = model.materials[first.material].base_color().context("no base texture")?.path.clone();
-    // same length as the HD id (patched in place): c001.dds -> p001.dds
-    let swap = |path: &str| -> Result<String> {
-        let (dir, file) = path.rsplit_once('/').context("texture path")?;
-        let lead = if file.starts_with('p') { 'q' } else { 'p' };
-        Ok(format!("{dir}/{lead}{}", &file[1..]))
-    };
-    let new_id = swap(&old_id)?;
-    let new_path = swap(&first.texture)?;
+    // In the model's own folder (c906 uses c106's texture), and as long as
+    // the HD id, which is patched in place: c001.dds -> p001.dds.
+    let rel = dir.strip_prefix("ffx_data/gamedata/ps3data/").context("model path")?;
+    // (n238 uses n238_hair.dds: p238_ps2x.dds)
+    let stem = old_id
+        .len()
+        .checked_sub(format!("PS3Data/{rel}/tex/.dds").len())
+        .filter(|&n| n >= name.len())
+        .with_context(|| format!("no texture name of the length of {old_id}"))?;
+    let file: String = format!("p{}_ps2", name.get(1..).context("name")?)
+        .chars()
+        .chain(std::iter::repeat('x'))
+        .take(stem)
+        .collect();
+    let new_id = format!("PS3Data/{rel}/tex/{file}.dds");
+    ensure!(new_id.len() == old_id.len(), "texture id {old_id} and {new_id} differ in length");
+    let new_path = format!("{dir}/tex/d3d11/{file}.dds.phyre");
     let mut edit = ffx_phyre::edit::ClusterEdit::parse(&bytes).context("edit")?;
     let mut materials = BTreeSet::new();
     for &s in &imported.segments {
