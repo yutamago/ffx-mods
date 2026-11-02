@@ -246,7 +246,7 @@ fn fx(iso: &str, vbf: &str, out: &Path, specs: &[String]) -> Result<()> {
             .collect::<Result<_>>()?
     };
     let mut gs = ps2fx::Gs::default();
-    let mut tsv = String::from("path\thd\tps2\tcorrelation\talpha_diff\torientation\n");
+    let mut tsv = String::from("path\thd\tps2\tcorrelation\talpha_diff\torientation\tconvention\n");
     let (mut done, mut hd_only, mut other, mut unused, mut failed, mut nopal) = (0, 0, 0, 0, 0, 0);
     let mut runtime = 0;
     for src in &sources {
@@ -303,9 +303,10 @@ fn fx(iso: &str, vbf: &str, out: &Path, specs: &[String]) -> Result<()> {
                 .diff
                 .map_or("-\t-".into(), |(c, a)| format!("{c:.3}\t{a:.1}"));
             let flipped = t.orientation;
+            let white = if t.white { "white" } else { "" };
             writeln!(
                 tsv,
-                "{}\t{}x{}\t{}x{}\t{diff}\t{flipped}",
+                "{}\t{}x{}\t{}x{}\t{diff}\t{flipped}\t{white}",
                 t.path, t.hd.0, t.hd.1, t.image.width, t.image.height
             )?;
         }
