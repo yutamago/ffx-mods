@@ -28,7 +28,7 @@ Numbers refer to the rows of [`differences.md`](differences.md). Status:
 
 | Item | Rows | Status |
 |---|---|---|
-| PS2 font | 13 | todo | texture + table swap for EFIGS, plan in `docs/font.md` (~2 days) |
+| PS2 font | 13 | done | EFIGS share one font: PS2 glyphs + widths, PS2 damage digits (`docs/font.md`); German umlauts seen in preview only |
 | Title logo, loading screen, splash videos | 16 | done | splash: OpeningScreen.swf skipped by hook; not seen on screen |
 | Battle dialogue subtitles | 17 | dropped | the PC already subtitles scripted battle dialogue; no case found where the PS2 did and the PC doesn't (user, 2026-11-02). `ui.battle_subtitles` only forces the save's subtitle bit on |
 | Battle menu input delay | 18 | done (static) | 8 delay branches removed (`docs/patches.md`); not timed in game |
@@ -38,8 +38,8 @@ Numbers refer to the rows of [`differences.md`](differences.md). Status:
 | Item | Rows | Status |
 |---|---|---|
 | PS2 FMVs into the PC video format | 15, 21 | done | 49 of 53 (4 with 3D overlays stay HD); ffmpeg downloaded on first use (`docs/movies.md`) |
-| 4:3 aspect ratio | 14 | todo | plan in `docs/screen.md` |
-| PS2 2D backgrounds | 7 | wip | 446 layers in 68 rooms with unchanged framing; 37 re-framed rooms need 4:3; animated parts not decoded; not seen in game |
+| 4:3 aspect ratio | 14 | done | final copy squeezed to 4:3 + PS2 camera aspect; movies 960x720; 105 rooms with PS2 paintings (`docs/screen.md`). Mouse on PS2-style menus unchecked |
+| PS2 2D backgrounds | 7 | done | 68 rooms at 16:9, 105 with 4:3; animated parts show one PS2 frame |
 
 ## Milestone 5: rendering
 
