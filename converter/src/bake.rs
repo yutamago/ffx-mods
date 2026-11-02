@@ -203,6 +203,7 @@ impl<'a> Index<'a> {
 
 /// An HD triangle to paint: its UVs (as stored, v up), the PS2 material
 /// and the PS2 UVs at its corners.
+#[derive(Clone)]
 pub struct Job {
     pub hd_uv: [[f32; 2]; 3],
     pub material: usize,

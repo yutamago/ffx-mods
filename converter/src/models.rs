@@ -29,6 +29,7 @@ use crate::glb::{Glb, Primitive};
 use crate::phyretex::{self, Rgba};
 use crate::ps2chr::Chr;
 use crate::ps2mesh::{self, Corner, Mesh};
+use crate::texanim::{self, Rect, TexAnim};
 
 /// Most bones one new segment's palette may name (the HD models go up to
 /// 75).
@@ -123,6 +124,8 @@ pub struct Converted {
     /// (archive path, file) to write under `efl/x`.
     pub files: Vec<(String, Vec<u8>)>,
     pub atlas: Rgba,
+    /// Texture animation frames (name tag, image), for previews.
+    pub anim: Vec<(String, Rgba)>,
     pub glb: Vec<u8>,
     pub report: String,
 }
@@ -253,6 +256,211 @@ pub fn convert(disc: &mut Disc, pc: &ffx_vbf::Archive, kind: &str, name: &str) -
     let original = pc.read(entry)?;
     convert_bytes(&chr_bytes, &original, &hd_path, |p| pc.find(p).map(|e| pc.read(e)).transpose().map_err(Into::into))
         .map(Some)
+}
+
+/// The face of a character with texture animation: its triangles go into
+/// the HD's animated material (`Mat_CTA_…`), which shows the PS2 patches
+/// over the rectangles the PS2 blits them into (`texanim.rs`).
+struct Face {
+    /// HD instance and segment of the animated material, and the material.
+    instance: usize,
+    segment: usize,
+    material: usize,
+    /// Texture-list entry of the animated image.
+    page: u8,
+    /// Where patches go, in that page's texels.
+    rects: Vec<Rect>,
+    /// `_MAYA` shaders: the one rectangle (T, S) every layer uses.
+    maya: Option<([f32; 2], [f32; 2])>,
+    /// Import id of the texture the HD material samples before any frame
+    /// is set (`…_anim_n0_p0.dds`), and its tag (`n0_p0`).
+    anim_id: String,
+    anim_tag: String,
+    /// The animation textures, by id.
+    textures: Vec<Rgba>,
+    records: Vec<texanim::Record>,
+}
+
+impl Face {
+    /// Whether triangle `t` samples a rectangle a patch goes into.
+    fn covers(&self, t: &ps2mesh::Tri) -> bool {
+        if t.texture != self.page {
+            return false;
+        }
+        let u = t.corners.map(|c| f64::from(c.uv[0]) / 16.0);
+        let v = t.corners.map(|c| f64::from(c.uv[1]) / 16.0);
+        let (u0, u1) = (u.iter().copied().fold(f64::MAX, f64::min), u.iter().copied().fold(f64::MIN, f64::max));
+        let (v0, v1) = (v.iter().copied().fold(f64::MAX, f64::min), v.iter().copied().fold(f64::MIN, f64::max));
+        self.rects.iter().any(|r| {
+            u0 < f64::from(r.x + r.w) && u1 > f64::from(r.x) && v0 < f64::from(r.y + r.h) && v1 > f64::from(r.y)
+        })
+    }
+}
+
+/// Plans the texture animation of a character (`None` when it has none,
+/// or the HD model has no animated material to show it with).
+#[allow(clippy::too_many_arguments)]
+fn plan_face(
+    mesh: &Mesh,
+    tex: &Chr,
+    chr_bytes: &[u8],
+    model: &ffx_phyre::Model,
+    original: &[u8],
+    target: &[usize],
+    pages: &[(u8, Rgba)],
+    page_of: &HashMap<u8, Placed>,
+    (aw, ah): (u32, u32),
+    report: &mut String,
+) -> Result<Option<Face>> {
+    let anim = match TexAnim::parse(chr_bytes) {
+        Ok(Some(a)) if !a.entries.is_empty() => a,
+        Ok(_) => return Ok(None),
+        Err(e) => {
+            *report += &format!("  texture animation left out: {e:#}\n");
+            return Ok(None);
+        }
+    };
+    // The HD's animated material: named Mat_CTA_G0G1…, on a segment of an
+    // instance the PS2 triangles go into.
+    let edit = ffx_phyre::edit::ClusterEdit::parse(original).context("HD model")?;
+    let names = texanim::material_names(&edit)?;
+    let mut best: Option<(usize, usize, usize, String)> = None;
+    for (inst, i) in model.instances.iter().enumerate() {
+        if !target.contains(&inst) {
+            continue;
+        }
+        for &(s, _) in &i.segments {
+            let Ok(pm) = edit.segment_material(u32::try_from(s)?) else { continue };
+            let Some(name) = names.get(pm as usize).filter(|n| n.contains("Mat_CTA")) else { continue };
+            let Some(m) = model.segments[s].material else { continue };
+            let size = model.segments[s].indices.len();
+            if best.as_ref().is_none_or(|b| size > model.segments[b.1].indices.len()) {
+                best = Some((inst, s, m, name.clone()));
+            }
+        }
+    }
+    let Some((instance, segment, material, name)) = best else {
+        *report += &format!("  texture animation: {} groups, but the HD model has no animated material; faces stay static\n", anim.entries.len());
+        return Ok(None);
+    };
+    let mat = &model.materials[material];
+    let maya_shader = mat.parameter("AnimTranslate_MAYA").is_some();
+    if !maya_shader && mat.parameter("AnimTranslate_GAME").is_none() {
+        *report += &format!("  texture animation: material {name} has neither _GAME nor _MAYA rectangles; faces stay static\n");
+        return Ok(None);
+    }
+    let anim_id = mat.texture("AnimSampler").map(|t| t.path.clone()).unwrap_or_default();
+    // `…_anim_n<k % 10>_p<k / 10>.dds`: texture k (`texanim::anim_tag`)
+    let initial = anim_id.rsplit_once("_anim_").and_then(|(_, t)| {
+        let t = t.split('.').next()?;
+        let (n, p) = t.strip_prefix('n')?.split_once("_p")?;
+        (n.len() == 1 && p.len() == 1).then_some((t.to_owned(), n.parse::<usize>().ok()? + 10 * p.parse::<usize>().ok()?))
+    });
+    let Some((anim_tag, initial)) = initial else {
+        *report += &format!("  texture animation: material {name} samples {anim_id:?}; faces stay static\n");
+        return Ok(None);
+    };
+    // Groups the material does not name are never drawn by the PC.
+    let named: BTreeSet<usize> = name
+        .split('G')
+        .skip(1)
+        .filter_map(|g| g.parse().ok())
+        .collect();
+    let image = anim.entries[0].image;
+    let entries: Vec<&texanim::Entry> =
+        anim.entries.iter().filter(|e| e.image == image && named.contains(&e.group)).collect();
+    if entries.len() < anim.entries.len() {
+        *report += &format!(
+            "  texture animation: {} of {} groups left out (other image or not in {name})\n",
+            anim.entries.len() - entries.len(),
+            anim.entries.len()
+        );
+    }
+    let rect_of = |e: &texanim::Entry| -> Option<Rect> {
+        e.states
+            .iter()
+            .map(|(s, _)| {
+                let (x, y, w, h) = e.rect(&anim.patches, *s);
+                Rect { x, y, w, h }
+            })
+            .reduce(Rect::union)
+    };
+    let rects: Vec<Rect> = entries.iter().filter_map(|e| rect_of(e)).collect();
+    // The page: the texture-list entry of that image whose triangles sample
+    // the rectangles most.
+    let hits = |t: u8| -> usize {
+        mesh.models
+            .iter()
+            .flat_map(|m| m.tris.iter())
+            .filter(|tr| tr.texture == t)
+            .flat_map(|tr| tr.corners.iter())
+            .filter(|c| {
+                let (u, v) = (u32::from(c.uv[0]) / 16, u32::from(c.uv[1]) / 16);
+                rects.iter().any(|r| (r.x..=r.x + r.w).contains(&u) && (r.y..=r.y + r.h).contains(&v))
+            })
+            .count()
+    };
+    let Some((page, _)) = pages
+        .iter()
+        .map(|p| p.0)
+        .filter(|&t| tex.materials.get(usize::from(t)).is_some_and(|m| m.image == image))
+        .map(|t| (t, hits(t)))
+        .filter(|x| x.1 > 0)
+        .max_by_key(|x| (x.1, std::cmp::Reverse(x.0)))
+    else {
+        *report += "  texture animation: no triangle samples the animated rectangles\n";
+        return Ok(None);
+    };
+    let base = &pages.iter().find(|p| p.0 == page).context("face page")?.1;
+    let pl = page_of[&page];
+    let clut = tex.cluts.get(tex.materials[usize::from(page)].clut).context("face clut")?;
+    ensure!(
+        rects.iter().all(|r| r.x + r.w <= base.width && r.y + r.h <= base.height),
+        "texture animation rectangle outside the {}x{} page",
+        base.width,
+        base.height
+    );
+    let union = rects.iter().copied().reduce(Rect::union).context("no rectangle")?;
+
+    // Textures by what they show: (patch, area, offset in it).
+    let mut keys: Vec<(usize, Rect, u32, u32)> = Vec::new();
+    let mut textures: Vec<Rgba> = Vec::new();
+    let mut records = Vec::new();
+    for e in &entries {
+        for (s, frames) in &e.states {
+            let (x, y, w, h) = e.rect(&anim.patches, *s);
+            let r = if maya_shader { union } else { Rect { x, y, w, h } };
+            let mut ids = Vec::new();
+            for f in frames {
+                let p = &anim.patches[f.patch];
+                let key = (f.patch, r, e.x - r.x, e.y - r.y);
+                let id = match keys.iter().position(|k| *k == key) {
+                    Some(i) => i,
+                    None => {
+                        keys.push(key);
+                        textures.push(texanim::compose(base, r, p, clut, key.2, key.3));
+                        keys.len() - 1
+                    }
+                };
+                ids.push(u32::try_from(id)?);
+            }
+            let (t, sc) = r.shader(pl.x, pl.y, aw, ah);
+            records.push(texanim::Record {
+                animation: format!("Animation{s}"),
+                group: format!("G{}", e.group),
+                interval: 0.5,
+                ids,
+                rect: [sc[0], sc[1], t[0], t[1]],
+            });
+        }
+    }
+    // The texture the material starts with must be listed.
+    while textures.len() <= initial {
+        textures.push(textures[0].clone());
+    }
+    ensure!(textures.len() <= 100, "{} animation textures (at most 100 have names)", textures.len());
+    let maya = maya_shader.then(|| union.shader(pl.x, pl.y, aw, ah));
+    Ok(Some(Face { instance, segment, material, page, rects, maya, anim_id, anim_tag, textures, records }))
 }
 
 #[allow(clippy::too_many_lines)]
@@ -497,6 +705,10 @@ pub fn convert_bytes(
     let page_of: HashMap<u8, Placed> = pages.iter().map(|p| p.0).zip(placed.iter().copied()).collect();
     report += &format!("  atlas {aw}x{ah}: textures {:?}\n", used_tex);
 
+    // Texture animation (eyes, mouths): the face triangles go into the HD's
+    // animated material (`texanim.rs`).
+    let face = plan_face(&mesh, &tex, chr_bytes, &model, original, &target, &pages, &page_of, (aw, ah), &mut report)?;
+
     // Winding: the PS2 strips against the HD convention.
     let hd_agree = winding_agreement(model.segments.iter().filter(|s| !s.normals.is_empty()).flat_map(|s| {
         s.indices.chunks_exact(3).map(move |t| {
@@ -568,7 +780,7 @@ pub fn convert_bytes(
     let mut prims: Vec<Primitive> = Vec::new();
     let mut prim_bones: Vec<BTreeSet<u16>> = Vec::new();
     let mut prim_keys: Vec<HashMap<(usize, u16, u16, [u16; 2], u8), u32>> = Vec::new();
-    let mut prim_slot: Vec<usize> = Vec::new();
+    let mut prim_slot: Vec<(usize, bool)> = Vec::new();
     // Order: by model, then texture, keeping the strip order.
     let mut order: Vec<(usize, usize)> = Vec::new();
     for (mi, m) in mesh.models.iter().enumerate() {
@@ -615,6 +827,19 @@ pub fn convert_bytes(
                 }
                 covering.extend(hit);
             }
+            if std::env::var_os("DM_DEBUG").is_some() {
+                let dist = |p: &[f64; 3], segs: &mut dyn Iterator<Item = usize>| {
+                    segs.flat_map(|s| model.segments[s].positions.iter())
+                        .map(|x| (0..3).map(|k| (f64::from(x[k]) - p[k]).powi(2)).sum::<f64>().sqrt())
+                        .fold(f64::MAX, f64::min)
+                };
+                let mut dc: Vec<f64> = pts.iter().map(|p| dist(p, &mut hd_cloth_segs.iter().copied())).collect();
+                let mut da: Vec<f64> = pts.iter().map(|p| dist(p, &mut (0..model.segments.len()))).collect();
+                dc.sort_by(f64::total_cmp);
+                da.sort_by(f64::total_cmp);
+                let set: BTreeSet<usize> = covering.iter().copied().collect();
+                eprintln!("model {mi} cloth piece: {} verts, covered {covered}, median distance to HD cloth {:.3}, to any HD segment {:.3}, segments {set:?}", pts.len(), dc[dc.len() / 2], da[da.len() / 2]);
+            }
             if !pts.is_empty() && covered * 10 >= pts.len() * 6 && !rigid[mi] {
                 cloth_vertices[mi].extend(c.vertices.iter().copied());
                 shown_hd_cloth.extend(covering);
@@ -640,8 +865,9 @@ pub fn convert_bytes(
             continue;
         }
         let bones: BTreeSet<u16> = vs.iter().flat_map(|v| v.bones.iter().filter(|b| b.1 > 0.0).map(|b| b.0)).collect();
-        let k = target[mi];
-        let slot = &slots[&k];
+        let on_face = face.as_ref().is_some_and(|f| f.instance == target[mi] && f.covers(t));
+        let k = (target[mi], on_face);
+        let slot = &slots[&k.0];
         let fits = |p: usize| {
             prim_slot[p] == k
                 && prim_bones[p].union(&bones).count() <= MAX_PALETTE
@@ -651,9 +877,13 @@ pub fn convert_bytes(
             Some(p) => p,
             None => {
                 let first = !prim_slot.contains(&k);
+                let (segment, material) = match (&face, on_face) {
+                    (Some(f), true) => (f.segment, f.material),
+                    _ => (slot.template, slot.material),
+                };
                 prims.push(Primitive {
-                    segment: first.then_some(slot.template),
-                    material: slot.material,
+                    segment: first.then_some(segment),
+                    material,
                     ..Primitive::default()
                 });
                 prim_bones.push(BTreeSet::new());
@@ -714,9 +944,10 @@ pub fn convert_bytes(
         prim_bones.iter().map(BTreeSet::len).collect::<Vec<_>>()
     );
 
+    let face_triangles: usize = prims.iter().zip(&prim_slot).filter(|(_, k)| k.1).map(|(p, _)| p.indices.len() / 3).sum();
     let mut meshes: BTreeMap<usize, Vec<Primitive>> = BTreeMap::new();
     for (p, k) in prims.into_iter().zip(&prim_slot) {
-        meshes.entry(*k).or_default().push(p);
+        meshes.entry(k.0).or_default().push(p);
     }
     let glb = Glb {
         joints: joints.iter().map(|b| format!("SkeletonNode_{b}")).collect(),
@@ -778,6 +1009,25 @@ pub fn convert_bytes(
     for &m in &materials {
         edit.set_texture(m, "TextureSampler", &new_id).context("set texture")?;
     }
+    let face = face.filter(|_| face_triangles > 0);
+    if let Some(f) = &face {
+        let m = edit.segment_material(u32::try_from(f.segment)?).context("face material")?;
+        if let Some((t, s)) = f.maya {
+            let mut set = 0;
+            for n in ["", "2", "3", "4", "5", "6"] {
+                set += u32::from(texanim::set_value(&mut edit, m, &format!("AnimTranslate_MAYA{n}"), &t)?);
+                set += u32::from(texanim::set_value(&mut edit, m, &format!("AnimScale_MAYA{n}"), &s)?);
+            }
+            ensure!(set >= 2, "the animated material has no AnimTranslate_MAYA to set");
+        }
+        report += &format!(
+            "  texture animation: {face_triangles} face triangles in segment {}, {} frames, {} records{}\n",
+            f.segment,
+            f.textures.len(),
+            f.records.len(),
+            if f.maya.is_some() { " (MAYA rectangle)" } else { "" }
+        );
+    }
     let bytes = edit.write().context("writing")?;
     let check = ffx_phyre::Model::parse(&bytes).context("re-reading")?;
     for &s in &imported.segments {
@@ -791,11 +1041,35 @@ pub fn convert_bytes(
     files.push((new_path, phyretex::argb8_as(&template_tex, &atlas, Some((&old_id, &new_id)))?));
     let list_path = format!("{dir}/{name}.ahwin32");
     let list = read(&list_path)?.with_context(|| format!("no {list_path}"))?;
-    let list = ffx_phyre::assets::add_files(&list, &[ffx_phyre::assets::texture_entry(&new_id)])?;
+    let atlas_entry = ffx_phyre::assets::texture_entry(&new_id);
+    let mut anim = Vec::new();
+    let list = match &face {
+        Some(f) => {
+            let ags_path = format!("{dir}/mdl/d3d11/textureanimationchar.ags.phyre");
+            let ags = read(&ags_path)?.with_context(|| format!("no {ags_path}"))?;
+            files.push((ags_path, texanim::write_ags(&ags, &f.records)?));
+            let template_id = &f.anim_id;
+            let template_path = texanim::archive_path(template_id);
+            let template = read(&template_path)?.with_context(|| format!("no {template_path}"))?;
+            let mut entries = Vec::new();
+            for (k, image) in f.textures.iter().enumerate() {
+                let tag = texanim::anim_tag(k);
+                let id = template_id.replace(&format!("_anim_{}.", f.anim_tag), &format!("_anim_{tag}."));
+                ensure!(id.len() == template_id.len(), "animation texture id {id}");
+                let rename = (id != *template_id).then_some((template_id.as_str(), id.as_str()));
+                files.push((texanim::archive_path(&id), phyretex::argb8_as(&template, image, rename)?));
+                entries.push(ffx_phyre::assets::texture_entry(&id));
+                anim.push((tag, image.clone()));
+            }
+            texanim::rewrite_list(&list, &entries, &[atlas_entry])?
+        }
+        None => ffx_phyre::assets::add_files(&list, &[atlas_entry])?,
+    };
     files.push((list_path, list));
     Ok(Converted {
         files,
         atlas,
+        anim,
         glb,
         report,
     })

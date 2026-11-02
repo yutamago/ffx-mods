@@ -14,6 +14,7 @@ mod ps2chr;
 mod ps2fx;
 mod ps2map;
 mod ps2mesh;
+mod texanim;
 mod uijob;
 
 use std::path::{Path, PathBuf};
@@ -22,7 +23,7 @@ use anyhow::{Context, Result, bail};
 
 fn usage() -> ! {
     eprintln!(
-        "FFX Demaster converter {}\nusage:\n{}\n  demaster chr <iso> <FFX_Data.vbf> <out dir> <kind/name>...\n      bake character textures (PNG previews + .dds.phyre)\n  demaster models <iso> <FFX_Data.vbf> <out dir> all|<kind/name>...\n      PS2 meshes into the remodelled characters (run after chr; docs/models.md)\n  demaster models-debug <chr file> <FFX_Data.vbf> <kind/name>\n      print a PS2 mesh against its HD model\n  demaster fx <iso> <FFX_Data.vbf> <out dir> all|<id>...\n      effect textures; id: 7, magic_0007, map/bika/bika00, btlmap/bika/bika00_a, chr/mon/m028\n  demaster maps <iso> <FFX_Data.vbf> <out dir> <map|area|kind>...|all\n      field and battle map textures (PNG previews, maps.tsv + .dds.phyre)\n  demaster ui <iso> <FFX_Data.vbf> <out dir>\n      menus, portraits, title, loading screen, button glyphs (PNG previews + .dds.phyre)",
+        "FFX Demaster converter {}\nusage:\n{}\n  demaster chr <iso> <FFX_Data.vbf> <out dir> <kind/name>...\n      bake character textures (PNG previews + .dds.phyre)\n  demaster models <iso> <FFX_Data.vbf> <out dir> all|<kind/name>...\n      PS2 meshes into the remodelled characters (run after chr; docs/models.md)\n  demaster models-debug <chr file> <FFX_Data.vbf> <kind/name>\n      print a PS2 mesh against its HD model\n  demaster texanim-debug <chr file> <FFX_Data.vbf> <kind/name>\n      print a PS2 texture animation against the HD .ags\n  demaster fx <iso> <FFX_Data.vbf> <out dir> all|<id>...\n      effect textures; id: 7, magic_0007, map/bika/bika00, btlmap/bika/bika00_a, chr/mon/m028\n  demaster maps <iso> <FFX_Data.vbf> <out dir> <map|area|kind>...|all\n      field and battle map textures (PNG previews, maps.tsv + .dds.phyre)\n  demaster ui <iso> <FFX_Data.vbf> <out dir>\n      menus, portraits, title, loading screen, button glyphs (PNG previews + .dds.phyre)",
         build::VERSION,
         build::USAGE
     );
@@ -146,6 +147,12 @@ fn main() -> Result<()> {
             let p = format!("ffx_data/gamedata/ps3data/chr/{kind}/{name}/mdl/d3d11/{name}.dae.phyre");
             let hd = pc.read(pc.find(&p).context("no HD model")?)?;
             models::debug(&chr, &hd)?;
+        }
+        "texanim-debug" => {
+            if a.len() < 5 {
+                usage();
+            }
+            texanim_debug(&a[2], &a[3], &a[4])?;
         }
         "fx" => {
             if a.len() < 6 {
@@ -412,8 +419,44 @@ fn models_cmd(iso: &str, vbf: &str, out: &Path, specs: &[String]) -> Result<()> 
         let png = ffx_phyre::png(c.atlas.width, c.atlas.height, &c.atlas.pixels);
         write(&out.join("preview").join(format!("{name}-atlas.png")), &png)?;
         write(&out.join("preview").join(format!("{name}.glb")), &c.glb)?;
+        for (tag, im) in &c.anim {
+            write(&out.join("preview").join(format!("{name}-anim-{tag}.png")), &ffx_phyre::png(im.width, im.height, &im.pixels))?;
+        }
         ok += 1;
     }
     eprintln!("{ok} converted, {failed} failed");
+    Ok(())
+}
+
+fn texanim_debug(chr: &str, vbf: &str, spec: &str) -> Result<()> {
+    let chr = std::fs::read(chr)?;
+    let pc = ffx_vbf::Archive::open(vbf)?;
+    let (kind, name) = spec.split_once('/').context("kind/name")?;
+    let Some(t) = texanim::TexAnim::parse(&chr)? else {
+        println!("no texture animation");
+        return Ok(());
+    };
+    for (k, p) in t.patches.iter().enumerate() {
+        println!("patch {k}: {}x{}", p.width, p.height);
+    }
+    for e in &t.entries {
+        println!("G{} mode {} at ({}, {}) image {}", e.group, e.mode, e.x, e.y, e.image);
+        for (s, frames) in &e.states {
+            let f: Vec<String> = frames.iter().map(|f| format!("{}:p{}", f.duration, f.patch)).collect();
+            println!("  Animation{s}: {}", f.join(" "));
+        }
+    }
+    let p = format!("ffx_data/gamedata/ps3data/chr/{kind}/{name}/mdl/d3d11/textureanimationchar.ags.phyre");
+    let Some(e) = pc.find(&p) else {
+        println!("no HD ags");
+        return Ok(());
+    };
+    let bytes = pc.read(e)?;
+    let recs = texanim::read_ags(&bytes)?;
+    for r in &recs {
+        println!("HD {} {}: ids {:?} rect {:?} interval {}", r.group, r.animation, r.ids, r.rect, r.interval);
+    }
+    let again = texanim::write_ags(&bytes, &recs)?;
+    println!("ags round trip: {} -> {} bytes, records equal", bytes.len(), again.len());
     Ok(())
 }
