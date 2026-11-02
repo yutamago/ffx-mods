@@ -62,14 +62,14 @@ every file.
 | `render.lighting` | 10 | PS2-like lighting | PhyreEngine lighting | mod | planned |
 | `render.shadows` | 11 | blob shadows only | shadow maps | mod | planned |
 | `render.aspect` | 14 | 4:3 with black bars and the PS2 projection | 16:9 | mod | planned |
-| `ui.menus` | 12 | the PS2-drawn menus, cursor and windows (the PC-only Flash screens stay HD) | HD | converter | planned |
-| `ui.portraits` | 12 | PS2 portraits and icons | HD | converter | planned |
-| `ui.font` | 13 | the PS2 font | the HD typeface | converter | planned |
-| `ui.title` | 16 | the plain title logo | "HD Remaster" logo | converter | planned |
-| `ui.loading` | 16 | no loading screen, no splash videos | HD | mod | planned |
+| `ui.menus` | 12 | the PS2 pieces of the menu and battle atlases (the menu layout and the Flash screens stay HD, `docs/ui.md`) | HD | converter (`ui.menus`) | battle HUD markers only; the PS2 window look needs code |
+| `ui.portraits` | 12 | PS2 portraits: menu faces, aeons, CTB list | HD | converter (`ui.menus`) | done (`docs/ui.md`) |
+| `ui.font` | 13 | the PS2 font | the HD typeface | converter | planned (`docs/font.md`) |
+| `ui.title` | 16 | the PS2 title screen and logos | "HD Remaster" logo | converter (`ui.title`) | done |
+| `ui.loading` | 16 | no loading screen, no splash videos | HD | converter (`ui.loading`: loading screen textures transparent) and mod (splash videos) | loading screen textures done; splash videos planned |
 | `ui.battle_subtitles` | 17 | subtitles for battle dialogue | none | mod | planned |
 | `ui.battle_menu_delay` | 18 | the battle menu reacts at once | 0.2-0.45 s delays | mod | planned |
-| `ui.button_glyphs` | 22 | PS2 button glyphs | Xbox-style | converter | planned |
+| `ui.button_glyphs` | 22 | PlayStation button glyphs | Xbox-style | converter (`ui.glyphs`) | pad prompts done (`docs/ui.md`) |
 | `audio.soundtrack` | 20 | the original soundtrack by default | arranged | mod | planned |
 | `movies` | 15, 21 | the 4:3 PS2 movies with their audio | the cropped HD movies | converter | planned |
 

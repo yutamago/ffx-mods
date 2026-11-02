@@ -11,6 +11,7 @@ mod phyretex;
 mod ps2chr;
 mod ps2fx;
 mod ps2map;
+mod uijob;
 
 use std::path::{Path, PathBuf};
 
@@ -18,7 +19,7 @@ use anyhow::{Context, Result, bail};
 
 fn usage() -> ! {
     eprintln!(
-        "FFX Demaster converter {}\nusage:\n{}\n  demaster chr <iso> <FFX_Data.vbf> <out dir> <kind/name>...\n      bake character textures (PNG previews + .dds.phyre)\n  demaster fx <iso> <FFX_Data.vbf> <out dir> all|<id>...\n      effect textures; id: 7, magic_0007, map/bika/bika00, btlmap/bika/bika00_a, chr/mon/m028\n  demaster maps <iso> <FFX_Data.vbf> <out dir> <map|area|kind>...|all\n      field and battle map textures (PNG previews, maps.tsv + .dds.phyre)",
+        "FFX Demaster converter {}\nusage:\n{}\n  demaster chr <iso> <FFX_Data.vbf> <out dir> <kind/name>...\n      bake character textures (PNG previews + .dds.phyre)\n  demaster fx <iso> <FFX_Data.vbf> <out dir> all|<id>...\n      effect textures; id: 7, magic_0007, map/bika/bika00, btlmap/bika/bika00_a, chr/mon/m028\n  demaster maps <iso> <FFX_Data.vbf> <out dir> <map|area|kind>...|all\n      field and battle map textures (PNG previews, maps.tsv + .dds.phyre)\n  demaster ui <iso> <FFX_Data.vbf> <out dir>\n      menus, portraits, title, loading screen, button glyphs (PNG previews + .dds.phyre)",
         build::VERSION,
         build::USAGE
     );
@@ -131,6 +132,32 @@ fn main() -> Result<()> {
                 usage();
             }
             fx(&a[2], &a[3], Path::new(&a[4]), &a[5..])?;
+        }
+        "ui" => {
+            if a.len() < 5 {
+                usage();
+            }
+            let pc = ffx_vbf::Archive::open(&a[3])?;
+            let mut d = disc::Disc::open(Path::new(&a[2]), &pc)?;
+            eprintln!("disc: region {}, {} files", d.region, d.file_count());
+            let out = PathBuf::from(&a[4]);
+            let (done, notes) = uijob::convert(&mut d, &pc, uijob::Parts::all())?;
+            for t in &done {
+                println!("{}", t.note);
+                write(&out.join("efl/x").join(&t.path), &t.file)?;
+                let name = t
+                    .path
+                    .trim_start_matches("ffx_data/gamedata/ps3data/")
+                    .replace('/', "_")
+                    .replace("_d3d11_", "_")
+                    .replace(".dds.phyre", ".png");
+                let p = &t.preview;
+                write(&out.join("preview").join(name), &ffx_phyre::png(p.width, p.height, &p.pixels))?;
+            }
+            for n in &notes {
+                println!("{n}");
+            }
+            println!("{} files, {} left HD", done.len(), notes.len());
         }
         _ => bail!("unknown command {cmd} (demaster help)"),
     }

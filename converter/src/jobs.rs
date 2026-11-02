@@ -19,6 +19,7 @@ pub fn registry() -> Vec<Box<dyn Job>> {
     jobs.extend(crate::chrjob::jobs());
     jobs.extend(crate::mapjob::jobs());
     jobs.extend(crate::fxjob::jobs());
+    jobs.extend(crate::uijob::jobs());
     // Further jobs (models) go here: jobs.extend(crate::<module>::jobs());
     jobs
 }
