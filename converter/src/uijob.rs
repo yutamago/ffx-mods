@@ -391,6 +391,46 @@ fn convert_atlas(
 /// The menu folders of the European languages (`ui.font`).
 const EUROPEAN: [&str; 5] = ["menu_us", "menu_de", "menu_fr", "menu_it", "menu_es"];
 
+/// Every menu folder of the PC (each has its own `meswin`).
+const ALL_MENU_FOLDERS: [&str; 8] =
+    ["menu", "menu_us", "menu_de", "menu_fr", "menu_it", "menu_es", "menu_kr", "menu_ch"];
+
+/// The PS2 message window's pieces in `meswin`, PS2 texels (x, y, w, h):
+/// FFX.exe's meswin layout table (`0x00c5b460`) entries 0-3, shapes
+/// 200-203 (`TOMkpWindowPlain`, `0x008f9a40`; the PS2's `0x001fa550`):
+/// the top-left corner with the brushed left edge, the top edge, the left
+/// edge and the body, white, tinted at run time by `col_mssgwind0/1`. The
+/// HD atlas is empty there (the remaster draws its own stone plate), so
+/// the PS2 pieces go in for the PS2 window draw the mod restores
+/// (`mod/MenuPatches.cs`, docs/ui.md). No text: every folder gets them.
+const WINDOW_PIECES: [u32; 4] = [160, 56, 24, 32];
+
+/// Pastes [`WINDOW_PIECES`] into a `meswin` (HD or converted) where the
+/// HD has nothing. False if the sizes do not fit or the HD drew there.
+fn paste_window_pieces(a: &Atlas, idx: &[u8], clp: &[u8], hd: &Rgba, img: &mut Rgba) -> bool {
+    if img.width % a.w != 0 || img.height % a.h != 0 || img.width / a.w != img.height / a.h {
+        return false;
+    }
+    let s = img.width / a.w;
+    let [x, y, w, h] = WINDOW_PIECES;
+    for yy in y * s..(y + h) * s {
+        for xx in x * s..(x + w) * s {
+            if hd.get(xx, yy)[3] > 8 {
+                return false;
+            }
+        }
+    }
+    let ps2 = indexed(a.w, a.h, idx, &clp_palette(clp, a.palette));
+    // texel for texel: the pieces' edges are cut to their layout boxes,
+    // so a bilinear blend with the empty texels around would thin them
+    for yy in 0..h * s {
+        for xx in 0..w * s {
+            img.put(x * s + xx, y * s + yy, ps2.get(x + xx / s, y + yy / s));
+        }
+    }
+    true
+}
+
 /// The damage digits 0-9 of the battle atlas, in PS2 texels: 5 x 2 cells
 /// of 12.25 x 16.25 from (111, 63.5) (`TOMakePktBtlDamageNumRGBA`,
 /// `0x008fb840`: HD pixels `444 + 49 col`, `254 + 65 row`, 49 x 65 each).
@@ -694,15 +734,24 @@ pub fn convert(disc: &mut Disc, pc: &ffx_vbf::Archive, parts: Parts) -> Result<(
                 }
             }
         }
+        if parts.menus {
+            for folder in ALL_MENU_FOLDERS {
+                if !todo.iter().any(|(_, f)| *f == folder) {
+                    todo.push((sources[0].0, folder));
+                }
+            }
+        }
         for (k, (dir, folder)) in todo.into_iter().enumerate() {
-            // a folder without a disc source of its own: digits only
+            // a folder without a disc source of its own: digits and the
+            // message window's pieces only
             let own = k < sources.len();
             let Some(clp) = disc.read(&format!("{dir}/menu.clp"))? else {
                 continue;
             };
             for a in ATLASES {
                 let digits = parts.font && a.name == "battle" && EUROPEAN.contains(&folder);
-                if !own && !digits {
+                let pieces = parts.menus && a.name == "meswin";
+                if !own && !digits && !pieces {
                     continue;
                 }
                 let path = format!("{PS3}/{folder}/d3d11/{}.dds.phyre", a.name);
@@ -719,6 +768,9 @@ pub fn convert(disc: &mut Disc, pc: &ffx_vbf::Archive, parts: Parts) -> Result<(
                 }
                 if digits && paste_digits(a, &idx, &clp, &mut img) {
                     what.push("PS2 damage digits".to_string());
+                }
+                if pieces && paste_window_pieces(a, &idx, &clp, &hd, &mut img) {
+                    what.push("PS2 message window pieces".to_string());
                 }
                 if what.is_empty() {
                     notes.push(format!("{path}: no PS2 element matches"));

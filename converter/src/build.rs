@@ -129,7 +129,7 @@ fn converter_settings(config: &Config) -> (BTreeMap<String, String>, String) {
     let all = config.settings();
     let s: BTreeMap<String, String> = SETTINGS
         .iter()
-        .filter(|(_, by)| *by == AppliedBy::Converter)
+        .filter(|(_, by)| *by != AppliedBy::Mod)
         .map(|(k, _)| (k.to_string(), all[*k].clone()))
         .collect();
     let text: String = s.iter().map(|(k, v)| format!("{k}={v}\n")).collect();

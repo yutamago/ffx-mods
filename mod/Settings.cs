@@ -2,8 +2,8 @@
 
 namespace Yuta.Demaster;
 
-/// <summary>Who applies a setting: files written by demaster.exe, or code in this mod.</summary>
-internal enum AppliedBy { Converter, Mod }
+/// <summary>Who applies a setting: files written by demaster.exe, code in this mod, or both.</summary>
+internal enum AppliedBy { Converter, Mod, Both }
 
 internal sealed record SettingInfo(string Key, AppliedBy By, string Default);
 
@@ -31,7 +31,7 @@ internal sealed class DemasterSettings {
         new("render.shadows",        AppliedBy.Mod,       "ps2"),
         new("render.aspect",         AppliedBy.Mod,       "ps2"),
         new("render.texture_filter", AppliedBy.Mod,       "game"),
-        new("ui.menus",              AppliedBy.Converter, "ps2"),
+        new("ui.menus",              AppliedBy.Both,      "ps2"),
         new("ui.portraits",          AppliedBy.Converter, "ps2"),
         new("ui.font",               AppliedBy.Converter, "ps2"),
         new("ui.title",              AppliedBy.Converter, "ps2"),
