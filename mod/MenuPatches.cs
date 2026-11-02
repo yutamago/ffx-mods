@@ -32,24 +32,62 @@ internal static class MenuPatches {
     /// </summary>
     private const uint WINDOW_DRAW_PLATE = 0x00907390;
 
-    private static WindowDraw? _draw_menu;
-    private static WindowDraw? _draw_plate;
-    private static int _logged;
+    /// <summary>TODrawMenuPlateXYWHType: cdecl(x, y, w, h, type), PS2 screen units (512 x 416).</summary>
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    public delegate void MenuPlate(float x, float y, float w, float h, int type);
+
+    /// <summary>TOMkpWindowPlain: cdecl(x, y, w, h) ints, PS2 screen units -> eax.</summary>
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    public delegate int WindowPlain(int x, int y, int w, int h);
 
     /// <summary>
-    /// The event message windows drawn as on the PS2: kind 0's draw runs kind 3's (the PS2
-    /// plain window). The pieces it draws from meswin are put in by the converter (ui.menus job);
-    /// without them the window is invisible, so the converter output must be current.
+    /// TODrawMenuPlateXYWHType: the remaster's plates. Type 10 is its message-box plate (the
+    /// stone body, a gradient, the HD frame): yiWindowDrawMenu, TOMenuDrawYesNoWindow (the
+    /// menus' yes/no questions), the battle-end legend notice. Where the PS2 code of these is
+    /// known it drew TOMkpWindowPlain: the yes/no window (SLPM_675.13 0x002362c0, centred,
+    /// +0x60 offset and +0x94 icon as on the PC) and kind 0 (above).
+    /// </summary>
+    private const uint MENU_PLATE = 0x008f5f70;
+    private const uint WINDOW_PLAIN = 0x008f9a40;
+    private const int MESSAGE_PLATE = 10;
+
+    private static WindowDraw? _draw_menu;
+    private static WindowDraw? _draw_plate;
+    private static MenuPlate? _plate_hook;
+    private static MenuPlate? _plate_next;
+    private static WindowPlain? _plain;
+    private static int _logged;
+
+    private static void first(int bit, FhLogger log, string message) {
+        if ((Interlocked.Or(ref _logged, bit) & bit) == 0) log.Info(message);
+    }
+
+    /// <summary>
+    /// The message windows drawn as on the PS2: kind 0's draw runs kind 3's (the PS2 plain
+    /// window), and the remaster's message-box plate (type 10) becomes the same plain window.
+    /// The pieces it draws from meswin are put in by the converter (ui.menus job); without them
+    /// the window is invisible, so the converter output must be current.
     /// </summary>
     public static bool menus(DemasterModule m, string value) {
         FhLogger log = m.log;
         _draw_menu = window => {
             // Fahrenheit hands out call pointers only after every module's init.
             _draw_plate ??= Native.fn<WindowDraw>(WINDOW_DRAW_PLATE).fnptr!;
-            if (Interlocked.Exchange(ref _logged, 1) == 0)
-                log.Info("ui.menus: message window drawn with the PS2 plate (yiWindowDrawPlate)");
+            first(1, log, "ui.menus: message window drawn with the PS2 plate (yiWindowDrawPlate)");
             return _draw_plate(window);
         };
-        return Native.fn<WindowDraw>(WINDOW_DRAW_MENU).hook(m, _draw_menu);
+        _plate_hook = (x, y, w, h, type) => {
+            if (type == MESSAGE_PLATE) {
+                _plain ??= Native.fn<WindowPlain>(WINDOW_PLAIN).fnptr!;
+                first(2, log, "ui.menus: message-box plate drawn as the PS2 plain window");
+                // the PS2 passes whole units (its windows are i16 rectangles); truncation, as ftol
+                _plain((int)x, (int)y, (int)w, (int)h);
+                return;
+            }
+            _plate_next ??= Native.fn<MenuPlate>(MENU_PLATE).chain_from(_plate_hook!).fnptr!;
+            _plate_next(x, y, w, h, type);
+        };
+        return Native.fn<WindowDraw>(WINDOW_DRAW_MENU).hook(m, _draw_menu)
+            && Native.fn<MenuPlate>(MENU_PLATE).hook(m, _plate_hook);
     }
 }
