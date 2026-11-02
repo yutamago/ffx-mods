@@ -1,0 +1,8 @@
+target/
+__pycache__/
+*.iso
+*.vbf
+*.phyre
+*.png
+*.dds
+out/
