@@ -145,6 +145,8 @@ pub struct Done {
     pub diff: Option<(f32, f32)>,
     /// How it was turned to match the HD texture (`ORIENTATIONS`).
     pub orientation: &'static str,
+    /// Written as white + alpha, as the HD texture is (`brightness_to_alpha`).
+    pub white: bool,
     /// The PS2 side-by-side preview (HD left, PS2 right).
     pub preview: Rgba,
 }
@@ -402,8 +404,25 @@ fn assign(scores: &[Vec<Fit>]) -> Vec<(usize, Option<usize>)> {
 /// An HD texture: the file and its pixels.
 fn load_hd(pc: &ffx_vbf::Archive, path: &str) -> Result<(Vec<u8>, Rgba)> {
     let e = pc.find(path).context("not in the archive")?;
-    let template = pc.read(e)?;
-    let hd = ffx_phyre::Texture::parse(template.clone())?;
+    let mut template = pc.read(e)?;
+    let hd = match ffx_phyre::Texture::parse(template.clone()) {
+        Ok(hd) => hd,
+        Err(err) => {
+            // `magic_0668` ships big-endian PS3 clusters. Their asset
+            // reference names the texture they are a copy of
+            // (`PS3Data/magic/magic_0611/tex/<name>.dds`); that texture's
+            // D3D11 file carries the same reference and serves as template.
+            let donor = asset_reference(&template)
+                .filter(|d| d != path)
+                .with_context(|| format!("{err:#}"))?;
+            let e = pc
+                .find(&donor)
+                .with_context(|| format!("{err:#}; its asset {donor} is missing"))?;
+            template = pc.read(e)?;
+            ffx_phyre::Texture::parse(template.clone())
+                .with_context(|| format!("{err:#}; its asset {donor} too"))?
+        }
+    };
     let rgba = Rgba {
         width: hd.width,
         height: hd.height,
@@ -412,9 +431,69 @@ fn load_hd(pc: &ffx_vbf::Archive, path: &str) -> Result<(Vec<u8>, Rgba)> {
     Ok((template, rgba))
 }
 
+/// The archive path of a texture cluster's asset reference
+/// (`PS3Data/magic/magic_0611/tex/13312_19_0_0_256_256.dds` ->
+/// `ffx_data/gamedata/ps3data/magic/magic_0611/tex/d3d11/13312_19_0_0_256_256.dds.phyre`).
+fn asset_reference(cluster: &[u8]) -> Option<String> {
+    let at = cluster.windows(8).position(|w| w == b"PS3Data/")?;
+    let end = at + cluster[at..].iter().position(|&c| c == 0)?;
+    let s = std::str::from_utf8(&cluster[at + 8..end]).ok()?;
+    let (dir, file) = s.rsplit_once('/')?;
+    file.ends_with(".dds")
+        .then(|| format!("{HD}/{}/d3d11/{file}.phyre", dir.to_ascii_lowercase()))
+}
+
+/// The share of an HD texture's alpha on (near) white pixels. Virtuos
+/// stored most glows, trails and rings as white with the brightness in
+/// alpha (`docs/effects.md`, "Alpha and brightness").
+fn white_share(hd: &Rgba) -> f32 {
+    let (mut white, mut all) = (0u64, 0u64);
+    for p in hd.pixels.chunks(4) {
+        let a = u64::from(p[3]);
+        all += a;
+        if p[0].min(p[1]).min(p[2]) >= WHITE_LEVEL {
+            white += a;
+        }
+    }
+    if all == 0 {
+        0.0
+    } else {
+        white as f32 / all as f32
+    }
+}
+const WHITE_LEVEL: u8 = 235;
+/// From this share of white an HD texture counts as white + alpha.
+const WHITE_SHARE: f32 = 0.9;
+
+/// The PC's effect shaders clamp the texture x vertex colour and the
+/// texture x vertex alpha to 1 each, where the PS2 let alpha reach 2.0
+/// (GS `0x80` = 1.0). Moving the brightness into alpha (colour scaled to
+/// its brightest channel, alpha times that channel) keeps colour x alpha
+/// and gives bright draws the PS2's headroom: they saturate to white as
+/// on the PS2 instead of keeping the vertex colour's hue.
+pub fn brightness_to_alpha(image: &Rgba) -> Rgba {
+    let mut out = image.clone();
+    for p in out.pixels.chunks_mut(4) {
+        let m = p[0].max(p[1]).max(p[2]);
+        if m == 0 {
+            p.copy_from_slice(&[255, 255, 255, 0]);
+            continue;
+        }
+        for c in &mut p[..3] {
+            *c = ((u32::from(*c) * 255 + u32::from(m) / 2) / u32::from(m)) as u8;
+        }
+        p[3] = ((u32::from(p[3]) * u32::from(m) + 127) / 255) as u8;
+    }
+    out
+}
+
 fn write_one(path: &str, template: &[u8], hd: &Rgba, image: &Rgba, f: &Fit) -> Result<Done> {
     let k = f.orientation();
-    let image = turn(image, k);
+    let mut image = turn(image, k);
+    let white = white_share(hd) >= WHITE_SHARE;
+    if white {
+        image = brightness_to_alpha(&image);
+    }
     let file = phyretex::argb8_from(template, &image)?;
     Ok(Done {
         path: path.to_string(),
@@ -422,6 +501,7 @@ fn write_one(path: &str, template: &[u8], hd: &Rgba, image: &Rgba, f: &Fit) -> R
         hd: (hd.width, hd.height),
         diff: f.diff(),
         orientation: ORIENTATIONS[k],
+        white,
         preview: side_by_side(hd, &image),
         image,
     })
@@ -586,5 +666,36 @@ impl crate::jobs::Job for FxJob {
             Ok(())
         })?;
         Ok(format!("{done} effect textures, {failed} failed"))
+    }
+}
+
+#[cfg(test)]
+mod white_tests {
+    use super::*;
+
+    /// Grey becomes white + alpha; a colour keeps its hue; colour x alpha
+    /// stays.
+    #[test]
+    fn brightness_moves_to_alpha() {
+        let img = Rgba {
+            width: 3,
+            height: 1,
+            pixels: vec![100, 100, 100, 255, 200, 100, 0, 128, 0, 0, 0, 255],
+        };
+        let out = brightness_to_alpha(&img);
+        assert_eq!(&out.pixels[0..4], &[255, 255, 255, 100]);
+        assert_eq!(&out.pixels[4..8], &[255, 128, 0, 100]);
+        assert_eq!(out.pixels[11], 0);
+    }
+
+    #[test]
+    fn asset_reference_path() {
+        let c = b"xxxxPS3Data/magic/magic_0611/tex/13312_19_0_0_256_256.dds\0yy";
+        assert_eq!(
+            asset_reference(c).as_deref(),
+            Some(
+                "ffx_data/gamedata/ps3data/magic/magic_0611/tex/d3d11/13312_19_0_0_256_256.dds.phyre"
+            )
+        );
     }
 }

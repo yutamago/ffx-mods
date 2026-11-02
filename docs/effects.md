@@ -169,12 +169,47 @@ Without this, the particles would draw upside down in the game.
 ### Alpha and brightness
 
 The colours of the PS2 CLUTs and the HD textures agree (the correlation is
-above 0.95 for 90% of the textures, above 0.8 for 97%), but many HD
-textures moved brightness into alpha: white colour with alpha = grey level
-times ~0.7 (`mag_0154`, `13984`). The PC blends effects as the PS2 did
-(additive `one, one` or `src alpha, one`, modulate `src alpha, inv src
-alpha`; ffx-rust `effects-draw.md`), so the PS2 CLUT alpha (`0x80` =
-opaque) gives the PS2 result. The converter keeps the PS2 alpha.
+above 0.95 for 90% of the textures, above 0.8 for 97%), and so does colour
+x alpha: a least-squares fit of the HD's colour x alpha against the PS2's
+gives a factor of 0.7 to 1.2 for almost every texture. What differs is how
+the product is split. Virtuos stored most glows, trails and rings (all
+greyscale on the PS2) as **white with the brightness in alpha** (alpha =
+0.7 to 1.0 x the PS2 grey level, `mag_0154` `13984`); the PS2 has the grey
+level in the colour and `0x80` (opaque) in alpha.
+
+The split matters because of how each machine clamps. The PC's effect
+shaders (`vfxadditiveshader.fx`, translated from its DXBC with ffx-rust's
+`ffx-dxbc`):
+
+```
+vertex: colour = vertex colour * 2            (PS2 0x80 = 1.0)
+pixel:  out.rgb = tex.rgb * colour.rgb        (clamped to 1: 8-bit target)
+        out.a   = tex.a * colour.a * fades    (clamped to 1)
+blend:  src alpha, one (or one, one; modulate src alpha, inv src alpha)
+```
+
+The GS computes `Cf = Ct x Cv` clamped to 1.0 (`0xff`), but
+`Af = At x Av` clamped to `0xff` = **2.0**, and the blend `Cs x As` can
+double a colour and burn it out to white. On the PC the alpha side stops at
+1.0. With the PS2's split (grey colour, alpha 1.0) a draw whose vertex
+alpha is above `0x80` loses that headroom and keeps the vertex colour's hue:
+Valefor's Energy Blast trails came out purple-blue, where the PS2 (and the
+HD) show them white. With the HD's split (colour at full brightness,
+brightness in alpha) the alpha side has room for the vertex alpha and the
+colour side saturates instead, as on the PS2: the PC result equals the
+PS2's whenever the vertex colour is at most `0x80` and colour x alpha stays
+below 1.
+
+So the converter writes the PS2 image in the HD's split wherever the HD
+texture uses it (at least 90% of its alpha on pixels with every channel
+at 235 or more): alpha = alpha x the brightest channel, colour = colour /
+the brightest channel. Colour x alpha (what an additive draw adds) stays
+the PS2's, the hue stays the PS2's, and greyscale textures become white +
+alpha like the HD ones. Textures the HD keeps with real colour and alpha
+(smoke, fire atlases, rock, text) may be drawn with normal alpha blending,
+where alpha is coverage; they keep the PS2 split. On the German disc this
+moves 2,832 of 7,357 textures (2,291 magic, 520 field-map, 21 battle-map,
+no monster ones).
 
 ### Languages
 
@@ -190,13 +225,13 @@ says "Luck" in English, where the HD `tex_de` texture is empty.)
 
 | | Textures |
 |---|---|
-| converted | 7,327 |
+| converted | 7,357 |
 | HD-only (Virtuos additions, above) | 49 |
 | `trxtex` frame copies | 1,098 |
 | text of another language (kept HD) | 212 |
-| failed | 30: all of `magic_0668`, whose HD files are big-endian PS3 clusters (`PHYR...GCM`) the writer can't use as a template |
+| failed | 0 |
 
-Correlation with the HD texture: 7,112 of 7,322 measured at 0.8 or more,
+Correlation with the HD texture: 7,142 of 7,352 measured at 0.8 or more,
 57 below 0.5. The low ones are textures Virtuos repainted or redrew (the
 German text in `tex_de`, `dome06`'s brick walls, `kami00`'s crystal,
 `mag_0105`'s ring, `djyt00`'s caustics) or shifted.
@@ -212,18 +247,20 @@ on a busy machine). `FFX_HOOK_LOG_OPENS=1` shows `mods:` for `magic_0076`,
 `0390`, `0595`, `0596`, `0604` and `btlmap/kami/kami00_a/fp`. Every effect
 draws, in the right orientation, with the PS2 textures.
 
-The runs reach the spell at different updates (the battle start differs
-by about 180 updates between runs), so random particles land elsewhere;
-compare looks, not pixels. Energy Blast at the same point of the effect
-shows the alpha difference above: the HD trails saturate to white, the PS2
-ones keep the effect's purple vertex colour. Worth checking against PS2
-footage.
+With the brightness moved into alpha (2026-11-02, max graphics settings,
+`fx2` shots), Energy Blast's trails burn out white as on the PS2 and in
+the HD version (they were purple-blue with the PS2's split), and Fire,
+Thunder, Cure, Valefor's entry and Ifrit's entry look like the HD effects
+at the same frame, at PS2 resolution. Runs can reach the spell at
+different updates (the battle start varies), in which case random
+particles land elsewhere.
 
 ## Open
 
-- `magic_0668`: needs a D3D11 template (another texture's cluster with the
-  path changed).
 - The PS2 images that no HD texture is named after (most are partial
   uploads whose `TEX0` image went in instead).
 - In-game check of field-map particles (only the Thunder Plains battle
-  map was looked at); Thunder and Cure only as previews.
+  map was looked at).
+- Textures the HD did not turn white keep the PS2 split; a draw of one of
+  them with vertex alpha above `0x80` still lacks the PS2's headroom (no
+  case seen).
