@@ -61,6 +61,7 @@ dependencies = [
  "ffx-phyre",
  "ffx-vbf",
  "serde",
+ "serde_json",
  "toml",
 ]
 

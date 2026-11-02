@@ -40,6 +40,26 @@ pub fn bake(
     kind: &str,
     name: &str,
 ) -> Result<Option<Report>> {
+    run(disc, pc, kind, name, true)
+}
+
+/// The HD pages [`bake`] would skip (remodelled meshes), without painting.
+pub fn skipped(
+    disc: &mut Disc,
+    pc: &ffx_vbf::Archive,
+    kind: &str,
+    name: &str,
+) -> Result<Option<Report>> {
+    run(disc, pc, kind, name, false)
+}
+
+fn run(
+    disc: &mut Disc,
+    pc: &ffx_vbf::Archive,
+    kind: &str,
+    name: &str,
+    paint: bool,
+) -> Result<Option<Report>> {
     let Some(chr) = disc.read(&format!("jppc/chr/{kind}/{name}/mdl/{name}.chr"))? else {
         return Ok(None);
     };
@@ -95,6 +115,13 @@ pub fn bake(
     for (path, (mut jobs, pending, total)) in by_page {
         // within a quarter of a PS2 texel of a 256 page
         let more = bake::second_pass(&index, &jobs, &pending, 1.0 / 1024.0);
+        if !paint {
+            let matched = (jobs.len() + more.len()) as f32 / total.max(1) as f32;
+            if matched < MIN_MATCHED {
+                report.skipped.push((path, matched));
+            }
+            continue;
+        }
         if std::env::var_os("DM_DEBUG").is_some() {
             let count = |js: &[bake::Job]| {
                 let mut c = std::collections::BTreeMap::new();
