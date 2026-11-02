@@ -44,6 +44,8 @@ pub struct DiscFile {
 
 pub struct Disc {
     iso: File,
+    /// The image, for readers independent of `iso`'s file position.
+    path: std::path::PathBuf,
     /// The region folder whose tables match the disc (`de`, `us`, ...).
     pub region: String,
     files: Vec<DiscFile>,
@@ -164,6 +166,7 @@ impl Disc {
         }
         Ok(Self {
             iso,
+            path: iso_path.to_path_buf(),
             region: region.to_string(),
             files,
             by_name,
@@ -177,6 +180,21 @@ impl Disc {
     /// Names (`jppc/...`) of every named file.
     pub fn names(&self) -> impl Iterator<Item = &str> {
         self.by_name.keys().map(String::as_str)
+    }
+
+    /// A reader over an uncompressed file (the movies: up to 590 MB) and
+    /// its size, without loading it.
+    pub fn open_stored(&mut self, name: &str) -> Result<Option<(impl Read + use<>, u64)>> {
+        let Some(&i) = self.by_name.get(&name.to_ascii_lowercase()) else {
+            return Ok(None);
+        };
+        let f = &self.files[i];
+        if f.unpacked.is_some() {
+            bail!("{name} is compressed");
+        }
+        let mut iso = File::open(&self.path)?;
+        iso.seek(SeekFrom::Start(f.sector * SECTOR))?;
+        Ok(Some((std::io::BufReader::with_capacity(1 << 20, iso.take(f.stored as u64)), f.stored as u64)))
     }
 
     /// Reads and unpacks a file by its PC name (`jppc/chr/pc/c001/mdl/c001.chr`).

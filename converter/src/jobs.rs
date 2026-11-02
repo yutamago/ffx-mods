@@ -18,9 +18,11 @@ pub fn registry() -> Vec<Box<dyn Job>> {
     let mut jobs: Vec<Box<dyn Job>> = Vec::new();
     jobs.extend(crate::chrjob::jobs());
     jobs.extend(crate::mapjob::jobs());
+    jobs.extend(crate::bgjob::jobs());
     jobs.extend(crate::fxjob::jobs());
     jobs.extend(crate::uijob::jobs());
     jobs.extend(crate::models::jobs());
+    jobs.extend(crate::moviejob::jobs());
     jobs
 }
 
@@ -55,6 +57,11 @@ pub struct Ctx<'a> {
     disc: Mutex<Option<Disc>>,
     /// Print per-item details.
     pub verbose: bool,
+    /// ffmpeg, from `--ffmpeg` or `source.ffmpeg`; `None`: look for it
+    /// (`moviejob::find_ffmpeg`).
+    pub ffmpeg: Option<PathBuf>,
+    /// Where a downloaded ffmpeg goes (`<mod>/tools`); `None`: no download.
+    pub tools_dir: Option<PathBuf>,
 }
 
 impl<'a> Ctx<'a> {
@@ -65,6 +72,8 @@ impl<'a> Ctx<'a> {
             iso: iso.to_path_buf(),
             disc: Mutex::new(None),
             verbose,
+            ffmpeg: None,
+            tools_dir: None,
         }
     }
 
@@ -140,6 +149,37 @@ impl Output {
             s.written += 1;
         }
         s.files.push((key, bytes.len() as u64));
+        Ok(true)
+    }
+
+    /// Where [`Output::put_file`] wants a file for `archive_path` written
+    /// first (next to its final place, so the move is a rename).
+    pub fn temp_path(&self, archive_path: &str) -> Result<PathBuf> {
+        let rel = archive_path.trim_start_matches('/').to_ascii_lowercase();
+        let path = self.efl.join(format!("{rel}.part"));
+        std::fs::create_dir_all(path.parent().context("no parent")?)?;
+        Ok(path)
+    }
+
+    /// Like [`Output::put`] for a large file already written at `temp`
+    /// (from [`Output::temp_path`]): moved into place.
+    pub fn put_file(&self, archive_path: &str, temp: &Path) -> Result<bool> {
+        let rel = archive_path.trim_start_matches('/').to_ascii_lowercase();
+        anyhow::ensure!(
+            !rel.split('/').any(|p| p == ".." || p.is_empty()),
+            "bad archive path {archive_path}"
+        );
+        let key = format!("efl/x/{rel}");
+        if !self.state.lock().expect("output lock").taken.insert(key.clone()) {
+            let _ = std::fs::remove_file(temp);
+            return Ok(false);
+        }
+        let path = self.efl.join(&rel);
+        let size = std::fs::metadata(temp).with_context(|| temp.display().to_string())?.len();
+        std::fs::rename(temp, &path).with_context(|| path.display().to_string())?;
+        let mut s = self.state.lock().expect("output lock");
+        s.written += 1;
+        s.files.push((key, size));
         Ok(true)
     }
 

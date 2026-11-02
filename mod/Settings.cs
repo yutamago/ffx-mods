@@ -45,7 +45,7 @@ internal sealed class DemasterSettings {
         new("fixes.lulu_fury",       AppliedBy.Mod,       "true"),
     ];
 
-    private static readonly HashSet<string> NON_SETTINGS = ["source.iso", "source.game", "build.mod_dir"];
+    private static readonly HashSet<string> NON_SETTINGS = ["source.iso", "source.game", "source.ffmpeg", "build.mod_dir"];
 
     public readonly string Path;
     public readonly bool   Found;

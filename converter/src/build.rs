@@ -31,7 +31,8 @@ pub const VERSION: &str = match option_env!("DEMASTER_VERSION") {
 const STEAM_DIR: &str = "FINAL FANTASY FFX&FFX-2 HD Remaster";
 
 pub const USAGE: &str = "  demaster build [--config <demaster.toml>] [--iso <disc.iso>] [--game <game folder>]
-                 [--mod-dir <mod folder>] [--only <job>,...] [--force] [--verbose]
+                 [--mod-dir <mod folder>] [--ffmpeg <ffmpeg program>]
+                 [--only <job>,...] [--force] [--verbose]
       builds the PS2 files the settings in demaster.toml ask for
       (without arguments, demaster.exe does this and waits for Enter)
   demaster jobs
@@ -42,6 +43,7 @@ pub struct Args {
     pub config: Option<PathBuf>,
     pub iso: Option<PathBuf>,
     pub game: Option<PathBuf>,
+    pub ffmpeg: Option<PathBuf>,
     pub mod_dir: Option<PathBuf>,
     /// Run only these jobs (the others keep their files).
     pub only: Vec<String>,
@@ -61,6 +63,7 @@ impl Args {
                 "--config" | "-c" => args.config = Some(value()?.into()),
                 "--iso" => args.iso = Some(value()?.into()),
                 "--game" => args.game = Some(value()?.into()),
+                "--ffmpeg" => args.ffmpeg = Some(value()?.into()),
                 "--mod-dir" => args.mod_dir = Some(value()?.into()),
                 "--only" => args.only.extend(value()?.split(',').map(|s| s.trim().to_string())),
                 "--force" | "-f" => args.force = true,
@@ -322,7 +325,9 @@ pub fn run(args: &Args) -> Result<bool> {
     let _ = std::fs::remove_file(&stamp_path);
 
     let pc = ffx_vbf::Archive::open(&vbf).with_context(|| format!("opening {}", vbf.display()))?;
-    let ctx = Ctx::new(config, &pc, &iso, args.verbose);
+    let mut ctx = Ctx::new(config, &pc, &iso, args.verbose);
+    ctx.ffmpeg = args.ffmpeg.clone().or_else(|| loaded.resolve(&config.source.ffmpeg));
+    ctx.tools_dir = Some(mod_dir.join("tools"));
     let settings = config.settings();
     let inputs = format!("{}|{}", identity(&iso), identity(&vbf));
 

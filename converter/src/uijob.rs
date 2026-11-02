@@ -54,7 +54,7 @@ impl Parts {
 
 // ---------------------------------------------------------------- helpers
 
-fn load_hd(pc: &ffx_vbf::Archive, path: &str) -> Result<Option<(Vec<u8>, Rgba)>> {
+pub fn load_hd(pc: &ffx_vbf::Archive, path: &str) -> Result<Option<(Vec<u8>, Rgba)>> {
     let Some(e) = pc.find(path) else {
         return Ok(None);
     };
@@ -69,7 +69,7 @@ fn load_hd(pc: &ffx_vbf::Archive, path: &str) -> Result<Option<(Vec<u8>, Rgba)>>
 }
 
 /// HD on the left, the result on the right, both at the larger size over grey.
-fn side_by_side(hd: &Rgba, out: &Rgba) -> Rgba {
+pub fn side_by_side(hd: &Rgba, out: &Rgba) -> Rgba {
     let (w, h) = (hd.width.max(out.width), hd.height.max(out.height));
     let s = (1024 / w.max(1)).clamp(1, 4);
     let (w, h) = (w * s, h * s);
