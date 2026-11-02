@@ -7,8 +7,9 @@
 //! (`shaders/d3d11/phyrechrlitshader.fx#<md5>.phyre` in the archive). The
 //! variant's switches (`PMaterialSwitch`) decide how it draws:
 //! `ALPHA_ENABLED` variants only have a `Transparent` pass (blended by
-//! texture alpha, far to near), `UATFOPQ` ones are opaque with the alpha
-//! test (`AlphaThreshold`), the others opaque without it.
+//! texture alpha, far to near), `UATFOPQ` ones draw in the `Opaque` pass
+//! with alpha to coverage on and the alpha test (`AlphaThreshold`), the
+//! others opaque without either.
 //!
 //! The PS2 drew every character polygon with alpha blending on (GIF tag
 //! `PRIM` ABE, context 2) and `ALPHA_2` = `0x44`, (Cs - Cd) × As + Cd, the
@@ -19,10 +20,15 @@
 //! fade out. The PC draws the same texels with the HD material's variant,
 //! which may be opaque (alpha ignored: solid quads) or alpha tested at 0.5
 //! (hard, ragged cut-outs). Materials that sample such texels are switched
-//! to their `ALPHA_ENABLED` twin: the variant with the same switches,
-//! `ALPHA_ENABLED` on and `UATFOPQ` off. Its `Transparent` pass blends
-//! (src alpha, inverse src alpha), writes depth and drops texels under
-//! `AlphaThreshold`, which is set low ([`THRESHOLD`]) so the fringes stay.
+//! to their `UATFOPQ` twin (the variant with the same switches and
+//! `UATFOPQ` on) with `AlphaThreshold` lowered to [`THRESHOLD`]: with MSAA,
+//! alpha to coverage turns texture alpha into partial coverage, so the
+//! fringes fade out in the opaque pass. The blended (`ALPHA_ENABLED`)
+//! twins were tried first: they look the same in cut scenes, but in battle
+//! the parts that lie over the character's own body (Lulu's necklace and
+//! collar, Kimahri's leg wraps, Tidus's wristband) were not drawn.
+//! HD materials that blend already keep blending on kept meshes, with the
+//! lower threshold.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::OnceLock;
@@ -256,22 +262,24 @@ impl Variants {
         self.by_path.get(&variant_path(id))
     }
 
-    /// The blended twin of variant `id` (an import id): the same effect and
-    /// switches with `ALPHA_ENABLED` on and `UATFOPQ` off. `id` itself when
-    /// it blends already.
-    pub fn blended(&self, id: &str) -> Option<(String, &Variant)> {
+    /// The see-through twin of variant `id` (an import id): the same effect
+    /// and switches with `UATFOPQ` on (alpha to coverage and the alpha test,
+    /// drawn in the opaque pass). `id` itself when it has `UATFOPQ`, or
+    /// `ALPHA_ENABLED` and `keep_blend`; else a blended variant becomes its
+    /// `UATFOPQ` twin too (`ALPHA_ENABLED` off).
+    pub fn blended(&self, id: &str, keep_blend: bool) -> Option<(String, &Variant)> {
         let v = self.of(id)?;
-        if v.on("ALPHA_ENABLED") {
+        if v.on("UATFOPQ") || (keep_blend && v.on("ALPHA_ENABLED")) {
             return Some((id.to_owned(), v));
         }
         let mut want = v.on_set();
-        want.remove("UATFOPQ");
-        want.insert("ALPHA_ENABLED");
+        want.remove("ALPHA_ENABLED");
+        want.insert("UATFOPQ");
         let (prefix, _) = id.rsplit_once('#')?;
         let dir_file = variant_path(prefix);
         let stem = dir_file.strip_suffix(".phyre")?;
-        // Not every switch set has a blended variant; the depth pre-pass
-        // switches do nothing for a blended draw and may go.
+        // Not every switch set has such a variant; the depth pre-pass
+        // switches may go.
         const OPTIONAL: [&str; 3] = ["ADDITIONAL_ZPREPASS", "BUILT_IN_ZPREPASS", "ZPP_IGNORE_Z"];
         (0..1u32 << OPTIONAL.len()).find_map(|drop| {
             let mut want = want.clone();
@@ -292,11 +300,11 @@ impl Variants {
     }
 }
 
-/// `AlphaThreshold` of the blended materials (at most; a lower one stays):
-/// texels under it are dropped and write no depth. Lower, the faint
-/// fringe texels write depth over what the same draw puts behind them
-/// later (pale outlines where a bird's wing feathers overlap); higher, the
-/// fringe gets cut like the HD's 0.3-0.5.
+/// `AlphaThreshold` of the see-through materials (at most; a lower one
+/// stays): texels under it are dropped. For blended materials, lower lets
+/// the faint fringe texels write depth over what the same draw puts behind
+/// them later (pale outlines where a bird's wing feathers overlap); higher
+/// cuts the fringe like the HD's 0.3-0.5.
 pub const THRESHOLD: f32 = 0.1;
 
 /// A texel counts as see-through below this alpha (PS2 alpha 0x78 of 0x80).
@@ -339,17 +347,16 @@ pub fn coverage(uv: [[f64; 2]; 3], alpha: impl Fn(i64, i64) -> u8) -> (usize, us
     if total == 0 { centroid() } else { (n, total) }
 }
 
-/// Whether a triangle samples a see-through texel ([`coverage`]).
-pub fn translucent(uv: [[f64; 2]; 3], alpha: impl Fn(i64, i64) -> u8) -> bool {
-    coverage(uv, alpha).0 > 0
-}
-
 /// Where parameter `name` of material `m` lives: (buffer list, buffer
 /// object, offset, size).
 fn parameter_at(edit: &ClusterEdit, m: u32, name: &str) -> Result<(usize, u32, usize, usize)> {
+    parameter_at_kind(edit, m, name, 0x40)
+}
+
+fn parameter_at_kind(edit: &ClusterEdit, m: u32, name: &str, kind: u8) -> Result<(usize, u32, usize, usize)> {
     let (_, _, loc) = buffer_layout(edit, m)?
         .into_iter()
-        .find(|p| p.0 == name && p.1 == 0x40)
+        .find(|p| p.0 == name && p.1 == kind)
         .with_context(|| format!("material {m} has no {name}"))?;
     let materials = list(edit, "PMaterial")?;
     let field = offset_of(edit, materials, "m_parameterBuffer")?;
@@ -395,9 +402,18 @@ pub enum Change {
 /// Makes material `m` blend by texture alpha like the PS2: its variant's
 /// blended twin, `AlphaThreshold` at most [`THRESHOLD`]. Returns what
 /// changed, or why it could not.
-pub fn blend(edit: &mut ClusterEdit, m: u32, variants: &Variants) -> Result<std::result::Result<Change, String>> {
+pub fn blend(
+    edit: &mut ClusterEdit,
+    m: u32,
+    variants: &Variants,
+    keep_blend: bool,
+) -> Result<std::result::Result<Change, String>> {
+    // for before/after comparisons in the game
+    if std::env::var_os("DM_NO_BLEND").is_some() {
+        return Ok(Err("DM_NO_BLEND set".into()));
+    }
     let id = material_variants(edit)?.get(m as usize).cloned().context("material")?;
-    let Some((twin, v)) = variants.blended(&id) else {
+    let Some((twin, v)) = variants.blended(&id, keep_blend) else {
         return Ok(Err(format!("no blended twin of {id}")));
     };
     let current = parameter(edit, m, "AlphaThreshold")?.first().copied().unwrap_or(0.0);
@@ -452,12 +468,12 @@ pub fn blend_segments(edit: &mut ClusterEdit, segs: &[u32], variants: &Variants)
                 m
             }
         };
-        match blend(edit, copy, variants)? {
+        match blend(edit, copy, variants, false)? {
             Ok(c) => {
                 let what = match c {
                     Change::Switched(id) => id.rsplit('#').next().unwrap_or(&id).to_owned(),
-                    Change::Lowered(t) => format!("blends already, threshold was {t}"),
-                    Change::None => "blends already".into(),
+                    Change::Lowered(t) => format!("see-through already, threshold was {t}"),
+                    Change::None => "see-through already".into(),
                 };
                 out += &format!("  see-through texels: segments {ss:?} blended (material {copy}, {what})\n");
             }
@@ -465,6 +481,16 @@ pub fn blend_segments(edit: &mut ClusterEdit, segs: &[u32], variants: &Variants)
         }
     }
     Ok(out)
+}
+
+/// The asset-list entries of every effect variant the cluster's materials
+/// use. The character's `.ahwin32` loads the variants (`Ch_LoadHdRenderData`
+/// reads its D3D11 file list), and a material whose variant was not loaded
+/// is not drawn: a blended twin the model did not use before must be added
+/// (`ffx_phyre::assets::add_files` skips the ones listed already).
+pub fn list_entries(edit: &ClusterEdit) -> Result<Vec<String>> {
+    let ids: BTreeSet<String> = material_variants(edit)?.into_iter().collect();
+    Ok(ids.iter().map(|id| ffx_phyre::assets::texture_entry(id)).collect())
 }
 
 /// What [`blend_in_place`] did.
@@ -486,15 +512,15 @@ pub fn blend_in_place(edit: &mut ClusterEdit, segs: &[u32], variants: &Variants)
     }
     let mut out = Blended { switched: 0, lowered: 0, text: String::new() };
     for m in materials {
-        match blend(edit, m, variants)? {
+        match blend(edit, m, variants, true)? {
             Ok(Change::None) => {}
             Ok(Change::Lowered(t)) => {
                 out.lowered += 1;
-                out.text += &format!("material {m} blends already, threshold {t} -> {THRESHOLD}; ");
+                out.text += &format!("material {m} see-through already, threshold {t} -> {THRESHOLD}; ");
             }
             Ok(Change::Switched(id)) => {
                 out.switched += 1;
-                out.text += &format!("material {m} blended ({}); ", id.rsplit('#').next().unwrap_or(&id));
+                out.text += &format!("material {m} see-through ({}); ", id.rsplit('#').next().unwrap_or(&id));
             }
             Err(why) => out.text += &format!("material {m} left: {why}; "),
         }
@@ -538,7 +564,7 @@ pub fn debug(hd: &[u8], read: impl Fn(&str) -> Result<Option<Vec<u8>>>) -> Resul
             seg.indices.len() / 3,
             mat.and_then(|x| x.base_color()).map_or("-", |t| t.path.rsplit('/').next().unwrap_or("")),
             id.rsplit('#').next().unwrap_or(id),
-            mat.and_then(|x| x.parameter("AlphaThreshold")),
+            (mat.and_then(|x| x.parameter("AlphaThreshold")), mat.and_then(|x| x.parameter("clipPlane")), mat.and_then(|x| x.parameter("MaterialColour"))),
             v.passes.first(),
             sw.join(" ")
         );

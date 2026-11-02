@@ -197,6 +197,23 @@ impl Disc {
         Ok(Some((std::io::BufReader::with_capacity(1 << 20, iso.take(f.stored as u64)), f.stored as u64)))
     }
 
+    /// Reads `len` bytes at `offset` of an uncompressed file (a bank of the
+    /// 117 MB `wave_wd.dat`).
+    pub fn read_range(&mut self, name: &str, offset: u64, len: usize) -> Result<Option<Vec<u8>>> {
+        let Some(&i) = self.by_name.get(&name.to_ascii_lowercase()) else {
+            return Ok(None);
+        };
+        let f = self.files[i].clone();
+        if f.unpacked.is_some() {
+            bail!("{name} is compressed");
+        }
+        let len = len.min((f.stored as u64).saturating_sub(offset) as usize);
+        let mut b = vec![0; len];
+        self.iso.seek(SeekFrom::Start(f.sector * SECTOR + offset))?;
+        self.iso.read_exact(&mut b)?;
+        Ok(Some(b))
+    }
+
     /// Reads and unpacks a file by its PC name (`jppc/chr/pc/c001/mdl/c001.chr`).
     pub fn read(&mut self, name: &str) -> Result<Option<Vec<u8>>> {
         let Some(&i) = self.by_name.get(&name.to_ascii_lowercase()) else {

@@ -22,7 +22,7 @@ Numbers refer to the rows of [`differences.md`](differences.md). Status:
 | Item | Rows | Status | Notes |
 |---|---|---|---|
 | PS2 mesh → Phyre model converter | 1-4 | done | 165 models: 32 party, 95 NPCs, 16 monsters, 2 aeons, 5 weapons, 15 objects (`docs/models.md`). Tidus face checked in game |
-| Texture animation (eyes, mouths) | 1 | todo | faces static; path traced in `docs/models.md`. Also: PS2 cloth without HD counterpart doesn't swing | `.chr` animation block; HD `*_anim_*` textures |
+| Texture animation (eyes, mouths), cloth | 1 | done | 110 converted characters blink/talk, kept-mesh frames repainted (~2,900); PS2 cloth pieces simulated (55 characters). Static: c107, c041, n295, n333, n343, m124, m070-m076 (`docs/models.md`) |
 
 ## Milestone 3: interface
 
@@ -37,19 +37,21 @@ Numbers refer to the rows of [`differences.md`](differences.md). Status:
 
 | Item | Rows | Status |
 |---|---|---|
-| PS2 FMVs into the PC video format | 15, 21 | todo |
-| 4:3 aspect ratio | 14 | todo |
-| PS2 2D backgrounds | 7 | todo |
+| PS2 FMVs into the PC video format | 15, 21 | done | 49 of 53 (4 with 3D overlays stay HD); ffmpeg downloaded on first use (`docs/movies.md`) |
+| 4:3 aspect ratio | 14 | todo | plan in `docs/screen.md` |
+| PS2 2D backgrounds | 7 | wip | 446 layers in 68 rooms with unchanged framing; 37 re-framed rooms need 4:3; animated parts not decoded; not seen in game |
 
 ## Milestone 5: rendering
 
 | Item | Rows | Status |
 |---|---|---|
-| Glow / blow-out off | 10 | todo |
-| PS2-like lighting | 10 | todo |
-| Shadows | 11 | todo |
-| Texture filtering option | 19 | todo |
+| Glow / blow-out off | 10 | done | blur-and-add pass skipped (`docs/render.md`) |
+| PS2-like lighting | 10 | wip | light levels/directions = PS2 script values at 1.0 (assumption); shader falloff still HD |
+| Shadows | 11 | done | blob shadows only; check maps that normally use shadow maps for artefacts |
+| Texture filtering option | 19 | todo | plan in `docs/render.md` |
 | Soundtrack default "Original" | 20 | done (static) | new-game save gets Original; menu switch still works |
+| PS2 music engine (offline render): our port of iopsound.irx + SPU2 model renders the 89 tracks into the `music_ps2` bank | 20 | done | 70/86 tracks correlate ≥0.9 with the PC Original recordings; 3 rock tracks copied (streamed layers); in-game capture matches our render (`docs/music.md`) |
+| PS2 music engine phase 2: live, driven by the game's iMusic* commands (runtime tempo/fades, streamed guitar/vocal layers) | 20 | todo | plan in `docs/music.md` |
 
 ## Fixes
 

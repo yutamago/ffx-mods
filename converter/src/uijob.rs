@@ -38,6 +38,11 @@ pub struct Parts {
     pub title: bool,
     pub loading: bool,
     pub glyphs: bool,
+    /// The PS2 damage digits in the battle atlas (`ui.font`, written with
+    /// the atlases by the `ui.menus` job).
+    pub font: bool,
+    /// The PS2 font's pages and widths (`fontjob.rs`).
+    pub font_files: bool,
 }
 
 impl Parts {
@@ -48,6 +53,8 @@ impl Parts {
             title: true,
             loading: true,
             glyphs: true,
+            font: true,
+            font_files: true,
         }
     }
 }
@@ -381,6 +388,31 @@ fn convert_atlas(
     Some((out, used, kept))
 }
 
+/// The menu folders of the European languages (`ui.font`).
+const EUROPEAN: [&str; 5] = ["menu_us", "menu_de", "menu_fr", "menu_it", "menu_es"];
+
+/// The damage digits 0-9 of the battle atlas, in PS2 texels: 5 x 2 cells
+/// of 12.25 x 16.25 from (111, 63.5) (`TOMakePktBtlDamageNumRGBA`,
+/// `0x008fb840`: HD pixels `444 + 49 col`, `254 + 65 row`, 49 x 65 each).
+/// The PS2 atlas has its serif digits at the same place; the element
+/// matching of [`convert_atlas`] keeps the HD ones (the shapes differ).
+/// Half a texel short of the cells at the bottom: the filter would pull in
+/// the dark edge of the bar below (row 96).
+const DIGITS: [f32; 4] = [111.0, 63.5, 61.25, 32.0];
+
+/// Pastes the PS2 damage digits into `img` (the HD battle atlas or its
+/// conversion), scaled up bilinear. False if the sizes do not fit.
+fn paste_digits(a: &Atlas, idx: &[u8], clp: &[u8], img: &mut Rgba) -> bool {
+    if img.width % a.w != 0 || img.height % a.h != 0 || img.width / a.w != img.height / a.h {
+        return false;
+    }
+    let s = (img.width / a.w) as f32;
+    let ps2 = indexed(a.w, a.h, idx, &clp_palette(clp, a.palette));
+    let d = DIGITS.map(|v| (v * s).round() as u32);
+    blit(&ps2, DIGITS, img, d);
+    true
+}
+
 // --------------------------------------------------------------- portraits
 
 /// A portrait sheet: a grid of faces. The PS2 and HD grids have the same
@@ -650,26 +682,54 @@ pub fn convert(disc: &mut Disc, pc: &ffx_vbf::Archive, parts: Parts) -> Result<(
     let mut notes = Vec::new();
     let region = disc.region.clone();
 
-    if parts.menus || parts.portraits {
-        for (dir, folder) in menu_sources(&region) {
+    if parts.menus || parts.portraits || parts.font {
+        // the battle atlas's damage digits (ui.font) go to every European
+        // folder, from the disc's own atlas where a folder has no source
+        let sources = menu_sources(&region);
+        let mut todo = sources.clone();
+        if parts.font {
+            for folder in EUROPEAN {
+                if !todo.iter().any(|(_, f)| *f == folder) {
+                    todo.push((sources[0].0, folder));
+                }
+            }
+        }
+        for (k, (dir, folder)) in todo.into_iter().enumerate() {
+            // a folder without a disc source of its own: digits only
+            let own = k < sources.len();
             let Some(clp) = disc.read(&format!("{dir}/menu.clp"))? else {
                 continue;
             };
             for a in ATLASES {
+                let digits = parts.font && a.name == "battle" && EUROPEAN.contains(&folder);
+                if !own && !digits {
+                    continue;
+                }
                 let path = format!("{PS3}/{folder}/d3d11/{}.dds.phyre", a.name);
                 let Some(idx) = disc.read(&format!("{dir}/{}.fmt", a.name))? else { continue };
                 let Some((template, hd)) = load_hd(pc, &path)? else { continue };
-                match convert_atlas(a, &idx, &clp, &hd, parts.menus, parts.portraits) {
-                    Some((img, used, kept)) if used > 0 => {
-                        done.push(Done {
-                            file: phyretex::argb8_from(&template, &img)?,
-                            preview: side_by_side(&hd, &img),
-                            note: format!("{path}: {used} PS2 elements, {kept} kept HD ({dir})"),
-                            path,
-                        });
-                    }
-                    _ => notes.push(format!("{path}: no PS2 element matches")),
+                let (mut img, used, kept) = if own && (parts.menus || parts.portraits) {
+                    convert_atlas(a, &idx, &clp, &hd, parts.menus, parts.portraits).unwrap_or((hd.clone(), 0, 0))
+                } else {
+                    (hd.clone(), 0, 0)
+                };
+                let mut what = vec![];
+                if used > 0 {
+                    what.push(format!("{used} PS2 elements, {kept} kept HD"));
                 }
+                if digits && paste_digits(a, &idx, &clp, &mut img) {
+                    what.push("PS2 damage digits".to_string());
+                }
+                if what.is_empty() {
+                    notes.push(format!("{path}: no PS2 element matches"));
+                    continue;
+                }
+                done.push(Done {
+                    file: phyretex::argb8_from(&template, &img)?,
+                    preview: side_by_side(&hd, &img),
+                    note: format!("{path}: {} ({dir})", what.join(", ")),
+                    path,
+                });
             }
         }
     }
@@ -802,6 +862,11 @@ pub fn convert(disc: &mut Disc, pc: &ffx_vbf::Archive, parts: Parts) -> Result<(
             }
         }
     }
+    if parts.font_files {
+        let (d, n) = crate::fontjob::convert(disc, pc)?;
+        done.extend(d);
+        notes.extend(n);
+    }
     Ok((done, notes))
 }
 
@@ -811,7 +876,7 @@ pub fn jobs() -> Vec<Box<dyn Job>> {
     vec![
         Box::new(UiJob {
             name: "ui.menus",
-            settings: &["ui.menus", "ui.portraits"],
+            settings: &["ui.menus", "ui.portraits", "ui.font"],
         }),
         Box::new(UiJob {
             name: "ui.title",
@@ -825,6 +890,10 @@ pub fn jobs() -> Vec<Box<dyn Job>> {
             name: "ui.glyphs",
             settings: &["ui.button_glyphs"],
         }),
+        Box::new(UiJob {
+            name: "ui.font",
+            settings: &["ui.font"],
+        }),
     ]
 }
 
@@ -837,9 +906,11 @@ impl UiJob {
     fn parts(&self, c: &Config) -> Parts {
         let ui = &c.ui;
         match self.name {
+            // ui.font: the damage digits of the battle atlas this job writes
             "ui.menus" => Parts {
                 menus: ui.menus.ps2(),
                 portraits: ui.portraits.ps2(),
+                font: ui.font.ps2(),
                 ..Parts::default()
             },
             "ui.title" => Parts {
@@ -848,6 +919,10 @@ impl UiJob {
             },
             "ui.loading" => Parts {
                 loading: ui.loading.ps2(),
+                ..Parts::default()
+            },
+            "ui.font" => Parts {
+                font_files: ui.font.ps2(),
                 ..Parts::default()
             },
             _ => Parts {
@@ -867,7 +942,7 @@ impl Job for UiJob {
     }
     fn enabled(&self, config: &Config) -> bool {
         let p = self.parts(config);
-        p.menus || p.portraits || p.title || p.loading || p.glyphs
+        p.menus || p.portraits || p.title || p.loading || p.glyphs || p.font || p.font_files
     }
     fn run(&self, ctx: &Ctx, out: &Output) -> Result<String> {
         let parts = self.parts(ctx.config);
@@ -882,6 +957,6 @@ impl Job for UiJob {
         for line in &notes {
             ctx.note(line);
         }
-        Ok(format!("{n} textures ({} left HD, see --verbose)", notes.len()))
+        Ok(format!("{n} files ({} left HD, see --verbose)", notes.len()))
     }
 }

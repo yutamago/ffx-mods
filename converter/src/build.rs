@@ -328,6 +328,7 @@ pub fn run(args: &Args) -> Result<bool> {
     let mut ctx = Ctx::new(config, &pc, &iso, args.verbose);
     ctx.ffmpeg = args.ffmpeg.clone().or_else(|| loaded.resolve(&config.source.ffmpeg));
     ctx.tools_dir = Some(mod_dir.join("tools"));
+    ctx.vbf = Some(vbf.clone());
     let settings = config.settings();
     let inputs = format!("{}|{}", identity(&iso), identity(&vbf));
 

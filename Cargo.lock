@@ -113,6 +113,7 @@ dependencies = [
  "anyhow",
  "ffx-phyre",
  "ffx-vbf",
+ "flate2",
  "rayon",
  "serde",
  "serde_ignored",

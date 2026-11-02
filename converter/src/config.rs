@@ -116,6 +116,9 @@ pub struct Ui {
 #[serde(default)]
 pub struct Audio {
     pub soundtrack: Look,
+    /// `"ps2"`: the original soundtrack rendered from the PS2 disc's
+    /// sequences by our PS2 sound driver, instead of the PC's recordings.
+    pub music_engine: Look,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -194,6 +197,7 @@ pub const SETTINGS: &[(&str, AppliedBy)] = {
         ("ui.battle_menu_delay", Mod),
         ("ui.button_glyphs", Converter),
         ("audio.soundtrack", Mod),
+        ("audio.music_engine", Converter),
         ("movies", Converter),
         ("fixes.npc_mouths", Mod),
         ("fixes.farplane_video", Mod),

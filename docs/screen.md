@@ -1,8 +1,10 @@
 # Screen shape: 4:3 (row 14) and the 2D backgrounds (row 7)
 
-Status: `render.aspect` is **not implemented** (research and plan below);
-`maps.backgrounds` converts the rooms whose HD paintings keep the PS2
-framing (job `maps.backgrounds`, `converter/src/bgjob.rs`).
+Status: `render.aspect = "ps2"` **done** (below, "How 4:3 is made"): the
+picture is the PS2's 4:3, pillarboxed, with the PS2 projection, the
+PS2-placed 2D where the PS2 had it, the Flash screens squeezed into the
+4:3, 4:3 movies, and the PS2 paintings in every fixed-camera room
+(`maps.backgrounds`, `converter/src/bgjob.rs`). What is left: "Not done".
 
 ## The 3D projection: the PS2 view is the middle 4:3 of the HD's
 
@@ -32,8 +34,12 @@ i.e. the PS2 view stretched by 4/3. The 2D-background rooms set their
 camera from the background (`rcbgSceneLoad` area, `0x00920000` region:
 the same formula from the room's `+0xb0`/`+0xb4`), and their layers are
 full-screen 512 x 448 quads, so a room whose HD painting keeps the PS2
-framing shows the PS2 view stretched to 16:9. Which flag the 2D rooms run
-with was not checked.
+framing shows the PS2 view stretched to 16:9. The 2D rooms run with the
+flag at 0 (`PhyreScene_fieldMapLoad` sets 1 only for 3D maps, minus a
+list of 30 level hashes at `0x00b421c8`, and the unload clears it;
+measured in hiku00: flag 0, camera aspect 4/3, `a` = 4/3 from
+`rcbgSceneSetMatrix`, whose `+0xb4 = +0xb0 x 1.1666666` always gives
+512/448 x 7/6 = 4/3).
 
 ## Why it is not just the crop
 
@@ -45,45 +51,122 @@ whole width by the remaster (the remaps in ffx-rust `render.md`, "UI
 coordinates", go the other way: 1920/1280 to 512); the Flash screens
 (Iggy) have their own 16:9 layouts.
 
-## Plan for `render.aspect = "ps2"`
+## How 4:3 is made (`render.aspect = "ps2"`)
 
-1. **Viewport.** `Phyre_PFramework_PApplication_setViewportKeepingAspect`
-   (`0x0062cba0`) already fits the application's views to the aspect at
-   `PApplication +0x10` (pillarbox when the window is wider) and is called
-   from `PApplication_resize` (`0x0062c260`). Set `+0x10` to 4/3 and force
-   a resize at start-up; check that the game's own render targets and the
-   post-process copy to the back buffer use that viewport (they may use
-   the full target size instead: then hook `PRendererD3D11_setViewport`
-   `0x0058c790` for the final pass).
-2. **Camera.** With a 4:3 viewport the 3D-scene aspect must drop from
-   `a * 4/3` to `a`: hook `PhyreScene_setCameraAspectRatio` and pass
-   `a * 0.75` when `g_PhyreScene3D` is set (not a patch of the double
-   16/9 at `0x00b43d68`: it is shared). `PhyreScene_RenderABmap` sets 16/9
-   for the area map itself (`[0x00b41cf0]`) and needs the same.
-3. **UI.** Every 2D draw (sprites, the PS2-drawn menus, fonts, the Iggy
-   Flash screens) goes through the same viewport and so is squeezed 3/4
-   horizontally: right for PS2-placed elements (they were stretched
-   4/3 by the remaster), wrong for the HD-designed Flash screens. Either
-   draw the Flash layer with the full viewport (find where Iggy renders,
-   `iggy_w32.dll` calls from FFX.exe) or accept squeezed Flash menus.
-   Mouse input (the remaps) must use the same mapping.
-4. **Movies.** The FMV quad (`PhyFMVPlayerManager_Render`, `video.fx`)
-   must keep the full screen: the converted movies already carry their
-   bars (`docs/movies.md`). With the viewport pillarboxed, encode the PS2
-   movies at 4:3 (960 x 720) instead.
-5. **Movies with a 3D scene** (mst, far, ggm, sns): with 1-2 done the
-   scene's projection is the PS2's, so their PS2 versions could be
-   converted too.
-6. **2D rooms.** With the viewport at 4:3 the stretched rooms show at
-   their PS2 shape; the re-framed rooms (below) can take their PS2
-   paintings then.
+The game draws its frame into 16:9 targets: `PhyreScene_setResolutionScale`
+(`0x00652910`) makes the scene's size (`+0x10dd0`/`+0x10dd4`) the largest
+16:9 inside the window, and the last copy of the frame into the back
+buffer (`PostProcessManager_copyBuffer` with the back buffer as target)
+goes through `PostProcessManager_setNon16By9Viewport` (`0x00698750`),
+which fits it to the f32 at `0x00c34154` (16/9; that function is its only
+reader) with bars, and gives the Iggy menus the same rectangle
+(`IggyMenuManager_setViewportRect_00a26bd0`). That is the HD's own
+handling of 4:3 and 21:9 monitors.
 
-Testing: the C# mod needs a real Fahrenheit run for this (the ffx-rust
-harness replaces parts of the render path, `render.md` "Replaced by
-ffx-render"); screenshots of the game window only.
+The mod keeps the 16:9 targets and draws the frame **anamorphic**:
+everything in it is 4/3 too wide, and the last copy squeezes it into the
+middle 4:3 of the window. Three changes (`mod/RenderPatches.cs`,
+`aspect`):
 
-Effort: 1 and 2 are small hooks; 3 is the bulk and needs research into
-how the 2D layers and Iggy are drawn.
+1. **Output aspect.** `0x00c34154` = 4/3. The copy pillarboxes the frame
+   to 4:3 (on a 16:9 window: 1440 x 1080 in the middle of 1920 x 1080; on
+   the user's 3440 x 1440: 1920 x 1440 at x 759). The copy samples
+   linearly, so the squeeze is a filtered 4:3 downscale, no dropped
+   columns (`zoom-text` check in the harness).
+2. **3D camera.** Hook on `PhyreScene_setCameraAspectRatio`
+   (`0x0066cbe0`, thiscall(scene; a)): with `g_PhyreScene3D` set it passes
+   `a * 3/4`, so the main and minimap cameras store `a` (the PS2's 4/3)
+   instead of `a * 4/3` (16/9). On the 16:9 target that is the PS2 frustum
+   stretched by 4/3, which the squeeze undoes. 2D scenes (flag 0) already
+   store `a`: they were the stretched ones in the HD and come out right
+   without a change.
+3. **Sphere grid.** `PhyreScene_RenderABmap` sets its camera to
+   `[0x00b41cf0]` (16/9; the same constant gives the UI camera its 16/9,
+   so it is not changed): the `fld` at `0x00652a7a` is pointed at a 4/3 of
+   the mod's. Not looked at in the game.
+
+What follows from the squeeze, with no further change:
+
+- **PS2-placed 2D** (the Tk path: message windows, the battle HUD and
+  windows, the main menu, the minimap, `graphicDrawUIElement` /
+  `graphicFontDraw` in PS2 units x 3.75 / 2.596) lands exactly where the
+  PS2 had it: the HD spread the 512-wide PS2 screen over 1920, the squeeze
+  takes it back to 4:3. The HD typeface and the HD-made pieces of the
+  battle HUD are squeezed with it (text 3/4 as wide as in the HD; the PS2
+  font, `ui.font`, is planned). The minimap is the PS2's square at the
+  PS2's place.
+- **3D-attached 2D** (damage numbers, cursors) is placed by the PS2 code
+  or through the camera, both consistent with the PS2 frustum now.
+- **Fixed-camera rooms**: their layers are full-screen quads, so a
+  painting fills the 4:3 at its PS2 shape and the camera (`a` = 4/3) is
+  the PS2's. The re-framed rooms need their PS2 paintings, which
+  `maps.backgrounds` writes when `render.aspect` is `"ps2"` (below).
+- **Movies** are drawn over the whole target, so a 960 x 720 movie fills
+  the 4:3: the `movies` job encodes 960 x 720 without bars when
+  `render.aspect` is `"ps2"`, and cuts the HD movies that have the 3D
+  scene on top (mst, far, ggm, sns) to their middle 4:3, where the 3D
+  scene now is (`docs/movies.md`).
+- **Flash screens (Iggy)**: the Esc menu, its settings pages, save/load
+  get the game's own 4:3 rectangle and are drawn squeezed into it.
+  Chosen over full width: the game then stays one 4:3 picture, the Esc
+  menu's dimmed background (the frozen frame) matches it, and Iggy's
+  mouse mapping uses the rectangle the game gives it. Text is 3/4 as wide,
+  still clear at 1080p.
+
+The alternative, a real 4:3 target (hooking `setResolutionScale` to make
+the scene 1440 x 1080), was tried in the harness first: the minimap's
+viewport (`PhyreScene_getMinimapViewportSize` etc., computed from the
+target width as if it were 16:9) shrinks to 3/4 and every other
+width-based placement would need its own fix. The anamorphic frame keeps
+every HD placement as it is and costs a filtered horizontal downscale.
+
+## Not done
+
+- **HD movies with `movies = "hd"`** (or the 4 movies the job does not
+  convert when it fails): a 1280 x 720 movie fills the target and is
+  squeezed to 4:3. Use `movies = "ps2"` with `render.aspect = "ps2"`.
+- **Mouse** on the PS2-placed menus (`GuiTouch_*` pointer zones): not
+  checked; their rectangles may still assume the full window.
+- **Animated parts of re-framed rooms** get the one PS2 picture in every
+  frame (their animation stops); the animated parts of the other rooms
+  stay HD (they line up).
+- **Other cameras** the game sets to 16/9 once (`PhyreScene_initScene`:
+  scene `+0x394`, `+0x238`) and anything drawn with them would be
+  squeezed; none seen.
+- **Framebuffer effects** that read `graphicGetScreenRatio` (16/9: the
+  model distortion `KeDttMdl_MkGifPk`, `updateVFXRenderData_FakeEnvModel`)
+  still work on the 16:9 target, so they should be right; not looked at.
+- **Not seen in the game**: the sphere grid, the 3D-scene movies, a
+  window that is not 16:9 or 21:9, a split-screen camera (`+0x10d8c`).
+
+## Checked
+
+- **Fahrenheit** (`C:\_workspaces\fh-demaster-test`, 3440 x 1440
+  full screen, 2026-11-02): the hooks install (`render.aspect = ps2`, no
+  warning, the sphere grid patch's bytes matched), the camera hook runs in
+  2D and 3D scenes (log: `camera aspect 1,3333334 in a 2D scene` / `3D
+  scene`); window captures (by window handle, PrintWindow) of the boot,
+  the opening's campfire scene with its credits and the title: the
+  picture is exactly 1920 x 1440 (4:3) at x 759..2678, black bars, the 3D
+  in PS2 proportions.
+- **ffx-rust harness** (1280 x 720), which can't run the hooks:
+  `tools/replays/aspect-besaid.txt` and `aspect-djose.txt` do the same
+  with memory writes (output aspect, and the PS2 screen scale `fx`
+  `0x01137010` x 4/3 so that `Cam_Apply` hands in `a * 3/4`: the camera
+  then stores 4/3, read back). The 4:3 3D is exactly the middle 960 of the
+  HD shot; the HUD and minimap are at the PS2 places. Also checked with
+  writes: the title, the New Game choice window, the main menu, the Esc
+  menu and its System setting page (Iggy, squeezed), the airship room
+  hiku00 (devsave 68, a re-framed room, 2D scene) with the converted PS2
+  paintings (characters stand on the painted floor, no gaps), and IWK
+  (Wakka's movie, ffx-rust's `movie-fmv` steps) encoded 960 x 720,
+  filling the 4:3.
+
+Pictures (HD left, 4:3 right; never in git):
+`~/ffx-work/demaster/research/aspect/` `besaid.png`, `djose.png`,
+`dialogue.png`, `menu.png`, `escmenu.png`, `title.png`,
+`room-hiku00.png`, `fmv-iwk-43.png`, `fahrenheit-opening-3440x1440.png`,
+`fahrenheit-title-3440x1440.png`.
 
 ## 2D backgrounds (`maps.backgrounds`)
 
@@ -99,16 +182,26 @@ The job pairs the HD parts sorted by (layer, part) with the PS2 transfers
 in file order (sizes within 8 pixels: the PS2 pads them) and writes each
 PS2 picture at its PS2 size into the HD texture (ARGB8). It keeps HD:
 
-- rooms whose full-screen pictures correlate under 0.85 with the HD ones:
-  the HD **re-framed** 37 rooms for 16:9 (bika01: the HD shows more at
-  the sides, the PS2 picture is a zoomed crop of it; also hiku00/05/17,
-  luca06, kami01, bltz02, ...). A PS2 painting there would not line up with
-  the 3D scene; they need 4:3 (plan step 6);
+- with `render.aspect = "hd"` only: rooms whose full-screen pictures
+  correlate under 0.85 with the HD ones: the HD **re-framed** 37 rooms
+  for 16:9 (bika01, the world map: the HD shows more at the sides, the
+  PS2 picture is a zoomed crop of it; also hiku00/05/17, luca06, kami01,
+  bltz02, ...). A PS2 painting there would not line up with the HD's 16:9
+  scene. With `render.aspect = "ps2"` they get every part in PS2 (no
+  correlation check, animated parts with the PS2 picture in every frame):
+  3D and painting are then both the PS2's. Some of them (hiku00 and the
+  other airship rooms, correlation 0.00) differ mostly by a black
+  rectangle in a PS2 part that another layer covers: hiku00 in the
+  harness looks whole;
 - parts with several frames (233: texture animation such as the turning
   wheel in azit00; the PS2 holds one picture per part, its animation data
-  was not decoded);
-- parts that correlate under 0.5 with the HD (91), and 4 rooms whose part
-  counts differ.
+  was not decoded), except in re-framed rooms under 4:3;
+- parts that correlate under 0.5 with the HD (91; not in re-framed rooms
+  under 4:3), and 4 rooms whose part counts differ.
+
+With `render.aspect = "ps2"` (the default) the job writes 4109 layer
+files (animated frames counted one by one) in 105 rooms.
+`demaster backgrounds` converts as for 4:3 unless `DEMASTER_ASPECT=hd`.
 
 Result: 446 layers in 68 rooms: azit00, azit05, azit06, bjyt05, bsil00, bsvr04, bsvr06, bsvr09, bsyt03, bsyt04, bvyt01, bvyt02, bvyt03, bvyt04, bvyt06, djyt02, djyt04, djyt05, dome05, genk04, genk05, genk06, genk11, genk12, genk13, guad02, guad03, hiku02, ikai00, kami02, kami08, klyt02, klyt06, klyt07, lchb09, lchb10, lchb11, lchb12, luca04, luca08, maca01, mcfr05, mcfr06, mcfr07, mcfr08, mcfr09, mcfr11, mcyt03, mcyt04, mihn03, mmmc00, ptkl08, ptkl14, ptkl17, ptkl18, slik03, slik07, slik08, swin03, swin08, swin09, zkrn03, znkd00, znkd03, znkd04, znkd05, znkd07, znkd13.
 In those rooms the HD painting has the PS2 framing (azit00: the same
@@ -116,7 +209,7 @@ picture, upscaled and brightened), so the swap is right in 16:9 too.
 
 Verified: previews of every converted layer
 (`demaster backgrounds <iso> <vbf> <out> all|<map>` writes HD | PS2 side by
-side; azit00 and bika01 looked at). **Not verified in the game**: the
-harness's saves reach no converted 2D room (`load direct 3 <event>` loads
-only save 3's own map; Besaid's `bsil00` layer is a fog overlay that its
-replay does not show: shots identical with and without it).
+side; azit00 and bika01 looked at). In the game: hiku00 (developer save
+68, `load devsave 68`) with the 4:3 writes and the PS2 paintings
+(`room-hiku00.png`); the 68 rooms converted under 16:9 too were not
+looked at in the game.

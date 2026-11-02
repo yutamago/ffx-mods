@@ -12,6 +12,7 @@ use crate::disc::Disc;
 use crate::jobs::{Ctx, Job, Output};
 use crate::phyretex::{self, Rgba};
 use crate::ps2chr::Chr;
+use crate::texanim::{self, TexAnim};
 
 /// The share of an HD page's triangles that must have a PS2 twin; pages
 /// below it belong to remodelled meshes and are left alone. Above it, the
@@ -33,9 +34,10 @@ pub struct Report {
     pub frame_share: f32,
     pub pages: Vec<Page>,
     /// The HD model with the materials of the segments that sample
-    /// see-through PS2 texels blended (`chralpha`): archive path, bytes, a
-    /// note. Only for models whose mesh was kept (not remodelled).
-    pub model: Option<(String, Vec<u8>, String)>,
+    /// see-through PS2 texels blended (`chralpha`) and its asset list with
+    /// the shader variants added: (archive path, bytes) each, and a note.
+    /// Only for models whose mesh was kept (not remodelled).
+    pub model: Option<(Vec<(String, Vec<u8>)>, String)>,
     /// HD pages skipped, with the share of matched triangles.
     pub skipped: Vec<(String, f32)>,
 }
@@ -71,6 +73,7 @@ fn bake_chr_with(
     name: &str,
     paint: bool,
 ) -> Result<Option<Report>> {
+    let raw = chr;
     let chr = Chr::parse(chr).with_context(|| format!("{name}.chr"))?;
     let hd_path = format!("ffx_data/gamedata/ps3data/chr/{kind}/{name}/mdl/d3d11/{name}.dae.phyre");
     let Some(entry) = pc.find(&hd_path) else {
@@ -191,6 +194,10 @@ fn bake_chr_with(
         };
         let (image, covered) = bake::paint(&chr, &jobs, size, Some(&hd_rgba));
         let file = phyretex::argb8_from(&template, &image).with_context(|| path.clone())?;
+        // The HD's animation frames over this page, painted from the PS2
+        // patches (eyes, mouths).
+        let frames = anim_frames(raw, &chr, &model, pc, kind, name, &path, &jobs, &image)
+            .with_context(|| format!("{path}: texture animation"))?;
         report.pages.push(Page {
             path,
             image,
@@ -199,6 +206,7 @@ fn bake_chr_with(
             scale,
             file,
         });
+        report.pages.extend(frames);
     }
     // The PS2 drew those texels see-through (`chralpha`); where the HD
     // material does not blend, it gets its blended twin. A remodelled
@@ -215,7 +223,14 @@ fn bake_chr_with(
         let mut edit = ffx_phyre::edit::ClusterEdit::parse(&hd_bytes).context("edit")?;
         let note = crate::chralpha::blend_in_place(&mut edit, &segs, variants)?;
         if note.switched + note.lowered > 0 {
-            report.model = Some((hd_path, edit.write().context("writing")?, note.text));
+            let mut files = vec![(hd_path.clone(), edit.write().context("writing")?)];
+            if note.switched > 0 {
+                let list_path = format!("ffx_data/gamedata/ps3data/chr/{kind}/{name}/{name}.ahwin32");
+                let list = pc.read(pc.find(&list_path).with_context(|| format!("no {list_path}"))?)?;
+                let entries = crate::chralpha::list_entries(&edit)?;
+                files.push((list_path, ffx_phyre::assets::add_files(&list, &entries)?));
+            }
+            report.model = Some((files, note.text));
         }
     }
     Ok(Some(report))
@@ -228,6 +243,102 @@ fn see_through_job(chr: &Chr, job: &bake::Job) -> (usize, usize) {
     crate::chralpha::coverage(uv, |x, y| {
         chr.sample(job.material, (x * 16 + 8) as f32, (y * 16 + 8) as f32).map_or(255, |c| c[3])
     })
+}
+
+/// The animation textures of a kept mesh whose animated material
+/// (`AnimSampler`) draws over `page`: each HD frame painted like the page,
+/// from the PS2 image with the frame's PS2 patch put in, and cut to the
+/// rectangle the shader shows it in (`texanim.rs`). The HD `.ags` stays.
+#[allow(clippy::too_many_arguments)]
+fn anim_frames(
+    raw: &[u8],
+    chr: &Chr,
+    model: &ffx_phyre::Model,
+    pc: &ffx_vbf::Archive,
+    kind: &str,
+    name: &str,
+    page: &str,
+    jobs: &[bake::Job],
+    painted: &Rgba,
+) -> Result<Vec<Page>> {
+    let Some(mat) = model.materials.iter().find(|m| {
+        m.texture("AnimSampler").is_some() && m.base_color().is_some_and(|t| t.archive_path() == page)
+    }) else {
+        return Ok(Vec::new());
+    };
+    let Ok(Some(anim)) = TexAnim::parse(raw) else {
+        return Ok(Vec::new());
+    };
+    let dir = format!("ffx_data/gamedata/ps3data/chr/{kind}/{name}");
+    let read = |p: &str| -> Result<Option<Vec<u8>>> { pc.find(p).map(|e| pc.read(e)).transpose().map_err(Into::into) };
+    let Some(ags) = read(&format!("{dir}/mdl/d3d11/textureanimationchar.ags.phyre"))? else {
+        return Ok(Vec::new());
+    };
+    let Some(list) = read(&format!("{dir}/{name}.ahwin32"))? else {
+        return Ok(Vec::new());
+    };
+    let records = texanim::read_ags(&ags)?;
+    let files = texanim::anim_files(&list)?;
+    let maya = mat.parameter("AnimTranslate_MAYA").zip(mat.parameter("AnimScale_MAYA"));
+    let (w, h) = (painted.width, painted.height);
+    let mut out = Vec::new();
+    for (n, file) in files.iter().enumerate() {
+        // the first frame that shows texture n: its patch and rectangle
+        let found = records.iter().find_map(|r| {
+            let i = r.ids.iter().position(|&id| id as usize == n)?;
+            let e = anim.entries.iter().find(|e| r.group.strip_prefix('G').and_then(|g| g.parse().ok()) == Some(e.group))?;
+            let s: usize = r.animation.strip_prefix("Animation")?.parse().ok()?;
+            let f = e.states.iter().find(|x| x.0 == s)?.1.get(i)?;
+            let (t, sc) = match maya {
+                Some((t, sc)) => ([t[0], t[1]], [sc[0], sc[1]]),
+                None => ([r.rect[2], r.rect[3]], [r.rect[0], r.rect[1]]),
+            };
+            Some((e, f.patch, t, sc))
+        });
+        let Some((e, patch, t, sc)) = found else { continue };
+        let Some(template) = read(file)? else { continue };
+        // the rectangle in page pixels, rows top first (v up in the file)
+        let px = |u: f32| (u * w as f32).clamp(0.0, w as f32);
+        let py = |v: f32| ((1.0 - v) * h as f32).clamp(0.0, h as f32);
+        let (x0, x1) = (px(t[0]).floor() as u32, px(t[0] + sc[0]).ceil() as u32);
+        let (y0, y1) = (py(t[1] + sc[1]).floor() as u32, py(t[1]).ceil() as u32);
+        if x1 <= x0 || y1 <= y0 {
+            continue;
+        }
+        let mut with = chr.clone();
+        let p = &anim.patches[patch];
+        let Some(img) = with.images.get_mut(e.image) else { continue };
+        for y in 0..p.height {
+            for x in 0..p.width {
+                let (dx, dy) = (e.x + x, e.y + y);
+                if dx < img.width && dy < img.height {
+                    img.texels[(dy * img.width + dx) as usize] = p.texels[(y * p.width + x) as usize];
+                }
+            }
+        }
+        let near: Vec<bake::Job> = jobs
+            .iter()
+            .filter(|j| {
+                let xs = j.hd_uv.map(|q| q[0] * w as f32);
+                let ys = j.hd_uv.map(|q| (1.0 - q[1]) * h as f32);
+                xs.iter().copied().fold(f32::MIN, f32::max) >= x0 as f32
+                    && xs.iter().copied().fold(f32::MAX, f32::min) <= x1 as f32
+                    && ys.iter().copied().fold(f32::MIN, f32::max) >= y0 as f32
+                    && ys.iter().copied().fold(f32::MAX, f32::min) <= y1 as f32
+            })
+            .cloned()
+            .collect();
+        let (full, _) = bake::paint(&with, &near, (w, h), Some(painted));
+        let mut image = Rgba::new(x1 - x0, y1 - y0);
+        for y in y0..y1 {
+            for x in x0..x1 {
+                image.put(x - x0, y - y0, full.get(x.min(w - 1), y.min(h - 1)));
+            }
+        }
+        let file_bytes = phyretex::argb8_from(&template, &image).with_context(|| file.clone())?;
+        out.push(Page { path: file.clone(), image, matched: 1.0, covered: 1.0, scale: 1, file: file_bytes });
+    }
+    Ok(out)
 }
 
 /// Every `(kind, name)` with a PS2 model on the disc, sorted.
@@ -337,9 +448,12 @@ impl Job for ChrJob {
                             ));
                         }
                         kept += r.skipped.len();
-                        if let Some((path, bytes, note)) = &r.model {
+                        if let Some((files, note)) = &r.model {
                             ctx.note(format!("{kind}/{name}: see-through texels: {note}"));
-                            blended += usize::from(out.put(path, bytes)?);
+                            blended += 1;
+                            for (path, bytes) in files {
+                                out.put(path, bytes)?;
+                            }
                         }
                         let own = format!("/chr/{kind}/{name}/");
                         for p in r.pages {

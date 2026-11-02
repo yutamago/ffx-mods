@@ -4,10 +4,11 @@
 //!
 //! The PC player takes VP8 + Vorbis WebM, shows one frame per game update
 //! (29.97 a second) and stretches the picture over the screen. So each PS2
-//! movie (25 fps, 640 x 416 for a 4:3 screen) becomes 1280 x 720 at
-//! 30000/1001 fps with the 4:3 picture in the middle (960 x 720) and black
-//! bars, its studio-range YCbCr expanded to the full range the PC's
-//! shader assumes. The sound is the PS2's, 48 kHz stereo.
+//! movie (25 fps, 640 x 416 for a 4:3 screen) becomes 960 x 720 at
+//! 30000/1001 fps when `render.aspect` is `"ps2"` (the game's picture is
+//! 4:3 then, `docs/screen.md`), else 1280 x 720 with the 4:3 picture in the
+//! middle and black bars; its studio-range YCbCr expanded to the full range
+//! the PC's shader assumes. The sound is the PS2's, 48 kHz stereo.
 //!
 //! The encoding is done by an external ffmpeg (not shipped; [`find_ffmpeg`]:
 //! `--ffmpeg`, `source.ffmpeg`, next to demaster.exe, the PATH, else on
@@ -31,7 +32,9 @@ const VIDEO_LIST: &str = "ffx_data/gamedata/ps3data/video/us/ffx_videolist.txt";
 /// Movies the PC plays with the 3D scene drawn over them (`movie_have_camera`:
 /// ids 0x20, 0x2e, 0x46, 0x48). The PC re-rendered them for its own 16:9
 /// cameras (`video/<id>.dat`); a 4:3 PS2 picture under a 16:9 scene would
-/// not line up, so they stay HD.
+/// not line up, so they stay HD. With `render.aspect = "ps2"` the scene shows
+/// the middle 4:3 of the PC camera's view, so the HD movie is cut to its
+/// middle 4:3 to match.
 const WITH_3D_SCENE: [&str; 4] = ["mst", "far", "ggm", "sns"];
 
 /// PS2 names the PC spells differently.
@@ -54,7 +57,7 @@ impl Job for MovieJob {
     }
 
     fn settings(&self) -> &'static [&'static str] {
-        &["movies"]
+        &["movies", "render.aspect"]
     }
 
     fn enabled(&self, config: &Config) -> bool {
@@ -82,14 +85,11 @@ pub fn run(ctx: &Ctx, out: &Output, only: &[String]) -> Result<String> {
         if names.is_empty() {
             bail!("no movies (jppc/movie/adpcm/*.sz) on the disc");
         }
+        let four_three = ctx.config.render.aspect.ps2();
         let mut done = 0;
         let mut kept = Vec::new();
         for name in &names {
             if !only.is_empty() && !only.contains(name) {
-                continue;
-            }
-            if WITH_3D_SCENE.contains(&name.as_str()) {
-                kept.push(format!("{name} (3D scene on top)"));
                 continue;
             }
             let Some(file) = list.iter().find(|f| f.split('_').next() == Some(pc_name(name))) else {
@@ -98,9 +98,17 @@ pub fn run(ctx: &Ctx, out: &Output, only: &[String]) -> Result<String> {
             };
             let archive = format!("{VIDEO_DIR}/{file}");
             let t = std::time::Instant::now();
-            let info = ctx
-                .disc(|d| convert(d, &ffmpeg, name, &archive, out))
-                .with_context(|| format!("movie {name}"))?;
+            let info = if WITH_3D_SCENE.contains(&name.as_str()) {
+                if !four_three {
+                    kept.push(format!("{name} (3D scene on top)"));
+                    continue;
+                }
+                kept.push(format!("{name} (3D scene on top: the HD movie's middle 4:3)"));
+                crop_hd(ctx.pc, &ffmpeg, &archive, out).with_context(|| format!("movie {name} (HD, cut to 4:3)"))?
+            } else {
+                ctx.disc(|d| convert(d, &ffmpeg, name, &archive, out, four_three))
+                    .with_context(|| format!("movie {name}"))?
+            };
             println!("  {name} -> {file}: {info} ({:.0} s)", t.elapsed().as_secs_f32());
             done += 1;
         }
@@ -254,7 +262,53 @@ fn chunks(
     Ok(())
 }
 
-fn convert(d: &mut crate::disc::Disc, ffmpeg: &Path, name: &str, archive: &str, out: &Output) -> Result<String> {
+/// The VP8 settings of every movie the job writes.
+const VP8: [&str; 16] = [
+    "-c:v", "libvpx", "-deadline", "good", "-cpu-used", "4", "-b:v", "4M", "-crf", "8", "-qmin", "0", "-qmax", "40",
+    "-auto-alt-ref", "0",
+];
+
+/// The 4:3 picture over the whole (4:3) screen with `render.aspect = "ps2"`,
+/// else in the middle of a 16:9 one with black bars.
+const SCALE_43: &str = "scale=960:720:flags=lanczos:in_range=tv:out_range=pc,fps=30000/1001,format=yuv420p";
+const SCALE_169: &str =
+    "scale=960:720:flags=lanczos:in_range=tv:out_range=pc,pad=1280:720:160:0:black,fps=30000/1001,format=yuv420p";
+
+/// A movie with the 3D scene on top, for `render.aspect = "ps2"`: the HD
+/// file's middle 4:3 (960 x 720 of its 1280 x 720), the sound as it is.
+fn crop_hd(pc: &ffx_vbf::Archive, ffmpeg: &Path, archive: &str, out: &Output) -> Result<String> {
+    let e = pc.find(archive).with_context(|| format!("{archive} is missing"))?;
+    let hd = out.temp_path(&format!("{archive}.hd"))?;
+    std::fs::write(&hd, pc.read(e)?)?;
+    let webm = out.temp_path(archive)?;
+    let result = Command::new(ffmpeg)
+        .args(["-hide_banner", "-loglevel", "error", "-y", "-i"])
+        .arg(&hd)
+        .args(["-map", "0:v", "-map", "0:a?", "-vf", "crop=iw*3/4:ih,format=yuv420p"])
+        .args(VP8)
+        .args(["-threads", "4", "-c:a", "copy"])
+        .args(["-map_metadata", "-1", "-fflags", "+bitexact", "-flags:v", "+bitexact", "-f", "webm"])
+        .arg(&webm)
+        .output()
+        .with_context(|| format!("starting {}", ffmpeg.display()));
+    let _ = std::fs::remove_file(&hd);
+    let result = result?;
+    if !result.status.success() {
+        let _ = std::fs::remove_file(&webm);
+        bail!("ffmpeg failed ({}): {}", result.status, String::from_utf8_lossy(&result.stderr).trim());
+    }
+    out.put_file(archive, &webm)?;
+    Ok("HD, middle 4:3".into())
+}
+
+fn convert(
+    d: &mut crate::disc::Disc,
+    ffmpeg: &Path,
+    name: &str,
+    archive: &str,
+    out: &Output,
+    four_three: bool,
+) -> Result<String> {
     let sz_name = format!("jppc/movie/adpcm/{name}.sz");
     let sz = d.read(&sz_name)?.with_context(|| format!("{sz_name} is missing"))?;
     let index = ps2movie::Index::parse(&sz)?;
@@ -280,13 +334,9 @@ fn convert(d: &mut crate::disc::Disc, ffmpeg: &Path, name: &str, archive: &str, 
         .args(["-framerate", "25", "-i", "pipe:0", "-i"])
         .arg(&wav)
         .args(["-map", "0:v", "-map", "1:a", "-t", &format!("{seconds:.3}")])
-        .args([
-            "-vf",
-            "scale=960:720:flags=lanczos:in_range=tv:out_range=pc,pad=1280:720:160:0:black,\
-             fps=30000/1001,format=yuv420p",
-        ])
-        .args(["-c:v", "libvpx", "-deadline", "good", "-cpu-used", "4", "-b:v", "4M", "-crf", "8"])
-        .args(["-qmin", "0", "-qmax", "40", "-auto-alt-ref", "0", "-threads", "4"])
+        .args(["-vf", if four_three { SCALE_43 } else { SCALE_169 }])
+        .args(VP8)
+        .args(["-threads", "4"])
         .args(["-c:a", "libvorbis", "-q:a", "5", "-ar", "48000", "-ac", "2"])
         .args(["-map_metadata", "-1", "-fflags", "+bitexact", "-flags:v", "+bitexact"])
         .args(["-flags:a", "+bitexact", "-f", "webm"])

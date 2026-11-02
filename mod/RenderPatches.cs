@@ -155,4 +155,67 @@ internal static unsafe class RenderPatches {
         return at<ApplyIntensityMultiplier>(APPLY_INTENSITY_MULTIPLIER).hook(m, _intensity)
             && at<SetLightRotation>(SET_LIGHT_ROTATION).hook(m, _rotation);
     }
+
+    // ---- render.aspect -------------------------------------------------------------------------
+
+    /// <summary>
+    /// The f32 16/9 that PostProcessManager_setNon16By9Viewport (0x00698750, its only reader)
+    /// fits the last copy of the frame into the back buffer with (pillarbox or letterbox), and
+    /// the Iggy menus' viewport rectangle with it. In .data.
+    /// </summary>
+    private const uint OUTPUT_ASPECT = 0x00c34154;
+
+    /// <summary>PhyreScene_setCameraAspectRatio: thiscall(scene; a) ret 4 (docs/screen.md).</summary>
+    [UnmanagedFunctionPointer(CallingConvention.ThisCall)]
+    public delegate void SetCameraAspectRatio(nint scene, float a);
+
+    private const uint SET_CAMERA_ASPECT = 0x0066cbe0;
+    /// <summary>g_PhyreScene3D: 1 in 3D maps and battles, where setCameraAspectRatio widens a by 4/3.</summary>
+    private const uint SCENE_3D = 0x00ccb9c0;
+    /// <summary>PhyreScene_RenderABmap's fld dword ptr [0x00b41cf0] (16/9, also the UI camera's): the sphere grid camera's aspect.</summary>
+    private const uint ABMAP_ASPECT_LOAD = 0x00652a7a;
+    private const uint SIXTEEN_NINE = 0x00b41cf0;
+
+    private static SetCameraAspectRatio? _camera_aspect;
+    private static nint _four_thirds;
+
+    /// <summary>
+    /// The PS2's 4:3 picture, pillarboxed. The frame is still drawn into the game's 16:9 targets,
+    /// but anamorphic: the last copy squeezes it into the middle 4:3 of the window (the game's own
+    /// path for windows that are not 16:9, with 4/3 as the target aspect). Everything the HD
+    /// places in the 16:9 frame from PS2 coordinates (x 3.75, the menus, the message windows,
+    /// the battle HUD, the minimap) lands where the PS2 had it; the 3D cameras keep the PS2's
+    /// aspect instead of the HD's 4/3 wider one, so the squeeze shows the PS2 frustum; the
+    /// fixed-camera rooms' full-screen paintings take their PS2 shape. The Flash (Iggy) screens
+    /// get the same 4:3 rectangle from the game and are drawn squeezed into it.
+    /// docs/screen.md.
+    /// </summary>
+    public static bool aspect(DemasterModule m, string value) {
+        _log = m.log;
+        float* output = (float*)Native.ptr(OUTPUT_ASPECT);
+        if (*output != 16f / 9f && *output != 4f / 3f) {
+            m.log.Warning($"render.aspect: 0x{OUTPUT_ASPECT:x8} holds {*output}, not 16/9; not changed");
+            return false;
+        }
+
+        _four_thirds = Marshal.AllocHGlobal(4);
+        *(float*)_four_thirds = 4f / 3f;
+        byte[] original = [0xd9, 0x05, .. BitConverter.GetBytes(Native.reloc(SIXTEEN_NINE))];
+        byte[] patched  = [0xd9, 0x05, .. BitConverter.GetBytes((uint)_four_thirds)];
+        bool abmap = Native.patch_code(ABMAP_ASPECT_LOAD, original, patched, m.log);
+        if (!abmap) m.log.Warning("render.aspect: the sphere grid keeps the HD aspect (squeezed)");
+
+        // In 3D scenes the game stores a * 3/4 * 16/9 (the PS2 frustum widened to 16:9); a * 3/4
+        // in makes it store a, which the squeeze turns back into the PS2's view. 2D scenes store
+        // a as it is, already the PS2's (shown stretched in the HD).
+        _camera_aspect = (scene, a) => {
+            bool scene3d = Native.u8(SCENE_3D) != 0;
+            first(scene3d ? 8 : 16, $"render.aspect: camera aspect {a} in a {(scene3d ? "3D" : "2D")} scene");
+            at<SetCameraAspectRatio>(SET_CAMERA_ASPECT).chain_from(_camera_aspect!).fnptr!(scene, scene3d ? a * 0.75f : a);
+        };
+        if (!at<SetCameraAspectRatio>(SET_CAMERA_ASPECT).hook(m, _camera_aspect)) return false;
+
+        *output = 4f / 3f;
+        return true;
+    }
 }
