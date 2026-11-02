@@ -1,7 +1,10 @@
 mod bake;
+mod build;
 mod chrjob;
+mod config;
 mod disc;
 mod gsmem;
+mod jobs;
 mod mapjob;
 mod phyretex;
 mod ps2chr;
@@ -13,7 +16,9 @@ use anyhow::{Context, Result, bail};
 
 fn usage() -> ! {
     eprintln!(
-        "usage:\n  demaster chr <iso> <FFX_Data.vbf> <out dir> <kind/name>...|all   bake character textures (PNG previews + .dds.phyre)\n  demaster maps <iso> <FFX_Data.vbf> <out dir> <map|area>...|all   field and battle map textures"
+        "FFX Demaster converter {}\nusage:\n{}\n  demaster chr <iso> <FFX_Data.vbf> <out dir> <kind/name>...\n      bake character textures (PNG previews + .dds.phyre)\n  demaster maps <iso> <FFX_Data.vbf> <out dir> <map|area|map|btlmap>...|all\n      field and battle map textures (PNG previews, maps.tsv + .dds.phyre)",
+        build::VERSION,
+        build::USAGE
     );
     std::process::exit(2)
 }
@@ -23,10 +28,35 @@ fn write(path: &Path, bytes: &[u8]) -> Result<()> {
     std::fs::write(path, bytes).with_context(|| path.display().to_string())
 }
 
+/// Keeps the console open when demaster.exe was started by double-click.
+fn wait_for_enter() {
+    if cfg!(windows) {
+        println!("\nPress Enter to close.");
+        let _ = std::io::stdin().read_line(&mut String::new());
+    }
+}
+
 fn main() -> Result<()> {
     let a: Vec<String> = std::env::args().collect();
-    let Some(cmd) = a.get(1) else { usage() };
+    let Some(cmd) = a.get(1) else {
+        // No arguments: build with the demaster.toml next to the exe.
+        let ok = build::run(&build::Args::default()).unwrap_or_else(|e| {
+            eprintln!("error: {e:#}");
+            false
+        });
+        wait_for_enter();
+        std::process::exit(if ok { 0 } else { 1 });
+    };
     match cmd.as_str() {
+        "build" => {
+            let args = build::Args::parse(&a[2..])?;
+            if !build::run(&args)? {
+                std::process::exit(1);
+            }
+        }
+        "jobs" => build::list_jobs(),
+        "--version" | "-V" => println!("demaster {}", build::VERSION),
+        "help" | "--help" | "-h" => usage(),
         "chr" => {
             if a.len() < 6 {
                 usage();
@@ -37,17 +67,10 @@ fn main() -> Result<()> {
             let out = PathBuf::from(&a[4]);
             let mut specs: Vec<String> = a[5..].to_vec();
             if specs == ["all"] {
-                specs = d
-                    .names()
-                    .filter_map(|n| {
-                        let rest = n.strip_prefix("jppc/chr/")?;
-                        let mut p = rest.split('/');
-                        let (kind, name, mdl, file) = (p.next()?, p.next()?, p.next()?, p.next()?);
-                        (mdl == "mdl" && file == format!("{name}.chr"))
-                            .then(|| format!("{kind}/{name}"))
-                    })
+                specs = chrjob::models(&d)
+                    .into_iter()
+                    .map(|(kind, name)| format!("{kind}/{name}"))
                     .collect();
-                specs.sort();
             }
             for spec in &specs {
                 let (kind, name) = spec.split_once('/').context("kind/name")?;
@@ -101,7 +124,7 @@ fn main() -> Result<()> {
             let out = PathBuf::from(&a[4]);
             maps(&mut d, &pc, &out, &a[5..])?;
         }
-        _ => bail!("unknown command {cmd}"),
+        _ => bail!("unknown command {cmd} (demaster help)"),
     }
     Ok(())
 }
@@ -122,7 +145,7 @@ fn maps(d: &mut disc::Disc, pc: &ffx_vbf::Archive, out: &Path, specs: &[String])
     let mut log = String::from("map\ttexture\tresult\terror\tsecond\thow\n");
     let (mut conv, mut hd_only, mut failed, mut guessed) = (0, 0, 0, 0);
     for (id, paths) in chosen {
-        let r = match mapjob::convert(d, pc, id, paths) {
+        let r = match mapjob::convert(d, pc, id, paths, true) {
             Ok(r) => r,
             Err(e) => {
                 println!("{}/{}: error: {e:#}", id.kind, id.name);
@@ -161,13 +184,15 @@ fn maps(d: &mut disc::Disc, pc: &ffx_vbf::Archive, out: &Path, specs: &[String])
             } else {
                 ""
             };
-            let png = ffx_phyre::png(c.preview.width, c.preview.height, &c.preview.pixels);
-            write(
-                &out.join("preview")
-                    .join(&id.name)
-                    .join(format!("{sub}{file}")),
-                &png,
-            )?;
+            if let Some(p) = &c.preview {
+                let png = ffx_phyre::png(p.width, p.height, &p.pixels);
+                write(
+                    &out.join("preview")
+                        .join(&id.name)
+                        .join(format!("{sub}{file}")),
+                    &png,
+                )?;
+            }
             log += &format!(
                 "{}\t{}\tok\t{:.1}\t{}\t{}\n",
                 id.name,

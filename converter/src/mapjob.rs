@@ -8,8 +8,12 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use anyhow::{Context, Result};
 
+use rayon::prelude::*;
+
+use crate::config::Config;
 use crate::disc::Disc;
 use crate::gsmem::{self, Gs};
+use crate::jobs::{Ctx, Job, Output};
 use crate::phyretex::{self, Rgba};
 use crate::ps2map::{self, SwapFrame, Tex0, Txa};
 
@@ -128,8 +132,8 @@ impl Region {
 pub struct Converted {
     pub path: String,
     pub region: Region,
-    /// HD texture (box-filtered to the PS2 size) | PS2, for the preview.
-    pub preview: Rgba,
+    /// HD texture (box-filtered to the PS2 size) | PS2, if asked for.
+    pub preview: Option<Rgba>,
     /// Where the pixels and CLUT came from.
     pub how: String,
     /// Mean colour distance to the HD texture.
@@ -542,13 +546,30 @@ pub fn convert(
     pc: &ffx_vbf::Archive,
     id: &MapId,
     paths: &[String],
+    previews: bool,
+) -> Result<Report> {
+    let files = read_ps2(disc, id)?;
+    convert_files(files, pc, paths, previews)
+}
+
+/// The map's `mapout.txa` and `mapout.vpa`, if the disc has the map.
+pub fn read_ps2(disc: &mut Disc, id: &MapId) -> Result<Option<(Vec<u8>, Vec<u8>)>> {
+    let dir = id.ps2_dir();
+    let txa = disc.read(&format!("{dir}/mapout.txa"))?;
+    let vpa = disc.read(&format!("{dir}/mapout.vpa"))?;
+    Ok(txa.zip(vpa))
+}
+
+/// Converts one map's textures from its PS2 files (`None`: an HD-only map,
+/// hiku28-30 and stbv04).
+pub fn convert_files(
+    files: Option<(Vec<u8>, Vec<u8>)>,
+    pc: &ffx_vbf::Archive,
+    paths: &[String],
+    previews: bool,
 ) -> Result<Report> {
     let mut report = Report::default();
-    let dir = id.ps2_dir();
-    let txa_bytes = disc.read(&format!("{dir}/mapout.txa"))?;
-    let vpa_bytes = disc.read(&format!("{dir}/mapout.vpa"))?;
-    let (Some(txa_bytes), Some(vpa_bytes)) = (txa_bytes, vpa_bytes) else {
-        // an HD-only map (hiku28-30, stbv04)
+    let Some((txa_bytes, vpa_bytes)) = files else {
         report.hd_only.extend(paths.iter().cloned());
         return Ok(report);
     };
@@ -694,7 +715,7 @@ pub fn convert(
         report.converted.push(Converted {
             path: path.clone(),
             region: r,
-            preview: side_by_side(&hd_rgba, &image),
+            preview: previews.then(|| side_by_side(&hd_rgba, &image)),
             how,
             error,
             second,
@@ -702,4 +723,88 @@ pub fn convert(
         });
     }
     Ok(report)
+}
+
+/// `maps.field` and `maps.battle` for `demaster build`.
+pub fn jobs() -> Vec<Box<dyn Job>> {
+    vec![
+        Box::new(MapsJob {
+            name: "maps.field",
+            settings: &["maps.field"],
+            kind: "map",
+            enabled: |c| c.maps.field.ps2(),
+        }),
+        Box::new(MapsJob {
+            name: "maps.battle",
+            settings: &["maps.battle"],
+            kind: "btlmap",
+            enabled: |c| c.maps.battle.ps2(),
+        }),
+    ]
+}
+
+struct MapsJob {
+    name: &'static str,
+    settings: &'static [&'static str],
+    /// `map` or `btlmap`.
+    kind: &'static str,
+    enabled: fn(&Config) -> bool,
+}
+
+impl Job for MapsJob {
+    fn name(&self) -> &'static str {
+        self.name
+    }
+
+    fn settings(&self) -> &'static [&'static str] {
+        self.settings
+    }
+
+    fn enabled(&self, config: &Config) -> bool {
+        (self.enabled)(config)
+    }
+
+    fn run(&self, ctx: &Ctx, out: &Output) -> Result<String> {
+        let maps: Vec<(MapId, Vec<String>)> = hd_maps(ctx.pc)
+            .into_iter()
+            .filter(|(id, _)| id.kind == self.kind)
+            .collect();
+        let (mut conv, mut hd_only, mut failed) = (0, 0, 0);
+        // A few maps at a time (each holds a 4 MiB GS image and its HD
+        // textures), written in map order so every build writes the same.
+        for chunk in maps.chunks(8) {
+            let files: Vec<_> = chunk
+                .iter()
+                .map(|(id, _)| ctx.disc(|d| read_ps2(d, id)))
+                .collect::<Result<_>>()?;
+            let reports: Vec<Result<Report>> = chunk
+                .par_iter()
+                .zip(files)
+                .map(|((_, paths), f)| convert_files(f, ctx.pc, paths, false))
+                .collect();
+            for ((id, paths), r) in chunk.iter().zip(reports) {
+                let r = match r {
+                    Ok(r) => r,
+                    Err(e) => {
+                        failed += paths.len();
+                        ctx.note(format!("{}: left HD: {e:#}", id.name));
+                        continue;
+                    }
+                };
+                for c in &r.converted {
+                    out.put(&c.path, &c.file)?;
+                }
+                for (p, why) in &r.failed {
+                    ctx.note(format!("{p}: left HD: {why}"));
+                }
+                conv += r.converted.len();
+                hd_only += r.hd_only.len();
+                failed += r.failed.len();
+            }
+        }
+        Ok(format!(
+            "{} maps: {conv} textures from the PS2, {hd_only} HD-only, {failed} left HD",
+            maps.len()
+        ))
+    }
 }

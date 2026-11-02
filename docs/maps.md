@@ -12,7 +12,12 @@ cargo build --release -p demaster
 ./target/release/demaster maps <iso> <vbf> <out> bsil00 kami genk16_a   # maps or areas
 ```
 
-Output: `<out>/efl/x/<HD path>` (ARGB8 at the PS2 size),
+In `demaster build` these are the jobs `maps.field` (`map/`) and
+`maps.battle` (`btlmap/`), switched by the settings of the same names. They
+write only `<map>/tex/d3d11/` and `<map>/tex/texswap/d3d11/`; the particle
+textures in `<map>/fp/tex/` belong to the effects job (`docs/effects.md`).
+
+Output of `demaster maps`: `<out>/efl/x/<HD path>` (ARGB8 at the PS2 size),
 `<out>/preview/<map>/[texswap/]<name>.png` (HD scaled down | PS2), and
 `<out>/maps.tsv` (one row per HD texture: result, colour distance to the
 HD texture, the runner-up's, where the pixels and CLUT came from).
