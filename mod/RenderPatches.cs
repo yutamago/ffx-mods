@@ -111,18 +111,49 @@ internal static unsafe class RenderPatches {
     private static ApplyIntensityMultiplier? _intensity;
     private static SetLightRotation? _rotation;
 
-    /// <summary>The level of every character light and of the ambient light: the PS2 colours as they are.</summary>
-    private const float PS2_LEVEL = 1.0f;
+    /// <summary>
+    /// The level of every character light and of the ambient light. The PS2's VU1 program turns
+    /// the lit colour (colour matrix x max(0, light matrix x N) + ambient, the script colours as
+    /// byte / 255) into the vertex colour by vf8 = material colour 0x7f x shade x 2
+    /// (FUN_008437f0 in FFX.exe, the leftover packet code), and the GS modulates the texture by
+    /// vertex colour / 128: the texture x 254/128 x lit. docs/render.md.
+    /// </summary>
+    private const float PS2_LEVEL = 254f / 128f;
 
     private static float luminance(float* rgb) => (rgb[0] * 0.3f + rgb[1] * 0.5f + rgb[2] * 0.2f) * PS2_LEVEL;
 
     /// <summary>
-    /// Characters lit by the PS2's light colours and directions: the three directional lights and
-    /// the ambient light at level 1 (no HD intensity, glow balance or Zanarkand saturation), and no
-    /// HD per-map rotation of the light directions. The PC shader's falloff stays (docs/render.md).
+    /// The f64 0.208125 that Phyre_CharacterLighting_setShadeCoeff (0x006aaef0, its only reader)
+    /// multiplies the ambient intensity by into CharacterShadeCoeff: the shaders add
+    /// CharacterShadeColor x CharacterShadeCoeff to every lit pixel, an HD fill light.
+    /// </summary>
+    private const uint SHADE_COEFF_SCALE = 0x00b48300;
+
+    /// <summary>
+    /// Ch_DrawMain's light-value term (0x0082f64c, with g_ChrShadeByLight, on in the shipped exe):
+    /// fld [chr+0x36c]; fmul qword [0.85]; fadd qword [0.15]; the HD keeps 15% of the shade when a
+    /// script dims a character's light value. The PS2 (Ch_DrawCalcShade) multiplies by it as it is.
+    /// </summary>
+    private const uint LIGHT_VALUE_SCALE = 0x0082f652;
+    private const uint K_085 = 0x00b501a8;
+    private const uint K_015 = 0x00b59870;
+
+    /// <summary>
+    /// Characters lit the PS2's way: the three directional lights and the ambient light at the
+    /// PS2's level (no HD intensity, glow balance or Zanarkand saturation), no HD per-map rotation
+    /// of the light directions, no HD shade-coefficient fill light, the script's light value as a
+    /// plain multiplier. The PS2's falloff (max(0, N.L)) is in the shader files of the
+    /// render.lighting converter job (docs/render.md).
     /// </summary>
     public static bool lighting(DemasterModule m, string value) {
         _log = m.log;
+        if (!Native.patch_code(SHADE_COEFF_SCALE, [0, 0, 0, 0x10, 0xd7, 0xa3, 0xca, 0x3f], new byte[8], m.log))
+            m.log.Warning("render.lighting: the HD shade coefficient stays");
+        byte[] k085 = BitConverter.GetBytes(Native.reloc(K_085));
+        byte[] k015 = BitConverter.GetBytes(Native.reloc(K_015));
+        byte[] original = [0xdc, 0x0d, .. k085, 0xdc, 0x05, .. k015];
+        if (!Native.patch_code(LIGHT_VALUE_SCALE, original, [0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90], m.log))
+            m.log.Warning("render.lighting: the HD light value scale (0.85 v + 0.15) stays");
         _intensity = (cl, i, flag) => {
             first(2, $"render.lighting: light levels set to {PS2_LEVEL} (first call: light {i})");
             nint r = at<ApplyIntensityMultiplier>(APPLY_INTENSITY_MULTIPLIER).chain_from(_intensity!).fnptr!(cl, i, flag);
@@ -154,6 +185,97 @@ internal static unsafe class RenderPatches {
         _rotation = (cl, i, pitch, yaw) => at<SetLightRotation>(SET_LIGHT_ROTATION).chain_from(_rotation!).fnptr!(cl, i, 0f, 0f);
         return at<ApplyIntensityMultiplier>(APPLY_INTENSITY_MULTIPLIER).hook(m, _intensity)
             && at<SetLightRotation>(SET_LIGHT_ROTATION).hook(m, _rotation);
+    }
+
+    // ---- render.texture_filter -----------------------------------------------------------------
+
+    /// <summary>
+    /// Phyre_PSerialization_PBinary_loadCluster: cdecl(stream, cluster, path, key) -> 0 or an
+    /// error. Every Direct3D object of a cluster (textures, buffers, shaders, its samplers) is made
+    /// inside this call, on the calling thread (ffx-rust docs/formats/phyre.md).
+    /// </summary>
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    public delegate int LoadCluster(nint stream, nint cluster, nint path, nint key);
+
+    /// <summary>
+    /// PSamplerStateD3D11_create: thiscall(sampler) -> 0/0xe/0x16. Fills a D3D11_SAMPLER_DESC from
+    /// the PSamplerState (+0 min filter, +1 mag filter, +2..+4 address modes, +0x1c bit 6
+    /// comparison) and calls ID3D11Device::CreateSamplerState.
+    /// </summary>
+    [UnmanagedFunctionPointer(CallingConvention.ThisCall)]
+    public delegate int CreateSampler(nint sampler);
+
+    /// <summary>
+    /// PRendererD3D11_mapSamplerFilter: cdecl(min, mag, comparison) -> D3D11_FILTER. Returns
+    /// ANISOTROPIC (0x55) for every sampler when the Anisotropic option (the f32 at 0x00c25370)
+    /// is above 1, whatever the filters say.
+    /// </summary>
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    public delegate int MapSamplerFilter(int min, int mag, int comparison);
+
+    private const uint LOAD_CLUSTER = 0x0057bce0;
+    private const uint CREATE_SAMPLER = 0x00595bf0;
+    private const uint MAP_SAMPLER_FILTER = 0x0058aa10;
+    /// <summary>D3D11_FILTER_MIN_MAG_POINT_MIP_LINEAR: texels unfiltered, mip levels blended.</summary>
+    private const int FILTER_POINT_MIP_LINEAR = 0x01;
+
+    private static LoadCluster? _load_cluster;
+    private static CreateSampler? _create_sampler;
+    private static MapSamplerFilter? _map_filter;
+    [ThreadStatic] private static string? _cluster;
+    [ThreadStatic] private static bool _point;
+    private static readonly HashSet<string> _logged_clusters = [];
+
+    /// <summary>
+    /// The clusters whose samplers get point sampling: models, maps and effects, the 3D scene.
+    /// The 2D rooms' paintings (map/.../2d/), menus, fonts and the PC's own screens keep theirs;
+    /// samplers the engine makes outside cluster loads (post-process, shadows, glow, text) too.
+    /// </summary>
+    private static bool scene_cluster(string path) {
+        string p = path.Replace('\\', '/').ToLowerInvariant();
+        if (p.Contains("/2d/") || p.Contains("/menu") || p.Contains("/font") || p.Contains("/shaders/")) return false;
+        return p.Contains("/chr/") || p.Contains("/map/") || p.Contains("/btlmap/") || p.Contains("/battle/")
+            || p.Contains("/effect/") || p.Contains("/magic/") || p.Contains("/event/") || p.Contains("/obj/");
+    }
+
+    /// <summary>
+    /// Nearest-neighbour texels on the 3D scene's materials: their samplers are made with
+    /// MIN_MAG_POINT_MIP_LINEAR instead of the game's (anisotropic or trilinear) filter.
+    /// </summary>
+    public static bool texture_filter(DemasterModule m, string value) {
+        _log = m.log;
+        _load_cluster = (stream, cluster, path, key) => {
+            string? outer = _cluster;
+            _cluster = path == 0 ? "" : Marshal.PtrToStringAnsi(path) ?? "";
+            try {
+                return at<LoadCluster>(LOAD_CLUSTER).chain_from(_load_cluster!).fnptr!(stream, cluster, path, key);
+            }
+            finally {
+                _cluster = outer;
+            }
+        };
+        _create_sampler = sampler => {
+            byte* s = (byte*)sampler;
+            bool point = _cluster is { } path && (s[0x1c] & 0x40) == 0 && scene_cluster(path);
+            // One line for the first sampler of each of the first 200 clusters (and of the engine's own).
+            bool first_of_cluster;
+            lock (_logged_clusters) first_of_cluster = _logged_clusters.Count < 200 && _logged_clusters.Add(_cluster ?? "");
+            if (first_of_cluster)
+                _log?.Info($"render.texture_filter: sampler min {s[0]} mag {s[1]} address {s[2]} {s[3]} {s[4]} flags {s[0x1c]:x2} cluster '{_cluster}' -> {(point ? "point" : "kept")}");
+            _point = point;
+            try {
+                return at<CreateSampler>(CREATE_SAMPLER).chain_from(_create_sampler!).fnptr!(sampler);
+            }
+            finally {
+                _point = false;
+            }
+        };
+        _map_filter = (min, mag, comparison) => _point
+            ? FILTER_POINT_MIP_LINEAR
+            : at<MapSamplerFilter>(MAP_SAMPLER_FILTER).chain_from(_map_filter!).fnptr!(min, mag, comparison);
+        return at<LoadCluster>(LOAD_CLUSTER).hook(m, _load_cluster)
+            && at<CreateSampler>(CREATE_SAMPLER).hook(m, _create_sampler)
+            && at<MapSamplerFilter>(MAP_SAMPLER_FILTER).hook(m, _map_filter);
     }
 
     // ---- render.aspect -------------------------------------------------------------------------

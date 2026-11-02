@@ -8,6 +8,7 @@ license.workspace = true
 [dependencies]
 ffx-vbf.workspace = true
 ffx-phyre.workspace = true
+ffx-dxbc.workspace = true
 anyhow = "1"
 serde = { version = "1", features = ["derive"] }
 toml = "0.8"
