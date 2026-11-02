@@ -23,7 +23,7 @@ internal static class Patches {
         new("render.glow",           "hd",    "glow/blow-out pass off",                  RenderPatches.glow),
         new("render.lighting",       "hd",    "PS2-like character lighting",             RenderPatches.lighting),
         new("render.shadows",        "hd",    "ground shadows only, no shadow maps",     RenderPatches.shadows),
-        new("render.aspect",         "hd",    "4:3 with the PS2 projection",             null),
+        new("render.aspect",         "hd",    "4:3 with the PS2 projection",             RenderPatches.aspect),
         new("render.texture_filter", "game",  "nearest-neighbour texture filtering",     null),
         new("ui.loading",            "hd",    "splash videos skipped at start-up",       GamePatches.skip_splash),
         new("ui.battle_subtitles",   "hd",    "battle dialogue subtitles",               GamePatches.battle_subtitles),

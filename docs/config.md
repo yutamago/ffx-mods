@@ -56,13 +56,13 @@ every file.
 | `models.object` | 4 | PS2 object textures (props, skeleton dummies) | HD | converter (`chr.object`) | textures: done |
 | `maps.field` | 5 | PS2 field map textures (and texture-swap frames) | HD | converter (`maps.field`) | done (`docs/maps.md`) |
 | `maps.geometry` | 6 | PS2 geometry where the HD maps changed it | HD | converter | not planned yet |
-| `maps.backgrounds` | 7 | the 4:3 PS2 paintings of fixed-camera rooms | the wider HD paintings | converter (`maps.backgrounds`) | 68 rooms whose HD painting keeps the PS2 framing; re-framed rooms and animated parts stay HD until 4:3 (`docs/screen.md`) |
+| `maps.backgrounds` | 7 | the 4:3 PS2 paintings of fixed-camera rooms | the wider HD paintings | converter (`maps.backgrounds`; reads `render.aspect`) | with `render.aspect = "ps2"` all 105 rooms (the 37 the HD re-framed for 16:9 too); with `"hd"` the 68 whose HD painting keeps the PS2 framing. Animated parts stay HD except in re-framed rooms (`docs/screen.md`) |
 | `maps.battle` | 8 | PS2 battle map textures | HD | converter (`maps.battle`) | done (`docs/maps.md`) |
 | `effects.textures` | 9 | PS2 spell, summon and effect textures | HD (2x upscales) | converter | planned |
 | `render.glow` | 10 | no glow/blow-out | the HD glow | mod | done (`docs/render.md`) |
 | `render.lighting` | 10 | characters lit by the PS2 light colours and directions | the HD light levels | mod | light levels and directions done; the shader's softer falloff stays (`docs/render.md`) |
 | `render.shadows` | 11 | ground shadows only, no shadow maps | shadow maps | mod | done (`docs/render.md`) |
-| `render.aspect` | 14 | 4:3 with black bars and the PS2 projection | 16:9 | mod | planned (`docs/screen.md`) |
+| `render.aspect` | 14 | 4:3 with black bars and the PS2 projection; the PS2-placed menus, windows and battle HUD where the PS2 had them; the Flash screens (Esc menu, settings, save/load) squeezed into the 4:3 | 16:9 | mod (and the `movies` and `maps.backgrounds` jobs) | done; mouse on the PS2 menus not checked (`docs/screen.md`) |
 | `ui.menus` | 12 | the PS2 pieces of the menu and battle atlases (the menu layout and the Flash screens stay HD, `docs/ui.md`) | HD | converter (`ui.menus`) | battle HUD markers only; the PS2 window look needs code |
 | `ui.portraits` | 12 | PS2 portraits: menu faces, aeons, CTB list | HD | converter (`ui.menus`) | done (`docs/ui.md`) |
 | `ui.font` | 13 | the PS2 font | the HD typeface | converter | planned (`docs/font.md`) |
@@ -73,7 +73,7 @@ every file.
 | `ui.button_glyphs` | 22 | PlayStation button glyphs | Xbox-style | converter (`ui.glyphs`) | pad prompts done (`docs/ui.md`) |
 | `audio.soundtrack` | 20 | a New Game starts with the original soundtrack; loaded saves keep their own choice, and the game's menu still switches it | arranged | mod | done (`docs/patches.md`) |
 | `audio.music_engine` | 20 | the original soundtrack rendered from the PS2 disc's music sequences and instruments by our PS2 sound driver and SPU2 (what "Original" in the game's menu plays) | the PC's recordings of the original soundtrack | converter (`audio.music`) | done (`docs/music.md`) |
-| `movies` | 15, 21 | the 4:3 PS2 movies with their audio | the cropped HD movies | converter (`movies`, needs ffmpeg) | 49 of 53; the four with a 3D scene on top stay HD (`docs/movies.md`) |
+| `movies` | 15, 21 | the 4:3 PS2 movies with their audio | the cropped HD movies | converter (`movies`, needs ffmpeg; reads `render.aspect`) | 49 of 53, 960 x 720 with `render.aspect = "ps2"`, else with bars in 1280 x 720; the four with a 3D scene on top stay HD (cut to their middle 4:3 with `render.aspect = "ps2"`) (`docs/movies.md`) |
 
 `movies` is a top-level key: it goes above the first `[table]` in the file.
 

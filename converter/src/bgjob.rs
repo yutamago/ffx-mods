@@ -32,13 +32,14 @@ impl Job for BgJob {
         "maps.backgrounds"
     }
     fn settings(&self) -> &'static [&'static str] {
-        &["maps.backgrounds"]
+        &["maps.backgrounds", "render.aspect"]
     }
     fn enabled(&self, config: &Config) -> bool {
         config.maps.backgrounds.ps2()
     }
     fn run(&self, ctx: &Ctx, out: &Output) -> Result<String> {
-        let (done, notes) = ctx.disc(|d| convert(d, ctx.pc, &[]))?;
+        let four_three = ctx.config.render.aspect.ps2();
+        let (done, notes) = ctx.disc(|d| convert(d, ctx.pc, &[], four_three))?;
         let mut n = 0;
         for d in &done {
             if out.put(&d.path, &d.file)? {
@@ -75,8 +76,15 @@ fn hd_rooms(pc: &ffx_vbf::Archive) -> Vec<(String, Vec<String>)> {
 }
 
 /// Converts the rooms whose `<area>/<map>` or map name is in `only` (all
-/// when empty).
-pub fn convert(d: &mut Disc, pc: &ffx_vbf::Archive, only: &[String]) -> Result<(Vec<Done>, Vec<String>)> {
+/// when empty). `four_three`: the game shows a 4:3 picture
+/// (`render.aspect = "ps2"`), so the rooms the HD re-framed for 16:9 get
+/// their PS2 paintings too.
+pub fn convert(
+    d: &mut Disc,
+    pc: &ffx_vbf::Archive,
+    only: &[String],
+    four_three: bool,
+) -> Result<(Vec<Done>, Vec<String>)> {
     let mut done = Vec::new();
     let mut notes = Vec::new();
     for (room, paths) in hd_rooms(pc) {
@@ -131,31 +139,41 @@ pub fn convert(d: &mut Disc, pc: &ffx_vbf::Archive, only: &[String]) -> Result<(
                 }
             }
         }
-        if framing < 0.85 {
+        // With a 4:3 picture (render.aspect = "ps2") the 3D scene has the
+        // PS2's frustum, so the re-framed rooms need their PS2 paintings:
+        // every part, animated ones too (each frame gets the one PS2
+        // picture; a re-framed HD frame would not line up), whatever it
+        // correlates with the HD.
+        let reframed = framing < 0.85;
+        if reframed && !four_three {
             notes.push(format!("{room}: framed differently from the HD (correlation {framing:.2}); kept HD"));
             continue;
         }
+        if reframed {
+            notes.push(format!("{room}: re-framed in the HD (correlation {framing:.2}); PS2 pictures for 4:3"));
+        }
         for (k, (lp, _, _, frames)) in parts.iter().enumerate() {
-            if frames.len() > 1 {
+            if frames.len() > 1 && !reframed {
                 notes.push(format!("{room}: part {lp:?} has {} frames, kept HD", frames.len()));
                 continue;
             }
-            let path = &frames[0];
-            let Some((template, hd)) = uijob::load_hd(pc, path)? else { continue };
-            let img = &layers[k];
-            let small = crate::mapjob::resize(&hd, img.width, img.height);
-            let c = crate::mapjob::correlation(&small, img);
-            if c < 0.5 {
-                notes.push(format!("{path}: PS2 picture {k} looks different (correlation {c:.2}), kept HD"));
-                continue;
+            for path in frames {
+                let Some((template, hd)) = uijob::load_hd(pc, path)? else { continue };
+                let img = &layers[k];
+                let small = crate::mapjob::resize(&hd, img.width, img.height);
+                let c = crate::mapjob::correlation(&small, img);
+                if c < 0.5 && !reframed {
+                    notes.push(format!("{path}: PS2 picture {k} looks different (correlation {c:.2}), kept HD"));
+                    continue;
+                }
+                let img = alpha_like(img, &hd);
+                done.push(Done {
+                    file: phyretex::argb8_from(&template, &img)?,
+                    preview: uijob::side_by_side(&hd, &img),
+                    note: format!("{path}: PS2 picture {k} (correlation {c:.2})"),
+                    path: path.clone(),
+                });
             }
-            let img = alpha_like(img, &hd);
-            done.push(Done {
-                file: phyretex::argb8_from(&template, &img)?,
-                preview: uijob::side_by_side(&hd, &img),
-                note: format!("{path}: PS2 picture {k} (correlation {c:.2})"),
-                path: path.clone(),
-            });
         }
     }
     Ok((done, notes))
