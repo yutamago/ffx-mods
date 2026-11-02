@@ -327,6 +327,7 @@ pub fn run(args: &Args) -> Result<bool> {
     let pc = ffx_vbf::Archive::open(&vbf).with_context(|| format!("opening {}", vbf.display()))?;
     let mut ctx = Ctx::new(config, &pc, &iso, args.verbose);
     ctx.ffmpeg = args.ffmpeg.clone().or_else(|| loaded.resolve(&config.source.ffmpeg));
+    ctx.tools_dir = Some(mod_dir.join("tools"));
     let settings = config.settings();
     let inputs = format!("{}|{}", identity(&iso), identity(&vbf));
 

@@ -9,8 +9,9 @@
 //! bars, its studio-range YCbCr expanded to the full range the PC's
 //! shader assumes. The sound is the PS2's, 48 kHz stereo.
 //!
-//! The encoding is done by an external ffmpeg (not shipped): `--ffmpeg`,
-//! `source.ffmpeg`, or `ffmpeg` on the PATH.
+//! The encoding is done by an external ffmpeg (not shipped; [`find_ffmpeg`]:
+//! `--ffmpeg`, `source.ffmpeg`, next to demaster.exe, the PATH, else on
+//! Windows a pinned LGPL build downloaded into `<mod>/tools`).
 
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
@@ -68,7 +69,7 @@ impl Job for MovieJob {
 /// Converts the movies (`only`: just these PS2 names; empty: all).
 pub fn run(ctx: &Ctx, out: &Output, only: &[String]) -> Result<String> {
     {
-        let ffmpeg = find_ffmpeg(ctx.ffmpeg.as_deref())?;
+        let ffmpeg = find_ffmpeg(ctx)?;
         let list = video_list(ctx.pc)?;
         let names: Vec<String> = ctx.disc(|d| {
             let mut v: Vec<String> = d
@@ -124,23 +125,107 @@ fn video_list(pc: &ffx_vbf::Archive) -> Result<Vec<String>> {
         .collect())
 }
 
-/// The ffmpeg program to run, checked.
-fn find_ffmpeg(configured: Option<&Path>) -> Result<PathBuf> {
-    let exe = configured.map_or_else(|| PathBuf::from("ffmpeg"), Path::to_path_buf);
-    let ok = Command::new(&exe)
+/// The ffmpeg build downloaded on Windows when none is found: BtbN's LGPL
+/// (v3) build of FFmpeg 8.1.3 (it has libvpx and libvorbis). Pinned by URL
+/// and SHA-256; only `ffmpeg.exe` and the licence are kept.
+const FFMPEG_URL: &str = "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-11-01-12-49/ffmpeg-n8.1.3-29-gad3b795b72-win64-lgpl-8.1.zip";
+const FFMPEG_SHA256: &str = "a152a35aacfe7972dce74f1e1d2a1cfaabc8daa7bf8632e9473f70ad18c6c5d4";
+const FFMPEG_DIR: &str = "ffmpeg-n8.1.3-29-gad3b795b72-win64-lgpl-8.1";
+
+fn runs(exe: &Path) -> bool {
+    Command::new(exe)
         .arg("-version")
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .status()
-        .is_ok_and(|s| s.success());
-    if !ok {
-        bail!(
-            "ffmpeg not found ({}). The movies need ffmpeg, which is not included: install it \
-             (https://ffmpeg.org/download.html; on Windows e.g. `winget install ffmpeg`), then put it \
-             on the PATH or set `ffmpeg` under [source] in demaster.toml to ffmpeg.exe",
-            exe.display()
-        );
+        .is_ok_and(|s| s.success())
+}
+
+/// The ffmpeg program to run: the configured one (`--ffmpeg`,
+/// `source.ffmpeg`), else `ffmpeg.exe` next to demaster.exe or in the mod's
+/// `tools` folder, else `ffmpeg` on the PATH, else (Windows) the pinned
+/// build, downloaded into `tools`.
+pub fn find_ffmpeg(ctx: &Ctx) -> Result<PathBuf> {
+    if let Some(exe) = &ctx.ffmpeg {
+        if runs(exe) {
+            return Ok(exe.clone());
+        }
+        bail!("the ffmpeg set in demaster.toml ({}) does not run", exe.display());
     }
+    let local = if cfg!(windows) { "ffmpeg.exe" } else { "ffmpeg" };
+    let mut candidates = vec![crate::build::exe_dir().join(local)];
+    if let Some(t) = &ctx.tools_dir {
+        candidates.push(t.join(local));
+    }
+    candidates.push(PathBuf::from("ffmpeg"));
+    if let Some(exe) = candidates.into_iter().find(|c| runs(c)) {
+        return Ok(exe);
+    }
+    match (&ctx.tools_dir, cfg!(windows)) {
+        (Some(tools), true) => download_ffmpeg(tools).map_err(|e| {
+            e.context(
+                "no ffmpeg for the movies, and downloading one failed (offline?). The movies stay HD; \
+                 the next build tries again. Or install ffmpeg yourself and set `ffmpeg` under [source]",
+            )
+        }),
+        _ => bail!(
+            "ffmpeg not found: the movies need it. Install it (https://ffmpeg.org/download.html) and put it \
+             on the PATH or set `ffmpeg` under [source] in demaster.toml. The movies stay HD"
+        ),
+    }
+}
+
+/// Downloads the pinned ffmpeg build with Windows' own `curl.exe`, checks
+/// its SHA-256 and unpacks `ffmpeg.exe` and its licence with `tar.exe`.
+fn download_ffmpeg(tools: &Path) -> Result<PathBuf> {
+    use sha2::{Digest, Sha256};
+    std::fs::create_dir_all(tools)?;
+    let zip = tools.join("ffmpeg-download.zip");
+    println!("  no ffmpeg found: downloading the LGPL build of FFmpeg 8.1.3 (168 MB) from");
+    println!("  {FFMPEG_URL}");
+    let ok = Command::new("curl.exe")
+        .args(["-fL", "-#", "--retry", "2", "-o"])
+        .arg(&zip)
+        .arg(FFMPEG_URL)
+        .status()
+        .with_context(|| "running curl.exe")?
+        .success();
+    if !ok {
+        let _ = std::fs::remove_file(&zip);
+        bail!("the download failed");
+    }
+    let mut hasher = Sha256::new();
+    std::io::copy(&mut std::fs::File::open(&zip)?, &mut hasher)?;
+    let hash: String = hasher.finalize().iter().map(|b| format!("{b:02x}")).collect();
+    if hash != FFMPEG_SHA256 {
+        let _ = std::fs::remove_file(&zip);
+        bail!("the downloaded file is not the expected one (SHA-256 {hash})");
+    }
+    let unpack = tools.join("ffmpeg-unpack");
+    std::fs::create_dir_all(&unpack)?;
+    let ok = Command::new("tar.exe")
+        .arg("-xf")
+        .arg(&zip)
+        .arg("-C")
+        .arg(&unpack)
+        .arg(format!("{FFMPEG_DIR}/bin/ffmpeg.exe"))
+        .arg(format!("{FFMPEG_DIR}/LICENSE.txt"))
+        .status()
+        .with_context(|| "running tar.exe")?
+        .success();
+    let exe = tools.join("ffmpeg.exe");
+    let moved = ok
+        && std::fs::rename(unpack.join(FFMPEG_DIR).join("bin/ffmpeg.exe"), &exe).is_ok()
+        && std::fs::rename(unpack.join(FFMPEG_DIR).join("LICENSE.txt"), tools.join("ffmpeg-LICENSE.txt")).is_ok();
+    let _ = std::fs::remove_dir_all(&unpack);
+    let _ = std::fs::remove_file(&zip);
+    if !moved || !runs(&exe) {
+        bail!("unpacking ffmpeg.exe from the download failed");
+    }
+    println!(
+        "  downloaded {} (FFmpeg 8.1.3, LGPL v3; licence in ffmpeg-LICENSE.txt, source at https://ffmpeg.org)",
+        exe.display()
+    );
     Ok(exe)
 }
 

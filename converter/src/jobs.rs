@@ -56,8 +56,11 @@ pub struct Ctx<'a> {
     disc: Mutex<Option<Disc>>,
     /// Print per-item details.
     pub verbose: bool,
-    /// ffmpeg, from `--ffmpeg` or `source.ffmpeg`; `None`: `ffmpeg` on PATH.
+    /// ffmpeg, from `--ffmpeg` or `source.ffmpeg`; `None`: look for it
+    /// (`moviejob::find_ffmpeg`).
     pub ffmpeg: Option<PathBuf>,
+    /// Where a downloaded ffmpeg goes (`<mod>/tools`); `None`: no download.
+    pub tools_dir: Option<PathBuf>,
 }
 
 impl<'a> Ctx<'a> {
@@ -69,6 +72,7 @@ impl<'a> Ctx<'a> {
             disc: Mutex::new(None),
             verbose,
             ffmpeg: None,
+            tools_dir: None,
         }
     }
 

@@ -24,7 +24,7 @@ use anyhow::{Context, Result, bail};
 
 fn usage() -> ! {
     eprintln!(
-        "FFX Demaster converter {}\nusage:\n{}\n  demaster chr <iso> <FFX_Data.vbf> <out dir> <kind/name>...\n      bake character textures (PNG previews + .dds.phyre)\n  demaster models <iso> <FFX_Data.vbf> <out dir> all|<kind/name>...\n      PS2 meshes into the remodelled characters (run after chr; docs/models.md)\n  demaster models-debug <chr file> <FFX_Data.vbf> <kind/name>\n      print a PS2 mesh against its HD model\n  demaster fx <iso> <FFX_Data.vbf> <out dir> all|<id>...\n      effect textures; id: 7, magic_0007, map/bika/bika00, btlmap/bika/bika00_a, chr/mon/m028\n  demaster maps <iso> <FFX_Data.vbf> <out dir> <map|area|kind>...|all\n      field and battle map textures (PNG previews, maps.tsv + .dds.phyre)\n  demaster ui <iso> <FFX_Data.vbf> <out dir>\n      menus, portraits, title, loading screen, button glyphs (PNG previews + .dds.phyre)\n  demaster movies <iso> <FFX_Data.vbf> <mod dir> all|<name>...\n      PS2 movies as WebM (name: opn, sak, ...; ffmpeg from 'FFMPEG' or the PATH; docs/movies.md)\n  demaster movie-debug <iso> <FFX_Data.vbf> <out dir> <name> [frame]...\n      decode one PS2 movie: statistics, PNGs of the frames, the sound as WAV",
+        "FFX Demaster converter {}\nusage:\n{}\n  demaster chr <iso> <FFX_Data.vbf> <out dir> <kind/name>...\n      bake character textures (PNG previews + .dds.phyre)\n  demaster models <iso> <FFX_Data.vbf> <out dir> all|<kind/name>...\n      PS2 meshes into the remodelled characters (run after chr; docs/models.md)\n  demaster models-debug <chr file> <FFX_Data.vbf> <kind/name>\n      print a PS2 mesh against its HD model\n  demaster fx <iso> <FFX_Data.vbf> <out dir> all|<id>...\n      effect textures; id: 7, magic_0007, map/bika/bika00, btlmap/bika/bika00_a, chr/mon/m028\n  demaster maps <iso> <FFX_Data.vbf> <out dir> <map|area|kind>...|all\n      field and battle map textures (PNG previews, maps.tsv + .dds.phyre)\n  demaster ui <iso> <FFX_Data.vbf> <out dir>\n      menus, portraits, title, loading screen, button glyphs (PNG previews + .dds.phyre)\n  demaster movies <iso> <FFX_Data.vbf> <mod dir> all|<name>...\n      PS2 movies as WebM (name: opn, sak, ...; ffmpeg: $FFMPEG, else found or downloaded as by build; docs/movies.md)\n  demaster movie-debug <iso> <FFX_Data.vbf> <out dir> <name> [frame]...\n      decode one PS2 movie: statistics, PNGs of the frames, the sound as WAV",
         build::VERSION,
         build::USAGE
     );
@@ -189,6 +189,7 @@ fn main() -> Result<()> {
             let config = config::Config::default();
             let mut ctx = jobs::Ctx::new(&config, &pc, Path::new(&a[2]), true);
             ctx.ffmpeg = std::env::var_os("FFMPEG").map(PathBuf::from);
+            ctx.tools_dir = Some(Path::new(&a[4]).join("tools"));
             let out = jobs::Output::new(Path::new(&a[4]));
             let only: Vec<String> = a[5..].iter().filter(|s| *s != "all").cloned().collect();
             println!("{}", moviejob::run(&ctx, &out, &only)?);
