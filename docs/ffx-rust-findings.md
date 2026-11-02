@@ -51,12 +51,9 @@ them ported.
 | ported, PR #7 (ps2-textures.md) | Which HD models/maps kept the PS2 mesh and UVs (class counts per kind, map vertex share, PS2 = (-x, -y, z)) | survey | docs/research/hd-vs-ps2-assets.md |
 | ported, PR #7 (ps2-textures.md) | PS2 font `base.ftc`: type 4, 200 glyphs, 14x18 cells, 4-bit bitmap at +0x40 holding two 2-bit coverage pages, width table at +0x3640 in whole texels; PC table in quarter texels, same glyph order, PC-added glyphs | `TOGetFontInfo` 0x008b7240; the disc's `uspc/menu/base.ftc` | docs/font.md |
 | ported, PR #7 (ps2-textures.md) | 2D background layer names `<layer>_<part>_<w>_<h>_<frame>`, pairing with the `YNSC` part transfers, 37 rooms re-framed for 16:9 | HD vs PS2 comparison | docs/screen.md |
-
 Ported into ffx-rust on branch `docs/demaster-findings`
 (https://github.com/yutamago/ffx-rust/pull/7, 2026-11-02).
-
 ## Not ported
-
 - SPU2 model (ADSR stepping, interpolation kernel, reverb resampler),
   IPU block-decode details: hardware behaviour from PCSX2/PS1
   documentation, not FFX.exe facts.
@@ -80,3 +77,6 @@ Ported into ffx-rust on branch `docs/demaster-findings`
 | new | `TODrawMenuPlateXYWHType` (`0x008f5f70`) type 10 = the HD message box: shadow `TODrawCrossBoxXYWHC2` (+6, +6, `0x401a1a1a`), stone body (shape -4, alpha 0x40), gradient `TODrawCrossBoxXYWHC2Mode2` `0x608f2c45`/`0x60501826` (sphere grid: `0x60340614`/`0x60300410`), meswin frame (shape 200 with explicit UVs); type 9 the same with `0x668f4b2d`/`0x6617080a`; callers yiWindowDrawMenu, TOMenuDrawYesNoWindow, TkBtlEndDrawLegendNotice | decompile | `docs/ui.md` |
 | new | `TOSeqInitParam` colours at run time (PC, English; bytes R G B A): `col_mssgwind0/1` `19 00 31 6b` / `34 00 66 6b`; `col_complt0/1` `4f 28 78 80` / `58 4a 82 80`; `col_nameplt0/1` `24 3e 53 80` / `11 18 40 80`; `col_helpplt` `09 09 09 80`; `col_bsoplt0/1` `3a3a3a80`/`27272780`; `col_bitemplt0/1` `51422380`/`3c3f1280`; `col_babplt0/1` `4a1e5580`/`420d3980`; `col_lmtplt0/1` `1f385580`/`141c3880` | harness `read 0x025d1600 0xb8` | `docs/ui.md` table |
 | new | SLPM_675.13 callers of the PS2 `TOMkpWindowPlain` `0x001fa550`: the 5 window-kind draws `0x00208758`, `0x00208a68`, `0x00208ce8`, `0x00208f60`, `0x002091e0`; the yes/no window `0x002362c0` (= PC `TOMenuDrawYesNoWindow`); unidentified `0x00223880`, `0x002238e0`, `0x002239b0` (the last two through a table at `0x00223cd8`), `0x0023d758`. `0x001fa0f0`, `0x001fa210`, `0x001fa448` read the same colours and have no reference | MIPS disassembly, data pointer search | `docs/ui.md` |
+| new | PS2 `musicNNN.bgm` header `u32` at 0x10 (size): the end of the last track or up to 3 bytes more (music052/127/190/191/193/194/196/240); the bytes after the last track are not always zero (music127 `c8ffc1`, 193 `88`, 196 `7f3e78`, 197 `01d4`); files padded to 8 | scan of all 112 BGMs of the German disc; studio round trip keeps both | `docs/studio.md` |
+| new | PS2 BGM usage: header flag `0x10000` (automatic key-off one tick before the next command), counted loops `0x04/0x05`, ties `0x2a/0x2b`, `0x2e` only in `music240`; no sequence uses `0x70` (delta offset); every varlen is minimal; every other song ends its notes with `0x18`/`0x1a` | same scan (command counts per file) | `docs/studio.md` |
+| new | PS2 `wave_wd.sec` lists no bank for music052, 190 (191 uses 190), 193-199: their sequences name WD banks that `wave_wd.dat` does not hold | `Sources::bank` on the German disc | `docs/studio.md` (Limits) |

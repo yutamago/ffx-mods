@@ -6,6 +6,8 @@
 //! (pan law, the pitch steps' random table, the reverb presets of
 //! `libsd.irx`) are read from the player's disc.
 
+use std::sync::Arc;
+
 use anyhow::{Context, Result, bail, ensure};
 
 use crate::spu2::{self, ReverbPreset, Spu2};
@@ -102,6 +104,23 @@ impl Tables {
         Ok(Tables { pan, rnd, semi, fine, sine, reverb })
     }
 
+    /// Tables without the disc, for tests: a constant-power pan law with
+    /// the module's anchor points, zero random bytes, no reverb presets.
+    pub fn generic() -> Self {
+        let semi: [u32; 12] = std::array::from_fn(|k| (131072.0 * 2f64.powf(k as f64 / 12.0)) as u32);
+        let fine: Vec<u32> = (0..256).map(|i| (65536.0 * 2f64.powf(i as f64 / 3072.0)) as u32).collect();
+        let sine: Vec<i32> = (0..512)
+            .map(|i| (65536.0 * (std::f64::consts::PI * i as f64 / 512.0).sin()).round() as i32)
+            .collect();
+        let pan = (0..256)
+            .map(|p: i32| {
+                let x = ((p - 0x40) as f64 / 128.0).clamp(0.0, 1.0);
+                (256.0 * (x * std::f64::consts::FRAC_PI_2).cos()).round() as i32
+            })
+            .collect();
+        Tables { pan, rnd: vec![0; 256], semi, fine, sine, reverb: vec![ReverbPreset::default(); 10] }
+    }
+
     /// The LFO shapes by number (phase: 10 bits a period).
     fn wave(&self, w: u8, p: u32) -> i32 {
         let sine = |p: u32| {
@@ -161,25 +180,26 @@ impl Tables {
 /// One key/velocity region of an instrument (0x20 bytes in the WD).
 #[derive(Debug, Clone, Copy)]
 pub struct Region {
-    flags: u32,
-    sample: u32,
-    loop_off: u32,
-    adsr: u32,
-    tune: u32,
-    key_hi: i8,
-    vel_hi: u8,
-    vol: u8,
-    pan: u8,
-    rev: u8,
+    pub flags: u32,
+    /// Sample start, bytes from the bank's sample data.
+    pub sample: u32,
+    pub loop_off: u32,
+    pub adsr: u32,
+    pub tune: u32,
+    pub key_hi: i8,
+    pub vel_hi: u8,
+    pub vol: u8,
+    pub pan: u8,
+    pub rev: u8,
 }
 
 /// A `wave_wd.dat` instrument bank ("WD").
+#[derive(Clone)]
 pub struct Wd {
-    #[allow(dead_code)]
     pub id: u16,
     /// First region of each instrument.
-    instruments: Vec<usize>,
-    regions: Vec<Region>,
+    pub instruments: Vec<usize>,
+    pub regions: Vec<Region>,
     /// The ADPCM sample data, loaded at SPU address 0.
     pub samples: Vec<u8>,
 }
@@ -230,20 +250,54 @@ impl Wd {
         let first = u32_at(b, 0x20) as usize;
         Some(first + nreg * 0x20 + size)
     }
+
+    /// The regions of instrument `i` (up to the next instrument's first).
+    pub fn instrument_regions(&self, i: usize) -> &[Region] {
+        let Some(&first) = self.instruments.get(i) else { return &[] };
+        let end = self.instruments.get(i + 1).copied().unwrap_or(self.regions.len());
+        self.regions.get(first..end.max(first)).unwrap_or(&[])
+    }
+
+    /// Appends instrument `i` of `other` (with all of `other`'s sample data,
+    /// once per bank: `base` is where an earlier call put it) and returns
+    /// its number here and the sample base used.
+    pub fn import(&mut self, other: &Wd, i: usize, base: Option<u32>) -> (usize, u32) {
+        let base = base.unwrap_or_else(|| {
+            let at = self.samples.len().next_multiple_of(16);
+            self.samples.resize(at, 0);
+            self.samples.extend_from_slice(&other.samples);
+            at as u32
+        });
+        let n = self.instruments.len();
+        self.instruments.push(self.regions.len());
+        let mut rs: Vec<Region> = other.instrument_regions(i).to_vec();
+        if rs.is_empty() {
+            let first = other.instruments.get(i).copied().unwrap_or(0);
+            rs.push(other.regions[first.min(other.regions.len() - 1)]);
+        }
+        let last = rs.len() - 1;
+        rs[last].flags |= 0x200;
+        for r in &mut rs {
+            r.sample += base;
+        }
+        self.regions.extend(rs);
+        (n, base)
+    }
 }
 
 /// A `musicNNN.bgm` sequence.
+#[derive(Clone)]
 pub struct Bgm {
-    #[allow(dead_code)]
     pub id: u16,
     pub wd: u16,
     pub reverb_mode: u8,
     pub reverb_depth: i16,
     pub volume: u8,
     pub flags: u32,
-    data: Vec<u8>,
-    /// Start offset of each track's events.
-    tracks: Vec<usize>,
+    /// The whole file.
+    pub data: Vec<u8>,
+    /// Start offset of each track's events (after its length word).
+    pub tracks: Vec<usize>,
 }
 
 impl Bgm {
@@ -313,7 +367,7 @@ fn scan(d: &[u8], mut p: usize) -> Vec<u8> {
 
 /// Argument layout per command: 1 a byte, 0 a variable-length number.
 /// `None`: the driver ends the track.
-fn arg_bytes(op: u8) -> Option<&'static [u8]> {
+pub fn arg_bytes(op: u8) -> Option<&'static [u8]> {
     const B: &[u8] = &[1];
     const BB: &[u8] = &[1, 1];
     const BBB: &[u8] = &[1, 1, 1];
@@ -529,6 +583,59 @@ struct Snapshot {
     tracks: Vec<(Option<usize>, i32, u32, (u8, u8, u8))>,
     active: i32,
     tempo: i32,
+    tick: u32,
+}
+
+/// The whole sequencer state at the start of a tick (FFX Music Studio's
+/// loop range).
+#[derive(Debug, Clone)]
+struct RangeSnap {
+    tracks: Vec<Track>,
+    active: i32,
+    song_flags: u32,
+    tempo: i32,
+    snapshot: Option<Snapshot>,
+}
+
+/// FFX Music Studio's changes on top of the sequence (none by default: then
+/// the driver plays exactly as `iopsound.irx`).
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct Mods {
+    /// Per track (missing: unchanged).
+    pub tracks: Vec<TrackMod>,
+    /// Tempo factor (0 or 1: the song's).
+    pub tempo: f64,
+    /// Loop from tick `a` to tick `b` instead of the song's loop: at the
+    /// start of tick `b` (or the song's end) the state from the start of
+    /// tick `a` comes back, volumes and programs included.
+    pub loop_range: Option<(u32, u32)>,
+    /// Stop at the end instead of jumping back to the loop point.
+    pub no_loop: bool,
+}
+
+/// One track's mixer settings.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct TrackMod {
+    /// Volume factor (0: muted).
+    pub gain: f32,
+    /// Added to the pan position (0x40 is hard left of centre 0x80).
+    pub pan: i32,
+    /// Semitones added to every new note.
+    pub transpose: i32,
+    /// Instrument for new notes instead of the track's program.
+    pub program: Option<usize>,
+}
+
+impl Default for TrackMod {
+    fn default() -> Self {
+        TrackMod { gain: 1.0, pan: 0, transpose: 0, program: None }
+    }
+}
+
+impl Mods {
+    fn track(&self, ti: usize) -> TrackMod {
+        self.tracks.get(ti).copied().unwrap_or_default()
+    }
 }
 
 /// What happened during a render (for the FSB's loop points and the checks).
@@ -546,10 +653,11 @@ pub struct Marks {
     pub dropped: u32,
 }
 
-pub struct Song<'a> {
-    tab: &'a Tables,
-    bgm: &'a Bgm,
-    wd: &'a Wd,
+#[derive(Clone)]
+pub struct Song {
+    tab: Arc<Tables>,
+    bgm: Arc<Bgm>,
+    wd: Arc<Wd>,
     tracks: Vec<Track>,
     voices: [DVoice; spu2::VOICES],
     queue: Vec<KeyOn>,
@@ -567,13 +675,19 @@ pub struct Song<'a> {
     pub marks: Marks,
     frame: u64,
     voices_in_use: usize,
+    /// The tick the next call of `tick` plays (counted from the song's
+    /// start in sequence time; jumps back with the loops).
+    pub tick: u32,
+    mods: Mods,
+    tempo_frac: f64,
+    range_snap: Option<RangeSnap>,
 }
 
 /// Output frames per timer interrupt (48 kHz / 240 Hz).
 pub const FRAMES_PER_IRQ: usize = 200;
 
-impl<'a> Song<'a> {
-    pub fn new(tab: &'a Tables, bgm: &'a Bgm, wd: &'a Wd, spu: &mut Spu2) -> Self {
+impl Song {
+    pub fn new(tab: Arc<Tables>, bgm: Arc<Bgm>, wd: Arc<Wd>, spu: &mut Spu2) -> Self {
         let mut tracks: Vec<Track> = bgm.tracks.iter().map(|&p| Track::new(p, bgm.flags)).collect();
         for t in &mut tracks {
             let mut p = t.pos.expect("start");
@@ -609,7 +723,63 @@ impl<'a> Song<'a> {
             marks: Marks::default(),
             frame: 0,
             voices_in_use: 0,
+            tick: 0,
+            mods: Mods::default(),
+            tempo_frac: 0.0,
+            range_snap: None,
         }
+    }
+
+    /// Output frames so far.
+    pub fn frame(&self) -> u64 {
+        self.frame
+    }
+
+    pub fn mods(&self) -> &Mods {
+        &self.mods
+    }
+
+    /// Changes the studio settings; sounding voices take the new volume and
+    /// pan at the next interrupt (transpose and program: new notes).
+    pub fn set_mods(&mut self, mods: Mods) {
+        if mods.loop_range != self.mods.loop_range {
+            self.range_snap = None;
+        }
+        self.mods = mods;
+        for v in self.voices.iter_mut().filter(|v| v.track.is_some()) {
+            v.dirty |= 2;
+        }
+    }
+
+    /// A bank that holds the current one at the same place, with more
+    /// instruments (studio: an instrument from another bank).
+    pub fn set_wd(&mut self, wd: Arc<Wd>) {
+        self.wd = wd;
+    }
+
+    pub fn wd(&self) -> &Arc<Wd> {
+        &self.wd
+    }
+
+    /// Voices per track that the driver has assigned.
+    pub fn voices_per_track(&self) -> Vec<u32> {
+        let mut n = vec![0; self.tracks.len()];
+        for v in &self.voices {
+            if let Some(t) = v.track {
+                n[t] += 1;
+            }
+        }
+        n
+    }
+
+    /// Each track's current program (instrument).
+    pub fn programs(&self) -> Vec<Option<usize>> {
+        self.tracks.iter().map(|t| t.inst).collect()
+    }
+
+    /// The song's tempo now (BPM).
+    pub fn bpm(&self) -> i32 {
+        self.tempo >> 12
     }
 
     /// Whether the sequence still plays.
@@ -619,13 +789,34 @@ impl<'a> Song<'a> {
 
     /// One 240 Hz timer interrupt, then `FRAMES_PER_IRQ` frames of output.
     pub fn interrupt(&mut self, spu: &mut Spu2, out: &mut Vec<[i16; 2]>) {
+        self.timer(spu);
+        spu.render(FRAMES_PER_IRQ, out);
+        self.frame += FRAMES_PER_IRQ as u64;
+    }
+
+    /// One interrupt without output (seeking: see [`Spu2::skip`]).
+    pub fn interrupt_skip(&mut self, spu: &mut Spu2) {
+        self.timer(spu);
+        spu.skip(FRAMES_PER_IRQ);
+        self.frame += FRAMES_PER_IRQ as u64;
+    }
+
+    fn timer(&mut self, spu: &mut Spu2) {
         if self.voices_in_use != 0 || !self.queue.is_empty() {
             self.flush_key_offs(spu);
             self.update_voices(spu);
         }
         self.queue.clear();
         if self.active != 0 {
-            self.tempo_counter -= self.tempo >> 12;
+            let step = self.tempo >> 12;
+            if self.mods.tempo == 0.0 || self.mods.tempo == 1.0 {
+                self.tempo_counter -= step;
+            } else {
+                self.tempo_frac += f64::from(step) * self.mods.tempo;
+                let whole = self.tempo_frac.floor();
+                self.tempo_frac -= whole;
+                self.tempo_counter -= whole as i32;
+            }
             if self.tempo_counter < 1 {
                 loop {
                     self.tempo_counter += 300;
@@ -636,17 +827,59 @@ impl<'a> Song<'a> {
                 }
             }
         }
-        spu.render(FRAMES_PER_IRQ, out);
-        self.frame += FRAMES_PER_IRQ as u64;
     }
 
     /// `FUN_00100824`: one tick; at the end of the song with a loop point,
-    /// back to the loop point and the tick again.
+    /// back to the loop point and the tick again. (The studio's loop range
+    /// and no-loop setting change where it jumps.)
     fn ticks(&mut self) {
-        while self.tick(1) == 0 && self.song_flags & 1 != 0 {
+        loop {
+            if let Some((a, b)) = self.mods.loop_range {
+                if self.tick == b
+                    && let Some(r) = self.range_snap.clone()
+                {
+                    self.restore_range(r, a);
+                }
+                if self.tick == a {
+                    self.range_snap = Some(RangeSnap {
+                        tracks: self.tracks.clone(),
+                        active: self.active,
+                        song_flags: self.song_flags,
+                        tempo: self.tempo,
+                        snapshot: self.snapshot.clone(),
+                    });
+                }
+            }
+            let alive = self.tick(1);
+            self.tick += 1;
+            if alive != 0 {
+                break;
+            }
+            if self.mods.no_loop {
+                if self.song_flags & 1 != 0 {
+                    // what `end_track` does when a song without loop ends
+                    for v in self.voices.iter_mut().filter(|v| v.track.is_some()) {
+                        v.flags = v.flags & !0xd | 2;
+                        v.track = None;
+                    }
+                    self.song_flags &= !1;
+                    self.marks.end = Some(self.frame);
+                }
+                break;
+            }
+            if let Some((a, _)) = self.mods.loop_range
+                && let Some(r) = self.range_snap.clone()
+            {
+                self.restore_range(r, a);
+                continue;
+            }
+            if self.song_flags & 1 == 0 {
+                break;
+            }
             let s = self.snapshot.clone().expect("loop point");
             self.active = s.active;
             self.tempo = s.tempo;
+            self.tick = s.tick;
             for (t, &(pos, wait, f2, (k, v, tf))) in self.tracks.iter_mut().zip(&s.tracks) {
                 t.pos = pos;
                 t.wait = wait;
@@ -657,6 +890,21 @@ impl<'a> Song<'a> {
             }
             self.marks.loop_jumps.push(self.frame);
         }
+    }
+
+    /// Back to the studio loop range's start.
+    fn restore_range(&mut self, r: RangeSnap, a: u32) {
+        self.tracks = r.tracks;
+        self.active = r.active;
+        self.song_flags = r.song_flags;
+        self.tempo = r.tempo;
+        self.snapshot = r.snapshot;
+        self.tick = a;
+        // the notes sounding at the jump are released
+        for v in self.voices.iter_mut().filter(|v| v.track.is_some()) {
+            v.flags |= 2;
+        }
+        self.marks.loop_jumps.push(self.frame);
     }
 
     fn tick(&mut self, n: i32) -> i32 {
@@ -1225,7 +1473,7 @@ impl<'a> Song<'a> {
                 }
             })
             .collect();
-        self.snapshot = Some(Snapshot { tracks, active: self.active, tempo: self.tempo });
+        self.snapshot = Some(Snapshot { tracks, active: self.active, tempo: self.tempo, tick: self.tick });
         if self.marks.loop_point.is_none() {
             self.marks.loop_point = Some(self.frame);
         }
@@ -1324,7 +1572,10 @@ impl<'a> Song<'a> {
     /// `FUN_00102468` + `FUN_00101d20`: starts a queued note.
     fn start_note(&mut self, spu: &mut Spu2, k: KeyOn, kon: &mut u64) -> bool {
         let ti = k.track;
-        let Some(inst) = self.tracks[ti].inst else { return true };
+        let m = self.mods.track(ti);
+        let Some(inst) = m.program.filter(|&p| p < self.wd.instruments.len()).or(self.tracks[ti].inst) else {
+            return true;
+        };
         let mut vi = None;
         if self.tracks[ti].flags2 & T2_TIE != 0 {
             vi = self.voices.iter().position(|v| v.track == Some(ti));
@@ -1336,7 +1587,7 @@ impl<'a> Song<'a> {
                 return false;
             }
         };
-        let r = self.region(inst, k.key, k.vel);
+        let r = self.region(inst, transpose(k.key, m.transpose), k.vel);
         self.voices[vi].region = r;
         self.setup(spu, ti, vi, k, kon);
         if self.wd.regions[r].flags & 1 != 0 && k.tflags & 0x11 == 0 {
@@ -1352,18 +1603,19 @@ impl<'a> Song<'a> {
 
     fn setup(&mut self, spu: &mut Spu2, ti: usize, vi: usize, k: KeyOn, kon: &mut u64) {
         let reg = self.wd.regions[self.voices[vi].region];
+        let pk = transpose(k.key, self.mods.track(ti).transpose);
         let t = &mut self.tracks[ti];
         let v = &mut self.voices[vi];
         v.track = Some(ti);
         if t.porta_time == 0 || t.porta_pitch < 0 {
-            t.porta_pitch = i32::from(k.key as i8) << 20;
-            v.note = if reg.flags & 0x20000 == 0 { i32::from(k.key as i8) << 20 } else { i32::from(reg.key_hi) << 20 };
+            t.porta_pitch = i32::from(pk as i8) << 20;
+            v.note = if reg.flags & 0x20000 == 0 { i32::from(pk as i8) << 20 } else { i32::from(reg.key_hi) << 20 };
         } else {
             t.porta_pitch &= !0xfff;
             v.note = t.porta_pitch;
             t.porta_n = t.porta_time;
             let mut n = t.porta_n.max(1);
-            t.porta_step = slide_step(0, i32::from(k.key as i8) * 0x100 - (t.porta_pitch >> 12), &mut n);
+            t.porta_step = slide_step(0, i32::from(pk as i8) * 0x100 - (t.porta_pitch >> 12), &mut n);
             t.porta_n = n;
         }
         v.key = k.key;
@@ -1511,6 +1763,10 @@ impl<'a> Song<'a> {
             rv += 1;
         }
         a = ((((a * m) >> 7) * (t.vol.v >> 12) >> 14) * rv) >> 7;
+        let tm = self.mods.track(v.track.expect("track"));
+        if tm.gain != 1.0 {
+            a = ((a as f32 * tm.gain.max(0.0)) as i32).min(0x7fff);
+        }
         let pan = if v.flags & 0xc0 == 0 {
             let mut p = if reg.pan & 0x80 == 0 {
                 t.pan.v >> 12
@@ -1518,7 +1774,7 @@ impl<'a> Song<'a> {
                 let x = i32::from(reg.pan & 0x7f) + 0x40;
                 if x == 0 { 0x80 } else { x }
             };
-            p += t.panlfo.out;
+            p += t.panlfo.out + tm.pan;
             p.clamp(0, 0xff)
         } else if v.flags & 0x40 != 0 {
             0x40
@@ -1562,7 +1818,13 @@ impl<'a> Song<'a> {
     }
 }
 
-fn varlen(d: &[u8], p: &mut usize) -> u32 {
+/// A key moved by `semitones` (studio transpose), kept in 0..=127.
+fn transpose(key: u8, semitones: i32) -> u8 {
+    if semitones == 0 { key } else { (i32::from(key) + semitones).clamp(0, 127) as u8 }
+}
+
+/// A MIDI-style variable-length number at `p` (moves `p` past it).
+pub fn varlen(d: &[u8], p: &mut usize) -> u32 {
     let mut v = 0u32;
     loop {
         let Some(&b) = d.get(*p) else { return v };
@@ -1594,7 +1856,7 @@ pub fn render(
     mut sink: impl FnMut(&[[i16; 2]]) -> Result<()>,
 ) -> Result<Marks> {
     let mut spu = Spu2::new(wd.samples.clone());
-    let mut song = Song::new(tab, bgm, wd, &mut spu);
+    let mut song = Song::new(Arc::new(tab.clone()), Arc::new(bgm.clone()), Arc::new(wd.clone()), &mut spu);
     let max = (plan.max_seconds * f64::from(spu2::RATE)) as u64;
     let mut buf = Vec::with_capacity(FRAMES_PER_IRQ * 64);
     let mut quiet = 0u64;

@@ -8,6 +8,20 @@
 //! What is left out because the music never uses it: noise, pitch
 //! modulation, the IRQ, sound data input and the voice streams.
 
+use std::sync::Arc;
+
+/// How a voice reads between its samples.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Interp {
+    /// The hardware's 4-tap Gaussian interpolation.
+    #[default]
+    Gaussian,
+    /// Linear between the two nearest samples (not the hardware).
+    Linear,
+    /// The nearest sample, no interpolation (not the hardware).
+    Nearest,
+}
+
 /// Voices per core.
 pub const CORE_VOICES: usize = 24;
 pub const VOICES: usize = 2 * CORE_VOICES;
@@ -228,17 +242,32 @@ impl Voice {
     }
 
     /// One output sample (before the voice volumes) and the step forward.
-    fn sample(&mut self, ram: &[u8], gauss: &[i32; 512]) -> i32 {
+    fn sample(&mut self, ram: &[u8], gauss: &[i32; 512], mode: Interp) -> i32 {
         if self.phase == Phase::Off {
             return 0;
         }
         let i = ((self.counter >> 4) & 0xff) as usize;
-        let s = (gauss[0xff - i] * self.interp[0]
-            + gauss[0x1ff - i] * self.interp[1]
-            + gauss[0x100 + i] * self.interp[2]
-            + gauss[i] * self.interp[3])
-            >> 15;
+        let s = match mode {
+            Interp::Gaussian => {
+                (gauss[0xff - i] * self.interp[0]
+                    + gauss[0x1ff - i] * self.interp[1]
+                    + gauss[0x100 + i] * self.interp[2]
+                    + gauss[i] * self.interp[3])
+                    >> 15
+            }
+            // between interp[1] and interp[2], where the kernel centres
+            Interp::Linear => (self.interp[1] * (256 - i as i32) + self.interp[2] * i as i32) >> 8,
+            Interp::Nearest => {
+                if i < 128 { self.interp[1] } else { self.interp[2] }
+            }
+        };
         let out = s * self.level >> 15;
+        self.step(ram);
+        out
+    }
+
+    /// The envelope and the sample position one output sample on.
+    fn step(&mut self, ram: &[u8]) {
         self.envelope();
         self.counter += u32::from(self.pitch.min(0x3fff));
         while self.counter >= 0x1000 {
@@ -248,7 +277,6 @@ impl Voice {
                 break;
             }
         }
-        out
     }
 }
 
@@ -430,25 +458,73 @@ struct Core {
 }
 
 /// The chip. Sound RAM holds the sample data at byte addresses.
+#[derive(Clone)]
 pub struct Spu2 {
-    ram: Vec<u8>,
+    ram: Arc<Vec<u8>>,
     voices: Vec<Voice>,
     cores: [Core; 2],
     gauss: [i32; 512],
-    halfband: Vec<f32>,
+    halfband: Arc<Vec<f32>>,
     /// Gain applied at the output (1.0: the chip's own level).
     pub gain: f32,
+    /// Interpolation between samples (FFX Music Studio; the hardware's is
+    /// [`Interp::Gaussian`]).
+    pub interp: Interp,
+    /// Gains of the dry and the reverb (wet) sums (FFX Music Studio; 1.0 is
+    /// the hardware).
+    pub dry: f32,
+    pub wet: f32,
 }
 
 impl Spu2 {
     pub fn new(ram: Vec<u8>) -> Self {
+        Self::with_ram(Arc::new(ram))
+    }
+
+    /// A chip whose sound RAM is shared (FFX Music Studio keeps one copy).
+    pub fn with_ram(ram: Arc<Vec<u8>>) -> Self {
         Spu2 {
             ram,
             voices: vec![Voice::default(); VOICES],
             cores: [Core { evol_l: 0x7fff, evol_r: 0x7fff, ..Core::default() }, Core { evol_l: 0x7fff, evol_r: 0x7fff, ..Core::default() }],
             gauss: gauss_table(),
-            halfband: halfband(),
+            halfband: Arc::new(halfband()),
             gain: 1.0,
+            interp: Interp::Gaussian,
+            dry: 1.0,
+            wet: 1.0,
+        }
+    }
+
+    /// Replaces the sound RAM; voices keep their addresses, so the new RAM
+    /// must hold the old data at the same place (an instrument appended).
+    pub fn set_ram(&mut self, ram: Arc<Vec<u8>>) {
+        self.ram = ram;
+    }
+
+    /// Switches the reverb off on both cores (its work area stays silent).
+    pub fn reverb_off(&mut self) {
+        for c in &mut self.cores {
+            c.reverb.on = false;
+        }
+    }
+
+    /// Voices that sound (envelope above 0).
+    pub fn active_voices(&self) -> usize {
+        self.voices.iter().filter(|v| v.phase != Phase::Off && v.level > 0).count()
+    }
+
+    /// Advances `n` frames without output: envelopes and sample positions
+    /// move on as in [`Spu2::render`], the reverb does not (seeking).
+    pub fn skip(&mut self, n: usize) {
+        let ram = &self.ram[..];
+        for v in self.voices.iter_mut().filter(|v| v.phase != Phase::Off) {
+            for _ in 0..n {
+                v.step(ram);
+                if v.phase == Phase::Off {
+                    break;
+                }
+            }
         }
     }
 
@@ -481,9 +557,7 @@ impl Spu2 {
     pub fn key_on(&mut self, mask: u64) {
         for v in 0..VOICES {
             if mask >> v & 1 != 0 {
-                let ram = std::mem::take(&mut self.ram);
-                self.voices[v].key_on(&ram);
-                self.ram = ram;
+                self.voices[v].key_on(&self.ram);
             }
         }
     }
@@ -512,7 +586,10 @@ impl Spu2 {
 
     /// Renders `n` stereo frames into `out`.
     pub fn render(&mut self, n: usize, out: &mut Vec<[i16; 2]>) {
-        let ram = std::mem::take(&mut self.ram);
+        let ram = Arc::clone(&self.ram);
+        let ram = &ram[..];
+        let mode = self.interp;
+        let custom = self.dry != 1.0 || self.wet != 1.0;
         for _ in 0..n {
             let mut dry = [[0i32; 2]; 2];
             let mut wet = [[0i32; 2]; 2];
@@ -520,7 +597,7 @@ impl Spu2 {
                 if v.phase == Phase::Off {
                     continue;
                 }
-                let s = v.sample(&ram, &self.gauss);
+                let s = v.sample(ram, &self.gauss, mode);
                 let l = s * i32::from(v.vol_l) >> 15;
                 let r = s * i32::from(v.vol_r) >> 15;
                 let c = i / CORE_VOICES;
@@ -541,15 +618,20 @@ impl Spu2 {
             for c in 0..2 {
                 let core = &mut self.cores[c];
                 let (rl, rr) = core.reverb.process(wet[c][0].clamp(-0x8000, 0x7fff), wet[c][1].clamp(-0x8000, 0x7fff), &self.halfband);
-                mix[0] += dry[c][0] + (rl * i32::from(core.evol_l) >> 15);
-                mix[1] += dry[c][1] + (rr * i32::from(core.evol_r) >> 15);
+                let (wl, wr) = (rl * i32::from(core.evol_l) >> 15, rr * i32::from(core.evol_r) >> 15);
+                if custom {
+                    mix[0] += (dry[c][0] as f32 * self.dry + wl as f32 * self.wet) as i32;
+                    mix[1] += (dry[c][1] as f32 * self.dry + wr as f32 * self.wet) as i32;
+                } else {
+                    mix[0] += dry[c][0] + wl;
+                    mix[1] += dry[c][1] + wr;
+                }
             }
             out.push([
                 (mix[0] as f32 * self.gain).round().clamp(-32768.0, 32767.0) as i16,
                 (mix[1] as f32 * self.gain).round().clamp(-32768.0, 32767.0) as i16,
             ]);
         }
-        self.ram = ram;
     }
 
     /// Whether any voice still sounds (a voice whose envelope reached 0
