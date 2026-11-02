@@ -1,7 +1,7 @@
 [workspace]
 resolver = "3"
 members = ["converter", "studio", "tools/ps2x"]
-exclude = ["tools/shotrun"]
+exclude = ["tools/shotrun", "tools/calllist"]
 
 [workspace.package]
 version = "0.1.0"

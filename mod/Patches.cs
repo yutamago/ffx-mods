@@ -25,7 +25,7 @@ internal static class Patches {
         new("render.shadows",        "hd",    "ground shadows only, no shadow maps",     RenderPatches.shadows),
         new("render.aspect",         "hd",    "4:3 with the PS2 projection",             RenderPatches.aspect),
         new("render.texture_filter", "game",  "nearest-neighbour texture filtering",     RenderPatches.texture_filter),
-        new("ui.menus",              "hd",    "PS2 message windows",                     MenuPatches.menus),
+        new("ui.menus",              "hd",    "PS2 message and battle command windows",  MenuPatches.menus),
         new("ui.loading",            "hd",    "splash videos skipped at start-up",       GamePatches.skip_splash),
         new("ui.battle_subtitles",   "hd",    "battle dialogue subtitles",               GamePatches.battle_subtitles),
         new("ui.battle_menu_delay",  "hd",    "battle menu without input delays",        GamePatches.battle_menu_delay),

@@ -88,6 +88,7 @@ internal static class MenuPatches {
             _plate_next(x, y, w, h, type);
         };
         return Native.fn<WindowDraw>(WINDOW_DRAW_MENU).hook(m, _draw_menu)
-            && Native.fn<MenuPlate>(MENU_PLATE).hook(m, _plate_hook);
+            & Native.fn<MenuPlate>(MENU_PLATE).hook(m, _plate_hook)
+            & BattlePatches.windows(m);
     }
 }
