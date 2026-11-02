@@ -60,7 +60,7 @@ every file.
 | `maps.battle` | 8 | PS2 battle map textures | HD | converter (`maps.battle`) | done (`docs/maps.md`) |
 | `effects.textures` | 9 | PS2 spell, summon and effect textures | HD (2x upscales) | converter | planned |
 | `render.glow` | 10 | no glow/blow-out | the HD glow | mod | done (`docs/render.md`) |
-| `render.lighting` | 10 | characters lit by the PS2 light colours and directions | the HD light levels | mod | light levels and directions done; the shader's softer falloff stays (`docs/render.md`) |
+| `render.lighting` | 10 | characters lit by the PS2 formula: the PS2 light colours and directions at the PS2's level (254/128), `max(0, N.L)` falloff, no HD fill light | the HD light levels and soft falloff | mod and converter (`render.lighting`: the patched character shaders) | done (`docs/render.md`); per-pixel instead of per-vertex, no 2x clamp of the PS2 vertex colour |
 | `render.shadows` | 11 | ground shadows only, no shadow maps | shadow maps | mod | done (`docs/render.md`) |
 | `render.aspect` | 14 | 4:3 with black bars and the PS2 projection; the PS2-placed menus, windows and battle HUD where the PS2 had them; the Flash screens (Esc menu, settings, save/load) squeezed into the 4:3 | 16:9 | mod (and the `movies` and `maps.backgrounds` jobs) | done; mouse on the PS2 menus not checked (`docs/screen.md`) |
 | `ui.menus` | 12 | the PS2 message windows (dialogue choices, yes/no questions: the PS2 plain window with its colours and pieces) and the PS2 pieces of the menu and battle atlases (the main menu, the battle command windows and the Flash screens stay HD, `docs/ui.md`) | HD | converter (`ui.menus`) and mod | message windows done; main menu and battle windows not started |
@@ -78,8 +78,13 @@ every file.
 `movies` is a top-level key: it goes above the first `[table]` in the file.
 
 `render.texture_filter` (row 19) has other values: `"game"` (default) keeps
-the filter of the game's graphics options; `"nearest"` shows unfiltered
-texels. Applied by the mod; planned (`docs/render.md`).
+the filter of the game's graphics options (bilinear/trilinear or
+anisotropic; the PS2 filtered bilinearly too); `"nearest"` shows unfiltered
+texels on the 3D scene's models and maps (effects, 2D rooms, menus and
+post-processing keep theirs). Applied by the mod (`docs/render.md`).
+
+Every converted PS2 texture whose HD texture has mip levels gets a full mip
+chain (`phyretex::mip_chain`), so surfaces seen from afar do not shimmer.
 
 ## Fixes (default `true`)
 

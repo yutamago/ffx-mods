@@ -83,7 +83,7 @@ fn main() {
     let mut starts: Vec<(i32, usize)> = dfid
         .iter()
         .enumerate()
-        .filter(|(_, &s)| s >= 0)
+        .filter(|&(_, &s)| s >= 0)
         .map(|(m, &s)| (s, m))
         .collect();
     starts.sort();
