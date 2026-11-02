@@ -10,3 +10,4 @@ out/
 # C# mod build output, release zips
 mod/artifacts/
 *.zip
+.claude/
