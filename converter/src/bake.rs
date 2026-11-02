@@ -78,6 +78,11 @@ pub fn find_frame(ps2: &[P], hd: &[[f32; 3]]) -> Option<(Frame, f32)> {
         .step_by((hd_unique.len() / 150).max(1))
         .map(|p| p.map(|c| c as f32 / 1000.0))
         .collect();
+    let check: Vec<[f32; 3]> = hd_unique
+        .iter()
+        .step_by((hd_unique.len() / 2000).max(1))
+        .map(|p| p.map(|c| c as f32 / 1000.0))
+        .collect();
     let mut ps2_unique: Vec<P> = set.iter().copied().collect();
     ps2_unique.sort_unstable();
     let ps2_sample: Vec<P> = ps2_unique
@@ -104,15 +109,35 @@ pub fn find_frame(ps2: &[P], hd: &[[f32; 3]]) -> Option<(Frame, f32)> {
                         .or_default() += 1;
                 }
             }
-            let Some((&t, _)) = votes.iter().max_by_key(|&(_, &n)| n) else {
+            // Every offset with the most votes, in a fixed order: picking one
+            // of a tie by HashMap order made builds differ from run to run.
+            let Some(&top) = votes.values().max() else {
                 continue;
             };
-            let f = Frame { perm, sign, t };
-            let hits = hd
+            let mut tied: Vec<P> = votes
                 .iter()
-                .filter(|&&h| snap(&set, f.apply(h)).is_some())
-                .count();
-            let share = hits as f32 / hd.len() as f32;
+                .filter(|&(_, &n)| n == top)
+                .map(|(&t, _)| t)
+                .collect();
+            tied.sort_unstable();
+            // Wrong orientations tie by the thousand with a handful of votes.
+            tied.truncate(16);
+            // Ties are settled on a sample, the winner is scored on every vertex.
+            let hits = |f: &Frame, pts: &[[f32; 3]]| {
+                pts.iter().filter(|&&h| snap(&set, f.apply(h)).is_some()).count()
+            };
+            let mut f = Frame { perm, sign, t: tied[0] };
+            if tied.len() > 1 {
+                let mut most = hits(&f, &check);
+                for &t in &tied[1..] {
+                    let g = Frame { perm, sign, t };
+                    let n = hits(&g, &check);
+                    if n > most {
+                        (f, most) = (g, n);
+                    }
+                }
+            }
+            let share = hits(&f, hd) as f32 / hd.len() as f32;
             if best.is_none_or(|(_, s)| share > s) {
                 best = Some((f, share));
             }
@@ -279,9 +304,11 @@ fn learn_maps(jobs: &[Job]) -> Vec<UvMap> {
             .entry((j.material, [q(s[0]), q(s[1]), q(o[0]), q(o[1])]))
             .or_default() += 1;
     }
+    let mut votes: Vec<_> = votes.into_iter().filter(|&(_, n)| n >= 3).collect();
+    // a fixed order for ties (HashMap order changes from run to run)
+    votes.sort_unstable_by_key(|&(k, n)| (std::cmp::Reverse(n), k));
     let mut maps: Vec<(u32, UvMap)> = votes
         .into_iter()
-        .filter(|&(_, n)| n >= 3)
         .map(|((material, k), n)| {
             let f = |v: i32| v as f32 / 256.0;
             (

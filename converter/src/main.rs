@@ -1,6 +1,9 @@
 mod bake;
+mod build;
 mod chrjob;
+mod config;
 mod disc;
+mod jobs;
 mod phyretex;
 mod ps2chr;
 
@@ -10,7 +13,9 @@ use anyhow::{Context, Result, bail};
 
 fn usage() -> ! {
     eprintln!(
-        "usage:\n  demaster chr <iso> <FFX_Data.vbf> <out dir> <kind/name>...   bake character textures (PNG previews + .dds.phyre)"
+        "FFX Demaster converter {}\nusage:\n{}\n  demaster chr <iso> <FFX_Data.vbf> <out dir> <kind/name>...\n      bake character textures (PNG previews + .dds.phyre)",
+        build::VERSION,
+        build::USAGE
     );
     std::process::exit(2)
 }
@@ -20,10 +25,35 @@ fn write(path: &Path, bytes: &[u8]) -> Result<()> {
     std::fs::write(path, bytes).with_context(|| path.display().to_string())
 }
 
+/// Keeps the console open when demaster.exe was started by double-click.
+fn wait_for_enter() {
+    if cfg!(windows) {
+        println!("\nPress Enter to close.");
+        let _ = std::io::stdin().read_line(&mut String::new());
+    }
+}
+
 fn main() -> Result<()> {
     let a: Vec<String> = std::env::args().collect();
-    let Some(cmd) = a.get(1) else { usage() };
+    let Some(cmd) = a.get(1) else {
+        // No arguments: build with the demaster.toml next to the exe.
+        let ok = build::run(&build::Args::default()).unwrap_or_else(|e| {
+            eprintln!("error: {e:#}");
+            false
+        });
+        wait_for_enter();
+        std::process::exit(if ok { 0 } else { 1 });
+    };
     match cmd.as_str() {
+        "build" => {
+            let args = build::Args::parse(&a[2..])?;
+            if !build::run(&args)? {
+                std::process::exit(1);
+            }
+        }
+        "jobs" => build::list_jobs(),
+        "--version" | "-V" => println!("demaster {}", build::VERSION),
+        "help" | "--help" | "-h" => usage(),
         "chr" => {
             if a.len() < 6 {
                 usage();
@@ -34,17 +64,10 @@ fn main() -> Result<()> {
             let out = PathBuf::from(&a[4]);
             let mut specs: Vec<String> = a[5..].to_vec();
             if specs == ["all"] {
-                specs = d
-                    .names()
-                    .filter_map(|n| {
-                        let rest = n.strip_prefix("jppc/chr/")?;
-                        let mut p = rest.split('/');
-                        let (kind, name, mdl, file) = (p.next()?, p.next()?, p.next()?, p.next()?);
-                        (mdl == "mdl" && file == format!("{name}.chr"))
-                            .then(|| format!("{kind}/{name}"))
-                    })
+                specs = chrjob::models(&d)
+                    .into_iter()
+                    .map(|(kind, name)| format!("{kind}/{name}"))
                     .collect();
-                specs.sort();
             }
             for spec in &specs {
                 let (kind, name) = spec.split_once('/').context("kind/name")?;
@@ -88,7 +111,7 @@ fn main() -> Result<()> {
                 }
             }
         }
-        _ => bail!("unknown command {cmd}"),
+        _ => bail!("unknown command {cmd} (demaster help)"),
     }
     Ok(())
 }
