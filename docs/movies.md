@@ -94,8 +94,10 @@ PS2 `saw` is the PC's `swa`. The PC has no PS2 counterpart for `fal`,
 `syuin` and the `*_480` texture videos.
 
 So each movie becomes: 640 x 416 (512-wide pictures widened to 640) scaled
-to 960 x 720, centred in 1280 x 720 with black bars (4:3 inside 16:9),
-studio range expanded to full range (blacks 0, as the PC's shader and the
+to 960 x 720; with `render.aspect = "ps2"` (the default: the game's
+picture is 4:3 and the movie quad fills it, `docs/screen.md`) that is the
+file, with `"hd"` it is centred in 1280 x 720 with black bars (4:3 inside
+16:9); studio range expanded to full range (blacks 0, as the PC's shader and the
 PS2's IPU colour conversion show them; the HD files are studio range and
 so show grey blacks), 25 fps duplicated up to 30000/1001, VP8 (`libvpx`,
 `-deadline good -cpu-used 4 -b:v 4M -crf 8`, no alt-ref frames), Vorbis
@@ -107,7 +109,14 @@ Left HD: `mst`, `far`, `ggm`, `sns` (ids 0x20, 0x2e, 0x46, 0x48,
 `movie_have_camera`): the game draws the 3D scene over them with the PC's
 16:9 cameras (`video/<id>.dat`), which would not line up with a 4:3 PS2
 picture. Their PS2 versions switch to 512 x 416 where the 3D scene goes on
-top.
+top. With `render.aspect = "ps2"` the 3D scene shows the middle 4:3 of the
+PC camera's view, so the job cuts the HD file to its middle 960 x 720
+(VP8 as above, the sound copied; mst and ggm checked with ffprobe; not
+seen in the game). Under 4:3 a movie left at 1280 x 720 (`movies = "hd"`)
+is squeezed to 4:3.
+
+IWK at 960 x 720 played in the harness with the 4:3 output
+(`~/ffx-work/demaster/research/aspect/fmv-iwk-43.png`): it fills the 4:3.
 
 Sound: the PS2's own. It is the same mix as the HD `_us` files (sak:
 correlation 0.97 at 8 kHz, the HD 21 ms later). The German disc's movies

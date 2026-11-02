@@ -204,7 +204,9 @@ fn main() -> Result<()> {
             let mut d = disc::Disc::open(Path::new(&a[2]), &pc)?;
             let out = PathBuf::from(&a[4]);
             let only: Vec<String> = a[5..].iter().filter(|s| *s != "all").cloned().collect();
-            let (done, notes) = bgjob::convert(&mut d, &pc, &only)?;
+            // DEMASTER_ASPECT=hd: as with render.aspect = "hd" (re-framed rooms stay HD)
+            let four_three = std::env::var("DEMASTER_ASPECT").map_or(true, |v| v != "hd");
+            let (done, notes) = bgjob::convert(&mut d, &pc, &only, four_three)?;
             for t in &done {
                 println!("{}", t.note);
                 write(&out.join("efl/x").join(&t.path), &t.file)?;
