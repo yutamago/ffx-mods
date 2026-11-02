@@ -22,7 +22,9 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use anyhow::{Context, Result, bail, ensure};
 
+use crate::config::Config;
 use crate::disc::Disc;
+use crate::jobs::{Ctx, Job, Output};
 use crate::glb::{Glb, Primitive};
 use crate::phyretex::{self, Rgba};
 use crate::ps2chr::Chr;
@@ -131,6 +133,113 @@ struct Vert {
     pos: [f64; 3],
     normal: [f64; 3],
     bones: [(u16, f32); 4],
+}
+
+/// Whether a character's HD model is a remodel this converter replaces:
+/// the texture bake skips at least one of its pages and under 60 % of its
+/// HD vertices sit on a PS2 vertex (`docs/models.md`, "What gets
+/// converted").
+pub fn remodelled(chr: &[u8], pc: &ffx_vbf::Archive, kind: &str, name: &str) -> Result<bool> {
+    Ok(crate::chrjob::skipped_chr(chr, pc, kind, name)?
+        .is_some_and(|r| !r.skipped.is_empty() && r.frame_share < 0.6))
+}
+
+/// One build job per character kind (`models.party`, ...): the PS2 mesh
+/// into every remodelled HD model of that kind. The texture-swap jobs
+/// (`chr.*`) cover the models whose mesh was kept.
+struct ModelsJob {
+    name: &'static str,
+    settings: &'static [&'static str],
+    kinds: &'static [&'static str],
+    enabled: fn(&Config) -> bool,
+}
+
+pub fn jobs() -> Vec<Box<dyn Job>> {
+    fn job(
+        name: &'static str,
+        settings: &'static [&'static str],
+        kinds: &'static [&'static str],
+        enabled: fn(&Config) -> bool,
+    ) -> Box<dyn Job> {
+        Box::new(ModelsJob { name, settings, kinds, enabled })
+    }
+    vec![
+        job("models.party", &["models.party"], &["pc"], |c| c.models.party.ps2()),
+        job("models.monster", &["models.monster"], &["mon"], |c| c.models.monster.ps2()),
+        job("models.npc", &["models.npc"], &["npc"], |c| c.models.npc.ps2()),
+        job("models.aeon", &["models.aeon"], &["sum"], |c| c.models.aeon.ps2()),
+        job("models.weapon", &["models.weapon"], &["wep"], |c| c.models.weapon.ps2()),
+        job("models.object", &["models.object"], &["obj", "skl"], |c| c.models.object.ps2()),
+    ]
+}
+
+impl Job for ModelsJob {
+    fn name(&self) -> &'static str {
+        self.name
+    }
+
+    fn settings(&self) -> &'static [&'static str] {
+        self.settings
+    }
+
+    fn enabled(&self, config: &Config) -> bool {
+        (self.enabled)(config)
+    }
+
+    fn run(&self, ctx: &Ctx, out: &Output) -> Result<String> {
+        use rayon::prelude::*;
+        let names: Vec<(String, String)> = ctx.disc(|d| {
+            Ok(crate::chrjob::models(d)
+                .into_iter()
+                .filter(|(k, _)| self.kinds.contains(&k.as_str()))
+                .collect())
+        })?;
+        let (mut done, mut failed) = (0, 0);
+        // in chunks, written in name order: every build writes the same files
+        for chunk in names.chunks(16) {
+            let results: Vec<Result<Option<Converted>>> = chunk
+                .par_iter()
+                .map(|(kind, name)| {
+                    let Some(chr) =
+                        ctx.disc(|d| d.read(&format!("jppc/chr/{kind}/{name}/mdl/{name}.chr")))?
+                    else {
+                        return Ok(None);
+                    };
+                    if !remodelled(&chr, ctx.pc, kind, name).unwrap_or(false) {
+                        return Ok(None);
+                    }
+                    let hd_path =
+                        format!("ffx_data/gamedata/ps3data/chr/{kind}/{name}/mdl/d3d11/{name}.dae.phyre");
+                    let original = ctx.pc.read(ctx.pc.find(&hd_path).context("no HD model")?)?;
+                    convert_bytes(&chr, &original, &hd_path, |p| {
+                        ctx.pc.find(p).map(|e| ctx.pc.read(e)).transpose().map_err(Into::into)
+                    })
+                    .map(Some)
+                })
+                .collect();
+            for ((kind, name), r) in chunk.iter().zip(results) {
+                match r {
+                    Ok(None) => {}
+                    Ok(Some(c)) => {
+                        ctx.note(format!("{kind}/{name}:\n{}", c.report.trim_end()));
+                        for (path, bytes) in &c.files {
+                            out.put(path, bytes)?;
+                        }
+                        done += 1;
+                    }
+                    Err(e) => {
+                        failed += 1;
+                        ctx.note(format!("{kind}/{name}: left HD: {e:#}"));
+                    }
+                }
+            }
+        }
+        let mut s = format!("{done} remodelled models given the PS2 mesh");
+        if failed > 0 {
+            s += &format!(", {failed} failed and left HD (--verbose lists them)");
+        }
+        Ok(s)
+    }
 }
 
 pub fn convert(disc: &mut Disc, pc: &ffx_vbf::Archive, kind: &str, name: &str) -> Result<Option<Converted>> {

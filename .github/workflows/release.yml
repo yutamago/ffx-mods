@@ -1,0 +1,61 @@
+# SPDX-License-Identifier: MIT
+# Pushing a tag such as v0.2.0 builds the converter and the mod with that
+# version and publishes a release with a zip that unpacks straight into the
+# Fahrenheit folder. A tag with a "-" (v0.2.0-alpha) makes a prerelease.
+# Needs the FFX_RUST_TOKEN secret (see build.yml).
+name: Release
+
+on:
+  push:
+    tags: [ "v*" ]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v7
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v6
+      with:
+        dotnet-version: 10.0.x
+
+    - name: Access to ffx-rust
+      env:
+        TOKEN: ${{ secrets.FFX_RUST_TOKEN }}
+      run: |
+        if (-not $env:TOKEN) { throw 'the FFX_RUST_TOKEN secret is not set; cargo cannot fetch ffx-rust' }
+        git config --global url."https://x-access-token:$env:TOKEN@github.com/yutamago/ffx-rust".insteadOf "https://github.com/yutamago/ffx-rust"
+
+    # The mod compares its version with the converter's that built the files,
+    # so both get the tag's.
+    - name: Build
+      env:
+        CARGO_NET_GIT_FETCH_WITH_CLI: "true"
+      run: |
+        $PSNativeCommandUseErrorActionPreference = $true
+        $version = $env:GITHUB_REF_NAME -replace '^v', ''
+        $env:DEMASTER_VERSION = $version
+        cargo build --release -p demaster --target x86_64-pc-windows-msvc
+        dotnet build -c Release -p:Version="$version" ffx-demaster.slnx
+
+    - name: Package
+      run: dotnet run tools/package.cs -- "yuta.demaster-$env:GITHUB_REF_NAME.zip"
+
+    - name: Publish
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        $tag = $env:GITHUB_REF_NAME
+        $release = @('release', 'create', $tag, "yuta.demaster-$tag.zip", '--verify-tag',
+                     '--title', "FFX Demaster $tag", '--generate-notes')
+        if ($tag.Contains('-')) { $release += '--prerelease' }
+        gh @release

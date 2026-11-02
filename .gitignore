@@ -6,3 +6,8 @@ __pycache__/
 *.png
 *.dds
 out/
+
+# C# mod build output, release zips
+mod/artifacts/
+*.zip
+.claude/
