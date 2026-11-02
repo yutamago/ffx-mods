@@ -29,9 +29,9 @@ Numbers refer to the rows of [`differences.md`](differences.md). Status:
 | Item | Rows | Status |
 |---|---|---|
 | PS2 font | 13 | todo | texture + table swap for EFIGS, plan in `docs/font.md` (~2 days) |
-| Title logo, loading screen, splash videos | 16 | wip | title and loading done; splash skip needs code |
-| Battle dialogue subtitles | 17 | todo |
-| Battle menu input delay | 18 | todo |
+| Title logo, loading screen, splash videos | 16 | done | splash: OpeningScreen.swf skipped by hook; not seen on screen |
+| Battle dialogue subtitles | 17 | dropped | the PC already subtitles scripted battle dialogue; no case found where the PS2 did and the PC doesn't (user, 2026-11-02). `ui.battle_subtitles` only forces the save's subtitle bit on |
+| Battle menu input delay | 18 | done (static) | 8 delay branches removed (`docs/patches.md`); not timed in game |
 
 ## Milestone 4: movies and screen
 
@@ -49,15 +49,15 @@ Numbers refer to the rows of [`differences.md`](differences.md). Status:
 | PS2-like lighting | 10 | todo |
 | Shadows | 11 | todo |
 | Texture filtering option | 19 | todo |
-| Soundtrack default "Original" | 20 | todo |
+| Soundtrack default "Original" | 20 | done (static) | new-game save gets Original; menu switch still works |
 
 ## Fixes
 
 | Item | Status |
 |---|---|
-| NPC mouths open in cutscenes | todo |
-| Farplane video | todo |
-| Lulu's Fury input | todo |
+| NPC mouths open in cutscenes | open | no PC-specific cause found, no reproducible case known (`docs/patches.md`) |
+| Farplane video | done (static) | movie-init branch patched; particles during the video not checked |
+| Lulu's Fury input | done (static) | skipped diagonal filled in; no real stick test |
 
 ## Changes wanted in ffx-rust
 
