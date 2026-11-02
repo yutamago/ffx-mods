@@ -50,6 +50,7 @@ Numbers refer to the rows of [`differences.md`](differences.md). Status:
 | Shadows | 11 | todo |
 | Texture filtering option | 19 | todo |
 | Soundtrack default "Original" | 20 | done (static) | new-game save gets Original; menu switch still works |
+| PS2 music engine: `.bgm` sequences + PS2 samples rendered by our own sequencer and SPU2 emulation, replacing the `music_ps2` FMOD bank (offline render first; live engine later) | 20 | wip | community request (user, 2026-11-02); oracle: the PC's own Original recordings |
 
 ## Fixes
 
