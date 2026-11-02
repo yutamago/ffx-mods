@@ -47,8 +47,8 @@ pub struct Disc {
     /// The region folder whose tables match the disc (`de`, `us`, ...).
     pub region: String,
     files: Vec<DiscFile>,
-    /// PC-style path (`jppc/chr/...`, without `ffx_ps2/ffx/master/`) to the
-    /// index in `files`.
+    /// PC-style path (`jppc/chr/...`, without `ffx_ps2/ffx/master/`;
+    /// `_host0/magic/mag_0007.bin` for the effects) to the index in `files`.
     by_name: HashMap<String, usize>,
 }
 
@@ -119,7 +119,16 @@ impl Disc {
             let raw = &names[a..b];
             let z = raw.iter().position(|&c| c == 0).unwrap_or(raw.len());
             let s = String::from_utf8_lossy(&raw[..z]);
-            Some(s.strip_prefix("host0:/ffx/master/")?.to_ascii_lowercase())
+            // As the extractor (tools/ps2x) names them: the effects
+            // (`host0:magic/mag_NNNN.bin`) become `_host0/magic/...`.
+            let s = if let Some(rest) = s.strip_prefix("host0:/ffx/master/") {
+                rest.to_string()
+            } else if let Some(rest) = s.strip_prefix("host0:/ffx/") {
+                format!("_ffx/{rest}")
+            } else {
+                format!("_host0/{}", s.strip_prefix("host0:")?)
+            };
+            Some(s.to_ascii_lowercase())
         };
 
         let mut files = Vec::new();
