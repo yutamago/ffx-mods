@@ -85,8 +85,8 @@ animation block `T+0x10980 = 0x3ab00`.
 | `+0` u8 | kind (1, or 2 = patch animation) | `chr_texanim_set` |
 | `+1` u8 | animation count | `chr_texanim_set_new` (`0x0077f9c0`) |
 | `+2` u8 | version (0 old, 1 new) | `chr_texanim_set` |
-| `+4` u32 | patch table offset (12 B: `u16 ?, u16 ?, u16 w, u16 h, u32 offset of a 32-byte upload header`; the pixels follow the header) | byte evidence (offsets step by `w*h + 0x20`) |
-| `+8` u32 | animation entries, `0x110` B each (`u16 x, y` destination in the image at `+8`, then 32 (frame ref, duration) pairs) | `chr_texanim_set_new` steps `0x110` |
+| `+4` u32 | patch table offset (12 B: `u16` destination image width and height, `u16 w, h`, `u32` offset of a 32-byte upload header; the pixels follow the header) | `FUN_0077f360`, `chr_texanim_draw_sub_new` ("tex anim area over" check) |
+| `+8` u32 | animation entries, `0x110` B each: `u16 x, y` destination `+8`, `u16` image `+0xc`, then 32 states × (`u32` frame list offset, `i16` count) from `+0x10`; a frame is `i16` duration, `u8` patch, `u8` random extra (`docs/models.md`, "Texture animation") | `chr_texanim_set_new` steps `0x110`; `FUN_0077f360` |
 | `+0xc` | 32 bytes: per-animation type (`0xff` = unused) | copied to work `+0xd08` |
 
 Patches are 8-bit sub-images (eye and mouth frames) that `setLoadImageTagsTexAnim` blits into the

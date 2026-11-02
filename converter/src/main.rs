@@ -21,6 +21,7 @@ mod ps2mesh;
 mod ps2movie;
 mod spu2;
 mod sqseq;
+mod texanim;
 mod uijob;
 
 use std::path::{Path, PathBuf};
@@ -29,7 +30,7 @@ use anyhow::{Context, Result, bail};
 
 fn usage() -> ! {
     eprintln!(
-        "FFX Demaster converter {}\nusage:\n{}\n  demaster chr <iso> <FFX_Data.vbf> <out dir> <kind/name>...\n      bake character textures (PNG previews + .dds.phyre)\n  demaster models <iso> <FFX_Data.vbf> <out dir> all|<kind/name>...\n      PS2 meshes into the remodelled characters (run after chr; docs/models.md)\n  demaster models-debug <chr file> <FFX_Data.vbf> <kind/name>\n      print a PS2 mesh against its HD model\n  demaster fx <iso> <FFX_Data.vbf> <out dir> all|<id>...\n      effect textures; id: 7, magic_0007, map/bika/bika00, btlmap/bika/bika00_a, chr/mon/m028\n  demaster maps <iso> <FFX_Data.vbf> <out dir> <map|area|kind>...|all\n      field and battle map textures (PNG previews, maps.tsv + .dds.phyre)\n  demaster ui <iso> <FFX_Data.vbf> <out dir>\n      menus, portraits, title, loading screen, button glyphs (PNG previews + .dds.phyre)\n  demaster movies <iso> <FFX_Data.vbf> <mod dir> all|<name>...\n      PS2 movies as WebM (name: opn, sak, ...; ffmpeg: $FFMPEG, else found or downloaded as by build; docs/movies.md)\n  demaster movie-debug <iso> <FFX_Data.vbf> <out dir> <name> [frame]...\n      decode one PS2 movie: statistics, PNGs of the frames, the sound as WAV\n  demaster music <iso> <FFX_Data.vbf> <out dir> all|<id|name>...\n      render PS2 music tracks (musicNNN.bgm) as 48 kHz WAVs (docs/music.md)\n  demaster music-bank <bank.fsb> <out dir> [name...]\n      decode a music bank (FSB5, IMA ADPCM) to WAVs",
+        "FFX Demaster converter {}\nusage:\n{}\n  demaster chr <iso> <FFX_Data.vbf> <out dir> <kind/name>...\n      bake character textures (PNG previews + .dds.phyre)\n  demaster models <iso> <FFX_Data.vbf> <out dir> all|<kind/name>...\n      PS2 meshes into the remodelled characters (run after chr; docs/models.md)\n  demaster models-debug <chr file> <FFX_Data.vbf> <kind/name>\n      print a PS2 mesh against its HD model\n  demaster fx <iso> <FFX_Data.vbf> <out dir> all|<id>...\n      effect textures; id: 7, magic_0007, map/bika/bika00, btlmap/bika/bika00_a, chr/mon/m028\n  demaster maps <iso> <FFX_Data.vbf> <out dir> <map|area|kind>...|all\n      field and battle map textures (PNG previews, maps.tsv + .dds.phyre)\n  demaster ui <iso> <FFX_Data.vbf> <out dir>\n      menus, portraits, title, loading screen, button glyphs (PNG previews + .dds.phyre)\n  demaster movies <iso> <FFX_Data.vbf> <mod dir> all|<name>...\n      PS2 movies as WebM (name: opn, sak, ...; ffmpeg: $FFMPEG, else found or downloaded as by build; docs/movies.md)\n  demaster movie-debug <iso> <FFX_Data.vbf> <out dir> <name> [frame]...\n      decode one PS2 movie: statistics, PNGs of the frames, the sound as WAV\n  demaster music <iso> <FFX_Data.vbf> <out dir> all|<id|name>...\n      render PS2 music tracks (musicNNN.bgm) as 48 kHz WAVs (docs/music.md)\n  demaster music-bank <bank.fsb> <out dir> [name...]\n      decode a music bank (FSB5, IMA ADPCM) to WAVs\n  demaster texanim-debug <chr file> <FFX_Data.vbf> <kind/name>\n      print a PS2 texture animation against the HD .ags",
         build::VERSION,
         build::USAGE
     );
@@ -153,6 +154,12 @@ fn main() -> Result<()> {
             let p = format!("ffx_data/gamedata/ps3data/chr/{kind}/{name}/mdl/d3d11/{name}.dae.phyre");
             let hd = pc.read(pc.find(&p).context("no HD model")?)?;
             models::debug(&chr, &hd)?;
+        }
+        "texanim-debug" => {
+            if a.len() < 5 {
+                usage();
+            }
+            texanim_debug(&a[2], &a[3], &a[4])?;
         }
         "fx" => {
             if a.len() < 6 {
@@ -474,6 +481,9 @@ fn models_cmd(iso: &str, vbf: &str, out: &Path, specs: &[String]) -> Result<()> 
         let png = ffx_phyre::png(c.atlas.width, c.atlas.height, &c.atlas.pixels);
         write(&out.join("preview").join(format!("{name}-atlas.png")), &png)?;
         write(&out.join("preview").join(format!("{name}.glb")), &c.glb)?;
+        for (tag, im) in &c.anim {
+            write(&out.join("preview").join(format!("{name}-anim-{tag}.png")), &ffx_phyre::png(im.width, im.height, &im.pixels))?;
+        }
         ok += 1;
     }
     eprintln!("{ok} converted, {failed} failed");
@@ -509,5 +519,38 @@ fn movie_debug(iso: &str, vbf: &str, out: &Path, name: &str, frames: &[String]) 
     }
     write(&out.join(format!("{name}.wav")), &ps2movie::wav(&pcm))?;
     println!("{name}: {:?}, sound {:.2} s", dec.stats, pcm.len() as f64 / 4.0 / 48000.0);
+    Ok(())
+}
+
+fn texanim_debug(chr: &str, vbf: &str, spec: &str) -> Result<()> {
+    let chr = std::fs::read(chr)?;
+    let pc = ffx_vbf::Archive::open(vbf)?;
+    let (kind, name) = spec.split_once('/').context("kind/name")?;
+    let Some(t) = texanim::TexAnim::parse(&chr)? else {
+        println!("no texture animation");
+        return Ok(());
+    };
+    for (k, p) in t.patches.iter().enumerate() {
+        println!("patch {k}: {}x{}", p.width, p.height);
+    }
+    for e in &t.entries {
+        println!("G{} mode {} at ({}, {}) image {}", e.group, e.mode, e.x, e.y, e.image);
+        for (s, frames) in &e.states {
+            let f: Vec<String> = frames.iter().map(|f| format!("{}:p{}", f.duration, f.patch)).collect();
+            println!("  Animation{s}: {}", f.join(" "));
+        }
+    }
+    let p = format!("ffx_data/gamedata/ps3data/chr/{kind}/{name}/mdl/d3d11/textureanimationchar.ags.phyre");
+    let Some(e) = pc.find(&p) else {
+        println!("no HD ags");
+        return Ok(());
+    };
+    let bytes = pc.read(e)?;
+    let recs = texanim::read_ags(&bytes)?;
+    for r in &recs {
+        println!("HD {} {}: ids {:?} rect {:?} interval {}", r.group, r.animation, r.ids, r.rect, r.interval);
+    }
+    let again = texanim::write_ags(&bytes, &recs)?;
+    println!("ags round trip: {} -> {} bytes, records equal", bytes.len(), again.len());
     Ok(())
 }
