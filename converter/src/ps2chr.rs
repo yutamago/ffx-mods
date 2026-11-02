@@ -179,7 +179,7 @@ impl Chr {
             };
             for g in 0..ng {
                 let ge = gp + 12 * g;
-                let (word, material) = (u8_(b, ge)?, usize::from(u8_(b, ge + 1)?));
+                let (word, material) = (u8_(b, ge)?, usize::from(u16_(b, ge + 2)?));
                 let count = usize::from(u16_(b, ge + 4)?);
                 let mut q = h + u32_(b, ge + 8)?;
                 if word & 1 != 0 {

@@ -95,6 +95,26 @@ pub fn bake(
     for (path, (mut jobs, pending, total)) in by_page {
         // within a quarter of a PS2 texel of a 256 page
         let more = bake::second_pass(&index, &jobs, &pending, 1.0 / 1024.0);
+        if std::env::var_os("DM_DEBUG").is_some() {
+            let count = |js: &[bake::Job]| {
+                let mut c = std::collections::BTreeMap::new();
+                for j in js {
+                    *c.entry(j.material).or_insert(0) += 1;
+                }
+                c
+            };
+            eprintln!(
+                "{path}: exact {:?} second {:?} pending {}",
+                count(&jobs),
+                count(&more),
+                pending.len()
+            );
+            let mut ps2 = std::collections::BTreeMap::new();
+            for t in &chr.triangles {
+                *ps2.entry(t.material).or_insert(0) += 1;
+            }
+            eprintln!("  ps2 triangles by material {ps2:?}");
+        }
         jobs.extend(more);
         let matched = jobs.len() as f32 / total.max(1) as f32;
         if matched < MIN_MATCHED {
