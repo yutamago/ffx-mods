@@ -92,7 +92,8 @@ impl Default for Voice {
     }
 }
 
-/// Experiment knobs (environment), 0.0 when unset.
+/// Debug switches from the environment (`DEMASTER_RAW=1`: `demaster music`
+/// writes the chip's output without the gain and limiter), 0.0 when unset.
 pub fn knob(name: &str) -> f32 {
     use std::sync::OnceLock;
     static K: OnceLock<std::collections::HashMap<String, f32>> = OnceLock::new();
@@ -232,22 +233,11 @@ impl Voice {
             return 0;
         }
         let i = ((self.counter >> 4) & 0xff) as usize;
-        let s = if knob("DEMASTER_INTERP") == 1.0 {
-            // Catmull-Rom between interp[1] and interp[2]
-            let t = i as f32 / 256.0;
-            let [p0, p1, p2, p3] = self.interp.map(|x| x as f32);
-            (0.5 * (2.0 * p1 + (-p0 + p2) * t + (2.0 * p0 - 5.0 * p1 + 4.0 * p2 - p3) * t * t
-                + (-p0 + 3.0 * p1 - 3.0 * p2 + p3) * t * t * t)) as i32
-        } else if knob("DEMASTER_INTERP") == 2.0 {
-            let t = i as i32;
-            (self.interp[1] * (256 - t) + self.interp[2] * t) >> 8
-        } else {
-            (gauss[0xff - i] * self.interp[0]
+        let s = (gauss[0xff - i] * self.interp[0]
             + gauss[0x1ff - i] * self.interp[1]
             + gauss[0x100 + i] * self.interp[2]
             + gauss[i] * self.interp[3])
-            >> 15
-        };
+            >> 15;
         let out = s * self.level >> 15;
         self.envelope();
         self.counter += u32::from(self.pitch.min(0x3fff));
@@ -475,12 +465,6 @@ impl Spu2 {
         self.voices[v].adsr1 = a1;
         self.voices[v].adsr2 = a2;
     }
-    pub fn set_adsr1(&mut self, v: usize, a1: u16) {
-        self.voices[v].adsr1 = a1;
-    }
-    pub fn set_adsr2(&mut self, v: usize, a2: u16) {
-        self.voices[v].adsr2 = a2;
-    }
     pub fn set_ssa(&mut self, v: usize, a: u32) {
         self.voices[v].ssa = a & !15;
     }
@@ -556,12 +540,7 @@ impl Spu2 {
             let mut mix = [0i32; 2];
             for c in 0..2 {
                 let core = &mut self.cores[c];
-                let (mut rl, mut rr) = core.reverb.process(wet[c][0].clamp(-0x8000, 0x7fff), wet[c][1].clamp(-0x8000, 0x7fff), &self.halfband);
-                let g = knob("DEMASTER_REV_GAIN");
-                if g != 0.0 {
-                    rl = (rl as f32 * g) as i32;
-                    rr = (rr as f32 * g) as i32;
-                }
+                let (rl, rr) = core.reverb.process(wet[c][0].clamp(-0x8000, 0x7fff), wet[c][1].clamp(-0x8000, 0x7fff), &self.halfband);
                 mix[0] += dry[c][0] + (rl * i32::from(core.evol_l) >> 15);
                 mix[1] += dry[c][1] + (rr * i32::from(core.evol_r) >> 15);
             }

@@ -175,6 +175,7 @@ pub struct Region {
 
 /// A `wave_wd.dat` instrument bank ("WD").
 pub struct Wd {
+    #[allow(dead_code)]
     pub id: u16,
     /// First region of each instrument.
     instruments: Vec<usize>,
@@ -233,6 +234,7 @@ impl Wd {
 
 /// A `musicNNN.bgm` sequence.
 pub struct Bgm {
+    #[allow(dead_code)]
     pub id: u16,
     pub wd: u16,
     pub reverb_mode: u8,
