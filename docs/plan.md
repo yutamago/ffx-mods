@@ -13,7 +13,7 @@ Numbers refer to the rows of [`differences.md`](differences.md). Status:
 | Field map textures | 5 | done | 13,701 textures + swap frames; `docs/maps.md`. Close palette calls listed in maps.tsv |
 | Battle map textures | 8 | done | 2,129 textures |
 | Effect textures | 9 | done | 7,357 converted (`docs/effects.md`); brightness moved into alpha where HD does, so bright draws burn out white like the PS2 (Energy Blast confirmed by user). Field-map particles not seen in game |
-| PS2-drawn menu textures, portraits, icons | 12, 22 | wip | title, portraits, battle atlas, pad glyphs, loading screen done (`docs/ui.md`); main menu look, message window, item icons need code |
+| PS2-drawn menu textures, portraits, icons, windows | 12, 22 | wip | done: title, portraits, battle atlas, pad glyphs, loading, message/choice windows, battle command windows (`docs/ui.md`). Todo: main menu + sub-menus (needs atlas cells + port from PS2 ELF), cursor glow, run-time coloured icons, Miss/Immune/Overkill |
 | Config file + converter `build` command | all | done | `docs/config.md` |
 | Fahrenheit mod package | | wip | mod `yuta.demaster` (F8 status window), `demaster.exe`, package script, CI. Open: F8 window not seen on screen; CI needs secret `FFX_RUST_TOKEN` |
 
@@ -46,9 +46,9 @@ Numbers refer to the rows of [`differences.md`](differences.md). Status:
 | Item | Rows | Status |
 |---|---|---|
 | Glow / blow-out off | 10 | done | blur-and-add pass skipped (`docs/render.md`) |
-| PS2-like lighting | 10 | wip | light levels/directions = PS2 script values at 1.0 (assumption); shader falloff still HD |
+| PS2-like lighting | 10 | done | PS2 formula from the VU1 program: level 254/128, max(0,N·L) via 1,854 patched shaders, HD fill light off (`docs/render.md`) |
 | Shadows | 11 | done | blob shadows only; check maps that normally use shadow maps for artefacts |
-| Texture filtering option | 19 | todo | plan in `docs/render.md` |
+| Texture filtering option | 19 | done | nearest for model/map samplers only; all converted textures now have mip chains |
 | Soundtrack default "Original" | 20 | done (static) | new-game save gets Original; menu switch still works |
 | PS2 music engine (offline render): our port of iopsound.irx + SPU2 model renders the 89 tracks into the `music_ps2` bank | 20 | done | 70/86 tracks correlate ≥0.9 with the PC Original recordings; 3 rock tracks copied (streamed layers); in-game capture matches our render (`docs/music.md`) |
 | PS2 music engine phase 2: live, driven by the game's iMusic* commands (runtime tempo/fades, streamed guitar/vocal layers) | 20 | todo | plan in `docs/music.md` |
