@@ -10,18 +10,18 @@ Numbers refer to the rows of [`differences.md`](differences.md). Status:
 | Disc reader, names, unpacking | | done | `docs/disc.md` |
 | ARGB8 texture writer | | done | loads in game (Djose battle) |
 | Character textures (kept meshes) | 2-4 | done | 621 pages; 188 remodelled pages skipped (milestone 2) |
-| Field map textures | 5 | todo | HD names encode the PS2 VRAM region |
-| Battle map textures | 8 | todo | same format as field maps |
-| Effect textures | 9 | todo | PS2 `mag_*.bin`; HD 2x upscales with the same names |
+| Field map textures | 5 | done | 13,701 textures + swap frames; `docs/maps.md`. Close palette calls listed in maps.tsv |
+| Battle map textures | 8 | done | 2,129 textures |
+| Effect textures | 9 | wip | 7,327 converted (`docs/effects.md`); user: PS2 Energy Blast trails were white, ours purple — alpha/palette fix in progress |
 | PS2-drawn menu textures, portraits, icons | 12, 22 | todo | named after PS2 VRAM pages |
-| Config file + converter `build` command | all | todo | `demaster.toml`, defaults PS2 look / PC logic |
-| Fahrenheit mod package | | todo | C# mod skeleton, release zip, install guide |
+| Config file + converter `build` command | all | done | `docs/config.md` |
+| Fahrenheit mod package | | wip | mod `yuta.demaster` (F8 status window), `demaster.exe`, package script, CI. Open: F8 window not seen on screen; CI needs secret `FFX_RUST_TOKEN` |
 
 ## Milestone 2: models
 
 | Item | Rows | Status | Notes |
 |---|---|---|---|
-| PS2 mesh → Phyre model converter | 1-4 | todo | party (32 pages), 95 NPCs, 27 monsters, aeons, weapons, objects |
+| PS2 mesh → Phyre model converter | 1-4 | wip | party (32 pages), 95 NPCs, 27 monsters, aeons, weapons, objects |
 | Texture animation (eyes, mouths) | 1 | todo | `.chr` animation block; HD `*_anim_*` textures |
 
 ## Milestone 3: interface
