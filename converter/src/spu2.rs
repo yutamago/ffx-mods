@@ -568,6 +568,17 @@ impl Spu2 {
             }
         }
     }
+    /// How loud voice `v` is now: envelope times the louder volume
+    /// register, 0..1 (FFX Music Studio's activity meters).
+    pub fn voice_level(&self, v: usize) -> f32 {
+        let x = &self.voices[v];
+        if x.phase == Phase::Off {
+            return 0.0;
+        }
+        let vol = i32::from(x.vol_l).abs().max(i32::from(x.vol_r).abs()) as f32 / 32767.0;
+        (x.level.max(0) as f32 / 32767.0) * vol
+    }
+
     /// The envelope level the driver reads back (`ENVX`).
     pub fn envx(&self, v: usize) -> i16 {
         if self.voices[v].phase == Phase::Off {

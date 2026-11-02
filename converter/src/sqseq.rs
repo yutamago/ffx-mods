@@ -153,6 +153,12 @@ impl Tables {
         }
     }
 
+    /// The SPU pitch register (0x1000: 48 kHz) a key plays a region at,
+    /// without bend, detune or scale (FFX Music Studio's sample survey).
+    pub fn key_pitch(&self, key: u8, tune: u32) -> u32 {
+        self.pitch(i32::from(key as i8) << 20, 0, tune, 0)
+    }
+
     /// The SPU pitch for a note (`key << 20` units), a fine offset (1/256
     /// semitone), the region's tuning word and the track's pitch scale.
     fn pitch(&self, note: i32, fine: i32, tune: u32, scale: i8) -> u32 {
@@ -770,6 +776,53 @@ impl Song {
             }
         }
         n
+    }
+
+    /// The track each voice plays for (`None`: free or released to 0).
+    pub fn voice_tracks(&self) -> [Option<usize>; spu2::VOICES] {
+        std::array::from_fn(|i| self.voices[i].track)
+    }
+
+    /// FFX Music Studio: a note on track `ti` from outside the sequence (a
+    /// key played live), started at the next interrupt like the sequence's
+    /// own key-ons.
+    pub fn live_key_on(&mut self, ti: usize, key: u8, vel: u8) {
+        if ti < self.tracks.len() && self.queue.len() < 48 {
+            let tflags = self.tracks[ti].tflags;
+            self.queue.push(KeyOn { track: ti, key: key.min(127), vel: vel.min(127), tflags });
+        }
+    }
+
+    /// FFX Music Studio: the key-off of a live note (every voice of the key
+    /// on the track).
+    pub fn live_key_off(&mut self, ti: usize, key: u8) {
+        self.queue.retain(|k| !(k.track == ti && k.key == key));
+        for v in self.voices.iter_mut().filter(|v| v.track == Some(ti) && v.key == key) {
+            v.flags |= 2;
+        }
+    }
+
+    /// FFX Music Studio: pitch bend of track `ti` as command `0x5c` sets it
+    /// (`raw` -0x2000..0x1fff, the track's bend range).
+    pub fn live_bend(&mut self, ti: usize, raw: i32) {
+        if ti >= self.tracks.len() {
+            return;
+        }
+        let t = &mut self.tracks[ti];
+        let raw = raw.clamp(-0x2000, 0x1fff);
+        t.bend_raw = raw as i16;
+        t.bend = (raw * i32::from(t.bend_range) >> 5) as i16;
+        self.bend(ti);
+    }
+
+    /// FFX Music Studio: key-off of every sounding voice now (pause: each
+    /// note goes into its own release); the sequence stays where it is.
+    pub fn release_all(&mut self, spu: &mut Spu2) {
+        self.queue.clear();
+        for v in &mut self.voices {
+            v.flags &= !2;
+        }
+        spu.key_off((1u64 << spu2::VOICES) - 1);
     }
 
     /// Each track's current program (instrument).
