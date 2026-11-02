@@ -627,6 +627,10 @@ pub fn jobs() -> Vec<Box<dyn crate::jobs::Job>> {
 struct FxJob;
 
 impl crate::jobs::Job for FxJob {
+    /// 2: textures with mip chains (phyretex::mip_chain).
+    fn version(&self) -> u32 {
+        2
+    }
     fn name(&self) -> &'static str {
         "fx.textures"
     }
