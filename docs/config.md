@@ -31,6 +31,7 @@ Who applies a setting:
 |---|---|
 | `source.iso` | Your PS2 disc image of Final Fantasy X (`.iso`, any region). Required. |
 | `source.game` | The game folder, the one with `FFX.exe` and `data\FFX_Data.vbf`. Empty: the converter looks in the usual Steam folders (`steamapps\common\FINAL FANTASY FFX&FFX-2 HD Remaster` in every Steam library). |
+| `source.ffmpeg` | ffmpeg, which converts the movies (not included). Empty: `ffmpeg.exe` next to `demaster.exe` or in `tools\`, else the one on your PATH; on Windows, if there is none, the converter downloads an LGPL build of FFmpeg 8.1.3 into `mods\yuta.demaster\tools\` (168 MB) and checks it (`docs/movies.md`). |
 | `build.mod_dir` | Where the files go. Empty: the folder `demaster.exe` is in, which is right when it sits in `mods\yuta.demaster`. |
 
 Relative paths are relative to the folder of `demaster.toml`. On Windows,
@@ -38,7 +39,7 @@ write paths in single quotes (`iso = 'D:\Games\FFX.iso'`): inside double
 quotes a backslash starts an escape sequence.
 
 The command line overrides the file: `demaster.exe build --iso <file>
---game <folder> --mod-dir <folder> --config <file>`. More options:
+--game <folder> --mod-dir <folder> --ffmpeg <ffmpeg.exe> --config <file>`. More options:
 `--force` rebuilds jobs that are unchanged, `--only chr.monster,chr.npc`
 runs just those jobs (`demaster.exe jobs` lists them), `--verbose` prints
 every file.
@@ -55,13 +56,13 @@ every file.
 | `models.object` | 4 | PS2 object textures (props, skeleton dummies) | HD | converter (`chr.object`) | textures: done |
 | `maps.field` | 5 | PS2 field map textures (and texture-swap frames) | HD | converter (`maps.field`) | done (`docs/maps.md`) |
 | `maps.geometry` | 6 | PS2 geometry where the HD maps changed it | HD | converter | not planned yet |
-| `maps.backgrounds` | 7 | the 4:3 PS2 paintings of fixed-camera rooms | the wider HD paintings | converter | planned |
+| `maps.backgrounds` | 7 | the 4:3 PS2 paintings of fixed-camera rooms | the wider HD paintings | converter (`maps.backgrounds`) | 68 rooms whose HD painting keeps the PS2 framing; re-framed rooms and animated parts stay HD until 4:3 (`docs/screen.md`) |
 | `maps.battle` | 8 | PS2 battle map textures | HD | converter (`maps.battle`) | done (`docs/maps.md`) |
 | `effects.textures` | 9 | PS2 spell, summon and effect textures | HD (2x upscales) | converter | planned |
 | `render.glow` | 10 | no glow/blow-out | the HD glow | mod | planned |
 | `render.lighting` | 10 | PS2-like lighting | PhyreEngine lighting | mod | planned |
 | `render.shadows` | 11 | blob shadows only | shadow maps | mod | planned |
-| `render.aspect` | 14 | 4:3 with black bars and the PS2 projection | 16:9 | mod | planned |
+| `render.aspect` | 14 | 4:3 with black bars and the PS2 projection | 16:9 | mod | planned (`docs/screen.md`) |
 | `ui.menus` | 12 | the PS2 pieces of the menu and battle atlases (the menu layout and the Flash screens stay HD, `docs/ui.md`) | HD | converter (`ui.menus`) | battle HUD markers only; the PS2 window look needs code |
 | `ui.portraits` | 12 | PS2 portraits: menu faces, aeons, CTB list | HD | converter (`ui.menus`) | done (`docs/ui.md`) |
 | `ui.font` | 13 | the PS2 font | the HD typeface | converter | planned (`docs/font.md`) |
@@ -71,7 +72,7 @@ every file.
 | `ui.battle_menu_delay` | 18 | the battle menu reacts at once | 0.2-0.45 s delays | mod | planned |
 | `ui.button_glyphs` | 22 | PlayStation button glyphs | Xbox-style | converter (`ui.glyphs`) | pad prompts done (`docs/ui.md`) |
 | `audio.soundtrack` | 20 | the original soundtrack by default | arranged | mod | planned |
-| `movies` | 15, 21 | the 4:3 PS2 movies with their audio | the cropped HD movies | converter | planned |
+| `movies` | 15, 21 | the 4:3 PS2 movies with their audio | the cropped HD movies | converter (`movies`, needs ffmpeg) | 49 of 53; the four with a 3D scene on top stay HD (`docs/movies.md`) |
 
 `movies` is a top-level key: it goes above the first `[table]` in the file.
 

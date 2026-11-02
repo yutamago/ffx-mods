@@ -18,6 +18,7 @@ pub fn registry() -> Vec<Box<dyn Job>> {
     let mut jobs: Vec<Box<dyn Job>> = Vec::new();
     jobs.extend(crate::chrjob::jobs());
     jobs.extend(crate::mapjob::jobs());
+    jobs.extend(crate::bgjob::jobs());
     jobs.extend(crate::fxjob::jobs());
     jobs.extend(crate::uijob::jobs());
     jobs.extend(crate::models::jobs());

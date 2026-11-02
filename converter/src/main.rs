@@ -1,4 +1,5 @@
 mod bake;
+mod bgjob;
 mod build;
 mod chrjob;
 mod config;
@@ -180,6 +181,30 @@ fn main() -> Result<()> {
                 println!("{n}");
             }
             println!("{} files, {} left HD", done.len(), notes.len());
+        }
+        "backgrounds" => {
+            if a.len() < 6 {
+                usage();
+            }
+            let pc = ffx_vbf::Archive::open(&a[3])?;
+            let mut d = disc::Disc::open(Path::new(&a[2]), &pc)?;
+            let out = PathBuf::from(&a[4]);
+            let only: Vec<String> = a[5..].iter().filter(|s| *s != "all").cloned().collect();
+            let (done, notes) = bgjob::convert(&mut d, &pc, &only)?;
+            for t in &done {
+                println!("{}", t.note);
+                write(&out.join("efl/x").join(&t.path), &t.file)?;
+                let name = t.path.trim_start_matches("ffx_data/gamedata/ps3data/map/").replace('/', "_");
+                let p = &t.preview;
+                write(
+                    &out.join("preview").join(name.replace(".dds.phyre", ".png")),
+                    &ffx_phyre::png(p.width, p.height, &p.pixels),
+                )?;
+            }
+            for n in &notes {
+                println!("{n}");
+            }
+            println!("{} layers, {} notes", done.len(), notes.len());
         }
         "movies" => {
             if a.len() < 6 {
