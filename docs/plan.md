@@ -12,8 +12,8 @@ Numbers refer to the rows of [`differences.md`](differences.md). Status:
 | Character textures (kept meshes) | 2-4 | done | 621 pages; 188 remodelled pages skipped (milestone 2) |
 | Field map textures | 5 | done | 13,701 textures + swap frames; `docs/maps.md`. Close palette calls listed in maps.tsv |
 | Battle map textures | 8 | done | 2,129 textures |
-| Effect textures | 9 | wip | 7,327 converted (`docs/effects.md`); user: PS2 Energy Blast trails were white, ours purple — alpha/palette fix in progress |
-| PS2-drawn menu textures, portraits, icons | 12, 22 | todo | named after PS2 VRAM pages |
+| Effect textures | 9 | done | 7,357 converted (`docs/effects.md`); brightness moved into alpha where HD does, so bright draws burn out white like the PS2 (Energy Blast confirmed by user). Field-map particles not seen in game |
+| PS2-drawn menu textures, portraits, icons | 12, 22 | wip | title, portraits, battle atlas, pad glyphs, loading screen done (`docs/ui.md`); main menu look, message window, item icons need code |
 | Config file + converter `build` command | all | done | `docs/config.md` |
 | Fahrenheit mod package | | wip | mod `yuta.demaster` (F8 status window), `demaster.exe`, package script, CI. Open: F8 window not seen on screen; CI needs secret `FFX_RUST_TOKEN` |
 
@@ -21,15 +21,15 @@ Numbers refer to the rows of [`differences.md`](differences.md). Status:
 
 | Item | Rows | Status | Notes |
 |---|---|---|---|
-| PS2 mesh → Phyre model converter | 1-4 | wip | party (32 pages), 95 NPCs, 27 monsters, aeons, weapons, objects |
-| Texture animation (eyes, mouths) | 1 | todo | `.chr` animation block; HD `*_anim_*` textures |
+| PS2 mesh → Phyre model converter | 1-4 | done | 165 models: 32 party, 95 NPCs, 16 monsters, 2 aeons, 5 weapons, 15 objects (`docs/models.md`). Tidus face checked in game |
+| Texture animation (eyes, mouths) | 1 | todo | faces static; path traced in `docs/models.md`. Also: PS2 cloth without HD counterpart doesn't swing | `.chr` animation block; HD `*_anim_*` textures |
 
 ## Milestone 3: interface
 
 | Item | Rows | Status |
 |---|---|---|
-| PS2 font | 13 | todo |
-| Title logo, loading screen, splash videos | 16 | todo |
+| PS2 font | 13 | todo | texture + table swap for EFIGS, plan in `docs/font.md` (~2 days) |
+| Title logo, loading screen, splash videos | 16 | wip | title and loading done; splash skip needs code |
 | Battle dialogue subtitles | 17 | todo |
 | Battle menu input delay | 18 | todo |
 
