@@ -25,13 +25,13 @@ internal static class Patches {
         new("render.shadows",        "hd",    "blob shadows only",                       null),
         new("render.aspect",         "hd",    "4:3 with the PS2 projection",             null),
         new("render.texture_filter", "game",  "nearest-neighbour texture filtering",     null),
-        new("ui.loading",            "hd",    "no loading screen, no splash videos",     null),
-        new("ui.battle_subtitles",   "hd",    "battle dialogue subtitles",               null),
-        new("ui.battle_menu_delay",  "hd",    "battle menu without input delays",        null),
-        new("audio.soundtrack",      "hd",    "original soundtrack by default",          null),
+        new("ui.loading",            "hd",    "splash videos skipped at start-up",       GamePatches.skip_splash),
+        new("ui.battle_subtitles",   "hd",    "battle dialogue subtitles",               GamePatches.battle_subtitles),
+        new("ui.battle_menu_delay",  "hd",    "battle menu without input delays",        GamePatches.battle_menu_delay),
+        new("audio.soundtrack",      "hd",    "original soundtrack for new games",       GamePatches.soundtrack),
         new("fixes.npc_mouths",      "false", "NPC mouths closed in cutscenes",          null),
-        new("fixes.farplane_video",  "false", "Farplane background video plays",         null),
-        new("fixes.lulu_fury",       "false", "Lulu's Fury spins register",              null),
+        new("fixes.farplane_video",  "false", "Farplane background video plays",         GamePatches.farplane_video),
+        new("fixes.lulu_fury",       "false", "Lulu's Fury spins register",              GamePatches.lulu_fury),
     ];
 
     /// <summary>Applies every patch its setting asks for. Returns each patch's state.</summary>

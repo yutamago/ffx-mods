@@ -66,11 +66,11 @@ every file.
 | `ui.portraits` | 12 | PS2 portraits: menu faces, aeons, CTB list | HD | converter (`ui.menus`) | done (`docs/ui.md`) |
 | `ui.font` | 13 | the PS2 font | the HD typeface | converter | planned (`docs/font.md`) |
 | `ui.title` | 16 | the PS2 title screen and logos | "HD Remaster" logo | converter (`ui.title`) | done |
-| `ui.loading` | 16 | no loading screen, no splash videos | HD | converter (`ui.loading`: loading screen textures transparent) and mod (splash videos) | loading screen textures done; splash videos planned |
-| `ui.battle_subtitles` | 17 | subtitles for battle dialogue | none | mod | planned |
-| `ui.battle_menu_delay` | 18 | the battle menu reacts at once | 0.2-0.45 s delays | mod | planned |
+| `ui.loading` | 16 | no loading screen, no splash videos | HD | converter (`ui.loading`: loading screen textures transparent) and mod (splash videos) | loading screen textures done; splash videos skipped (`docs/patches.md`) |
+| `ui.battle_subtitles` | 17 | subtitles for battle dialogue | none | mod | done, not yet seen on screen (`docs/patches.md`) |
+| `ui.battle_menu_delay` | 18 | the battle menu takes input at once (the HD window's 0.2 s opening animation stays) | 0.3-0.45 s input delays | mod | done (`docs/patches.md`) |
 | `ui.button_glyphs` | 22 | PlayStation button glyphs | Xbox-style | converter (`ui.glyphs`) | pad prompts done (`docs/ui.md`) |
-| `audio.soundtrack` | 20 | the original soundtrack by default | arranged | mod | planned |
+| `audio.soundtrack` | 20 | a New Game starts with the original soundtrack; loaded saves keep their own choice, and the game's menu still switches it | arranged | mod | done (`docs/patches.md`) |
 | `movies` | 15, 21 | the 4:3 PS2 movies with their audio | the cropped HD movies | converter | planned |
 
 `movies` is a top-level key: it goes above the first `[table]` in the file.
@@ -83,9 +83,9 @@ texels. Applied by the mod; planned.
 
 | Key | `true` | Applied by | Status |
 |---|---|---|---|
-| `fixes.npc_mouths` | NPC mouths no longer hang open in some cutscenes | mod | planned |
-| `fixes.farplane_video` | the Farplane background video plays | mod | planned |
-| `fixes.lulu_fury` | Lulu's Fury spins register | mod | planned |
+| `fixes.npc_mouths` | NPC mouths no longer hang open in some cutscenes | mod | not implemented: cause not found (`docs/patches.md`) |
+| `fixes.farplane_video` | the Farplane background video plays | mod | done, not yet seen in the game (`docs/patches.md`) |
+| `fixes.lulu_fury` | Lulu's Fury spins register: a diagonal the PC's once-a-frame stick reading skipped is filled in | mod | done, not yet tested with a stick (`docs/patches.md`) |
 
 Kimahri's Spirit Lance comes with `models.party`.
 
