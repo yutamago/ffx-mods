@@ -58,9 +58,9 @@ every file.
 | `maps.backgrounds` | 7 | the 4:3 PS2 paintings of fixed-camera rooms | the wider HD paintings | converter | planned |
 | `maps.battle` | 8 | PS2 battle map textures | HD | converter (`maps.battle`) | done (`docs/maps.md`) |
 | `effects.textures` | 9 | PS2 spell, summon and effect textures | HD (2x upscales) | converter | planned |
-| `render.glow` | 10 | no glow/blow-out | the HD glow | mod | planned |
-| `render.lighting` | 10 | PS2-like lighting | PhyreEngine lighting | mod | planned |
-| `render.shadows` | 11 | blob shadows only | shadow maps | mod | planned |
+| `render.glow` | 10 | no glow/blow-out | the HD glow | mod | done (`docs/render.md`) |
+| `render.lighting` | 10 | characters lit by the PS2 light colours and directions | the HD light levels | mod | light levels and directions done; the shader's softer falloff stays (`docs/render.md`) |
+| `render.shadows` | 11 | ground shadows only, no shadow maps | shadow maps | mod | done (`docs/render.md`) |
 | `render.aspect` | 14 | 4:3 with black bars and the PS2 projection | 16:9 | mod | planned |
 | `ui.menus` | 12 | the PS2 pieces of the menu and battle atlases (the menu layout and the Flash screens stay HD, `docs/ui.md`) | HD | converter (`ui.menus`) | battle HUD markers only; the PS2 window look needs code |
 | `ui.portraits` | 12 | PS2 portraits: menu faces, aeons, CTB list | HD | converter (`ui.menus`) | done (`docs/ui.md`) |
@@ -77,7 +77,7 @@ every file.
 
 `render.texture_filter` (row 19) has other values: `"game"` (default) keeps
 the filter of the game's graphics options; `"nearest"` shows unfiltered
-texels. Applied by the mod; planned.
+texels. Applied by the mod; planned (`docs/render.md`).
 
 ## Fixes (default `true`)
 

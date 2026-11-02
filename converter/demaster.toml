@@ -58,9 +58,10 @@ textures = "ps2"
 [render]
 # "ps2": no glow/blow-out. "hd": the HD Remaster's glow.
 glow = "ps2"
-# Character and map lighting.
+# "ps2": characters lit by the PS2 light colours and directions (no HD
+# intensity boost). "hd": the HD Remaster's character lighting.
 lighting = "ps2"
-# "ps2": simple blob shadows. "hd": shadow maps.
+# "ps2": a soft ground shadow under each character, no shadow maps. "hd": shadow maps.
 shadows = "ps2"
 # "ps2": 4:3 with black bars. "hd": 16:9.
 aspect = "ps2"

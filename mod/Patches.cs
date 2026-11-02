@@ -20,9 +20,9 @@ internal enum PatchState { Off, On, NotImplemented, Failed }
 /// <summary>Where the code patches go: add the Apply function of a patch here when it's written.</summary>
 internal static class Patches {
     public static readonly CodePatch[] ALL = [
-        new("render.glow",           "hd",    "glow/blow-out pass off",                  null),
-        new("render.lighting",       "hd",    "PS2-like character lighting",             null),
-        new("render.shadows",        "hd",    "blob shadows only",                       null),
+        new("render.glow",           "hd",    "glow/blow-out pass off",                  RenderPatches.glow),
+        new("render.lighting",       "hd",    "PS2-like character lighting",             RenderPatches.lighting),
+        new("render.shadows",        "hd",    "ground shadows only, no shadow maps",     RenderPatches.shadows),
         new("render.aspect",         "hd",    "4:3 with the PS2 projection",             null),
         new("render.texture_filter", "game",  "nearest-neighbour texture filtering",     null),
         new("ui.loading",            "hd",    "no loading screen, no splash videos",     null),
