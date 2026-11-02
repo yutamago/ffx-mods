@@ -1,0 +1,13 @@
+[package]
+name = "demaster"
+description = "Builds FFX Demaster's PS2 assets from the player's own PS2 disc"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+ffx-vbf.workspace = true
+ffx-phyre.workspace = true
+anyhow = "1"
+serde = { version = "1", features = ["derive"] }
+toml = "0.8"
