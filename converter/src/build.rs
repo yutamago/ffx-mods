@@ -208,7 +208,7 @@ fn steam_libraries() -> Vec<PathBuf> {
 
 /// The game's `FFX_Data.vbf`: the argument, the config, a game folder above
 /// the converter, then the Steam libraries.
-fn find_vbf(arg: Option<&Path>, loaded: &Loaded) -> Result<PathBuf> {
+pub fn find_vbf(arg: Option<&Path>, loaded: &Loaded) -> Result<PathBuf> {
     if let Some(p) = arg
         .map(Path::to_path_buf)
         .or_else(|| loaded.resolve(&loaded.config.source.game))

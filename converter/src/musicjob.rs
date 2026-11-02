@@ -138,17 +138,47 @@ impl Sources {
         Ok(Sources { tables, sec, sound_dir })
     }
 
+    /// The bytes of `musicNNN.bgm`.
+    pub fn sequence(&self, disc: &mut Disc, id: u16) -> Result<Vec<u8>> {
+        let name = format!("{}music/data/music{id:03}.bgm", self.sound_dir);
+        disc.read(&name)?.with_context(|| format!("{name} not on the disc"))
+    }
+
     pub fn song(&self, disc: &mut Disc, id: u16) -> Result<(Bgm, Wd)> {
         let name = format!("{}music/data/music{id:03}.bgm", self.sound_dir);
-        let b = disc.read(&name)?.with_context(|| format!("{name} not on the disc"))?;
+        let b = self.sequence(disc, id)?;
         let bgm = Bgm::parse(&b).with_context(|| name.clone())?;
+        let wd = self.bank(disc, bgm.wd).with_context(|| format!("music {id}"))?;
+        Ok((bgm, wd))
+    }
+
+    /// Instrument bank `id` of `wave_wd.dat`.
+    pub fn bank(&self, disc: &mut Disc, id: u16) -> Result<Wd> {
         let dat = format!("{}wave/wave_wd.dat", self.sound_dir);
-        let at = Wd::locate(&self.sec, bgm.wd).with_context(|| format!("no WD {} for music {id}", bgm.wd))?;
+        let at = Wd::locate(&self.sec, id).with_context(|| format!("no WD {id}"))?;
         let head = disc.read_range(&dat, at, 0x800)?.context("wave_wd.dat")?;
         let size = Wd::size(&head).context("WD header")?;
         let b = disc.read_range(&dat, at, size)?.context("wave_wd.dat")?;
-        let wd = Wd::parse(&b).with_context(|| format!("WD {}", bgm.wd))?;
-        Ok((bgm, wd))
+        Wd::parse(&b).with_context(|| format!("WD {id}"))
+    }
+
+    /// The banks `wave_wd.sec` lists.
+    pub fn bank_ids(&self) -> Vec<u16> {
+        (0..self.sec.len() / 4)
+            .filter(|&i| Wd::locate(&self.sec, i as u16).is_some())
+            .map(|i| i as u16)
+            .collect()
+    }
+
+    /// The music ids of the disc's `musicNNN.bgm` files, ascending.
+    pub fn music_ids(&self, disc: &Disc) -> Vec<u16> {
+        let dir = format!("{}music/data/music", self.sound_dir);
+        let mut ids: Vec<u16> = disc
+            .names()
+            .filter_map(|n| n.strip_prefix(&dir)?.strip_suffix(".bgm")?.parse().ok())
+            .collect();
+        ids.sort_unstable();
+        ids
     }
 }
 
@@ -229,7 +259,8 @@ impl Master {
         }
     }
 
-    fn frame(&mut self, x: [f32; 2], out: &mut Vec<[i16; 2]>) {
+    /// One frame at the chip's level (the gain comes here).
+    pub fn frame(&mut self, x: [f32; 2], out: &mut Vec<[i16; 2]>) {
         let x = [x[0] * self.gain, x[1] * self.gain];
         let peak = x[0].abs().max(x[1].abs());
         let target = if peak > self.thr { self.thr / peak } else { 1.0 };
