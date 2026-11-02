@@ -26,6 +26,9 @@ internal static unsafe class Native {
 
     public static byte* ptr(uint va) => FhUtil.ptr_at<byte>(off(va));
 
+    /// <summary>An ffx.sym VA as an absolute address in this process (FFX.exe is relocated).</summary>
+    public static uint reloc(uint va) => (uint)(nint)ptr(va);
+
     public static byte  u8 (uint va) => *ptr(va);
     public static sbyte i8 (uint va) => *(sbyte*)ptr(va);
     public static short i16(uint va) => *(short*)ptr(va);

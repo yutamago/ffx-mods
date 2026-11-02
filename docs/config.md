@@ -67,7 +67,7 @@ every file.
 | `ui.font` | 13 | the PS2 font | the HD typeface | converter | planned (`docs/font.md`) |
 | `ui.title` | 16 | the PS2 title screen and logos | "HD Remaster" logo | converter (`ui.title`) | done |
 | `ui.loading` | 16 | no loading screen, no splash videos | HD | converter (`ui.loading`: loading screen textures transparent) and mod (splash videos) | loading screen textures done; splash videos skipped (`docs/patches.md`) |
-| `ui.battle_subtitles` | 17 | subtitles for battle dialogue | none | mod | done, not yet seen on screen (`docs/patches.md`) |
+| `ui.battle_subtitles` | 17 | subtitles for battle dialogue | none | mod | scripted battle dialogue always subtitled (the PC already does this for its own saves); the missing "battle quotes" not found yet (`docs/patches.md`) |
 | `ui.battle_menu_delay` | 18 | the battle menu takes input at once (the HD window's 0.2 s opening animation stays) | 0.3-0.45 s input delays | mod | done (`docs/patches.md`) |
 | `ui.button_glyphs` | 22 | PlayStation button glyphs | Xbox-style | converter (`ui.glyphs`) | pad prompts done (`docs/ui.md`) |
 | `audio.soundtrack` | 20 | a New Game starts with the original soundtrack; loaded saves keep their own choice, and the game's menu still switches it | arranged | mod | done (`docs/patches.md`) |

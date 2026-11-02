@@ -42,10 +42,16 @@ internal static class GamePatches {
     // Battle scripts ask native 0x70de (0x007a79b0 -> 0x00785210, MsGetSaveConfigSubTitle) before
     // each voiced line and draw the subtitle window (0x7072, TODrawAMES_EVJIMAKU) when it says 1.
     // It answers 0 while g_BtlMuteSubtitle (0x01133354, the PC's speed-up) is set, else bit 9 of
-    // g_SaveMenu (0x0113079c); nothing on PC sets that bit (MsSetSaveConfigSubTitle has no caller
-    // and the PC config menu has no subtitle option). The load of g_SaveMenu becomes mov eax, 0x200.
-    public static bool battle_subtitles(DemasterModule m, string value) =>
-        Native.patch_code(0x0078521c, [0xa1, 0x9c, 0x07, 0x13, 0x01], [0xb8, 0x00, 0x02, 0x00, 0x00], m.log);
+    // g_SaveMenu (0x0113079c), which comes from the save (the PC's new-game and PC saves measured
+    // have it set; nothing on PC can change it). The load of g_SaveMenu becomes mov eax, 0x200, so
+    // a save with the bit clear gets the subtitles too. Row 17's missing "battle quotes" are
+    // something else (docs/patches.md).
+    // The game is relocated (its absolute operands move with the load address), so the expected
+    // operand is g_SaveMenu's address in this process.
+    public static bool battle_subtitles(DemasterModule m, string value) {
+        byte[] original = [0xa1, .. BitConverter.GetBytes(Native.reloc(0x0113079c))];
+        return Native.patch_code(0x0078521c, original, [0xb8, 0x00, 0x02, 0x00, 0x00], m.log);
+    }
 
     // ---- fixes.farplane_video ----------------------------------------------------------------
     // Native 0xb00a (MovieStartPicture, handler 0x0076eb80; only ikai0800's Farplane loop, movie
@@ -91,7 +97,8 @@ internal static class GamePatches {
             // FMOD's queue needs its manager; at boot iSoundInit has made it before MsBattleInit.
             bool fmod = Native.u32(FMOD_MANAGER) != 0;
             if (fmod) Native.fn<Fn.Void>(0x008cc170).fnptr!();
-            m.log.Info($"audio.soundtrack: new-game save set to the original soundtrack{(fmod ? "" : " (FMOD not up yet: not switched now)")}");
+            m.log.Info($"audio.soundtrack: new-game save set to the original soundtrack{(fmod ? "" : " (FMOD not up yet: not switched now)")}"
+                     + $"; g_SaveMenu 0x{Native.u32(0x0113079c):x8} (bit 9 = the PS2 subtitle option)");
         };
         return Native.fn<Fn.Void>(0x00786b00).hook(m, _start_game_hook);
     }
@@ -157,6 +164,8 @@ internal static class GamePatches {
             return;
         }
         // The same readings the original takes this call (a pure read of the pad history).
+        // Fahrenheit hands out call pointers only after every module's init.
+        _analog ??= Native.fn<Fn.AnalogHist>(0x00888c20).fnptr!;
         int c1 = zone(_analog!(0, 0, 0, -1), _analog!(0, 0, 1, -1));
         int c2 = zone(_analog!(0, 0, 0, 0), _analog!(0, 0, 1, 0));
         int last = last_code();
@@ -197,8 +206,6 @@ internal static class GamePatches {
     private static int _pending_mid = -1, _pending_after = -1;
 
     public static bool lulu_fury(DemasterModule m, string value) {
-        _analog = Native.fn<Fn.AnalogHist>(0x00888c20).fnptr;
-        if (_analog is null) return false;
         _log = m.log;
         _lulu_hook = lulu_step;
         return Native.fn<Fn.Void>(0x00891b80).hook(m, _lulu_hook);

@@ -9,6 +9,13 @@ original ones listed here, so another game build or another mod's patch at
 the same place is left alone and the patch shows as *failed* in the log and
 the F8 window.
 
+Under Fahrenheit `FFX.exe` is relocated (in the 2026-11-02 runs its image
+sat `0x670000` above `0x00400000`), so absolute addresses inside code bytes
+move: the subtitle patch compares its operand against
+`Native.reloc(0x0113079c)`, not the ffx.sym value. Fahrenheit also refuses
+`FhCallHandle.fnptr` until every module's `init` is done, so hooks fetch the
+functions they call on their first run.
+
 How each was checked is at the end of its section; "static" means read from
 the code, not seen in the game.
 
@@ -47,8 +54,9 @@ it could not be read (its page answers 403 to the fetch tool).
 
 **Checked:** static (the eight compares and their branch senses, x87 status
 bits worked through: C0 for "below"; a NaN runs the pad read in every one).
-The bytes were matched in the Fahrenheit run (log). Timing not measured in
-the game.
+In the Fahrenheit run (2026-11-02) all eight sites held the original bytes
+and were patched, and the game ran on. Not measured in a battle: the harness
+can't write code, and the Fahrenheit test install has no input driver.
 
 ## `ui.battle_subtitles` (row 17)
 
@@ -69,18 +77,39 @@ sar eax, 9 / and eax, 1 / ret
 ```
 
 Bit 9 of `g_SaveMenu` is the PS2's subtitle option (Fahrenheit's
-`savedata.cs`: `config_subtitles`). On PC nothing sets it: its setter
-`MsSetSaveConfigSubTitle` (`0x00785f80`) has no caller and the PC config
-menu has no subtitle entry.
+`savedata.cs`: `config_subtitles`). `g_SaveMenu` lies inside `g_SaveData`,
+so it comes from the save. Its setter `MsSetSaveConfigSubTitle`
+(`0x00785f80`) has no caller and the PC config menu has no subtitle entry,
+**but the bit is set anyway**: the new-game save the game builds at start-up
+has `g_SaveMenu` = `0x00002f61` (Fahrenheit run, 2026-11-02), a PC save
+(harness slot 5) `0x00006763`, the developer save 22 `0x0001a763`; bit 9
+(`0x200`) is set in all three. So on the stock PC this scripted battle
+dialogue *is* subtitled, except while the speed-up booster mutes it.
 
 **The patch.** `0x0078521c`: `a1 9c 07 13 01` (`mov eax, [g_SaveMenu]`) →
 `b8 00 02 00 00` (`mov eax, 0x200`): the getter answers 1 unless the
-speed-up mutes it, as the PC intends. Writing the save bit instead would end
-up in the player's saves and be reset by every load.
+speed-up mutes it, as the PC intends. With the measured saves this changes
+nothing; it only covers a save whose bit 9 is clear. Writing the save bit
+instead would end up in the player's saves and be reset by every load.
 
-**Checked:** static; the bytes matched in the Fahrenheit run. Not yet seen
-on screen (harness test: `call 0x00785f80 1` before a battle with voiced
-lines sets the same bit through data, see below).
+**Open: what row 17 means.** The research row cites only the Final Fantasy
+Wiki ("battle quotes not displayed"). The scripted lines above are not it.
+The likely candidates are the battle system's own shouts (FMOD command 6,
+`FfxFmod_shoutStart` `0x00706fd0` → `FmodVoice::shoutStart`: kill and
+overdrive quotes), which have no text path found yet, or lines the speed-up
+mutes. Needs a concrete line that International subtitles and the PC
+doesn't, then its play path.
+
+**Checked:** the mechanism in the game through the ffx-rust harness
+(`tools/replays/battle-subtitles.txt`, which sets the same bit through data,
+since the harness can't write code): developer save 22, the Luca docks'
+battle `lchb02_00`. With bit 9 cleared the opening's voiced lines play with no
+text; with it set, "Tidus: Whoa! What are they?", "Lulu: Ancient machina
+salvaged by the Al Bhed." and "Lulu: They are mostly vulnerable to
+lightning." show at the bottom, then the command window comes as usual. The
+developer save itself has bit 9 set (`g_SaveMenu` `0x0001a763`, a PS2-era
+save). The code patch itself: bytes matched and written in the Fahrenheit
+run; not watched in a battle there.
 
 ## `audio.soundtrack` (row 20)
 
@@ -105,8 +134,10 @@ the player can switch in the game's menu at any time; the choice is saved.
 Forcing it on every load was rejected: it would fight the player's menu
 choice.
 
-**Checked:** static; the hook's log line in the Fahrenheit run at start-up.
-The music itself not heard.
+**Checked:** in the Fahrenheit run the hook ran at start-up (3 s after the
+logos were skipped) with `g_FmodManager` already set, so the switch was
+queued. The music itself not heard, and a New Game not started (no input in
+the test install).
 
 ## `ui.loading`: splash videos (row 16)
 
@@ -127,8 +158,10 @@ and deleted unseen. ffx-rust's harness ends the logos the same way (it
 clears the flag after each flip, `docs/host.md`), so the rest of the
 start-up is known to cope.
 
-**Checked:** the hook's log line in the Fahrenheit run; start-up to the
-title (log timestamps) without the logos.
+**Checked:** in the Fahrenheit runs the hook answered (log line 7 s after
+the mod's init) and the start-up went on: the new-game save was built 2 s
+later and the game ran until the 60 s timeout without errors. Not looked at
+on screen (no window capture of the Fahrenheit game).
 
 ## `fixes.farplane_video`
 
@@ -191,10 +224,21 @@ pass through: a jump of two zones is only filled in the direction the stick
 was already turning. The log reports how many diagonals were filled per
 Fury.
 
-**Checked:** static only. The harness has no analog-stick input; a test
-needs the stick faked (e.g. hooking `inputGetCurrDeviceStickInfo`
-`0x00630c90` to turn a fixed angle per frame) in a battle with Lulu's
-gauge full.
+**Checked:** the hook installs in the Fahrenheit run. The logic against a
+Python model of the original's state-4 code (`0x00891cd2..0x00891f60`: two
+samples per call, two calls per frame, one stick reading per frame), 300
+frames, speed jittered ±20 %, 20 runs each, circles counted:
+
+| °/frame (turns/s at 30 fps) | 30 (2.5) | 60 (5.0) | 70 (5.8) | 90 (7.5) | 110 (9.2) | 120 (10) | 150 (12.5) |
+|---|---|---|---|---|---|---|---|
+| original | 24.4 | 39.5 | 25.8 | 33.9 | 11.4 | 0.6 | 0.2 |
+| with the fill | 24.4 | 48.9 | 50.8 | 45.6 | 18.6 | 12.1 | 42.1 |
+
+It never counts fewer than the original. Not tested with a real stick: the
+harness has no analog input; a test needs the stick faked (e.g. hooking
+`inputGetCurrDeviceStickInfo` `0x00630c90` to turn a fixed angle per frame)
+in a battle with Lulu's gauge full. Open: the PS2's own sampling rate for
+this window (and so how fast a spin it accepted) is not known.
 
 ## `fixes.npc_mouths`: not patched
 
