@@ -201,11 +201,29 @@ Correlation with the HD texture: 7,112 of 7,322 measured at 0.8 or more,
 German text in `tex_de`, `dome06`'s brick walls, `kami00`'s crystal,
 `mag_0105`'s ring, `djyt00`'s caustics) or shifted.
 
+## In the game (2026-11-02)
+
+Replays `tools/replays/fx-fire.txt` (also `fx-thunder.txt`, `fx-cure.txt`:
+the item trick of ffx-rust's battle-magic with another effect ID),
+`fx-overdrive.txt` (Spiral Cut, Valefor's entry, Energy Blast) and
+`fx-ifrit.txt` (Ifrit's entry on the Thunder Plains), each run once without
+and once with the converter's output (`tools/shotrun`, `SHOTRUN_STARTUP=600`
+on a busy machine). `FFX_HOOK_LOG_OPENS=1` shows `mods:` for `magic_0076`,
+`0390`, `0595`, `0596`, `0604` and `btlmap/kami/kami00_a/fp`. Every effect
+draws, in the right orientation, with the PS2 textures.
+
+The runs reach the spell at different updates (the battle start differs
+by about 180 updates between runs), so random particles land elsewhere;
+compare looks, not pixels. Energy Blast at the same point of the effect
+shows the alpha difference above: the HD trails saturate to white, the PS2
+ones keep the effect's purple vertex colour. Worth checking against PS2
+footage.
+
 ## Open
 
 - `magic_0668`: needs a D3D11 template (another texture's cluster with the
   path changed).
 - The PS2 images that no HD texture is named after (most are partial
   uploads whose `TEX0` image went in instead).
-- In-game check of map particles (only the battle map of Ifrit's replay
-  was looked at).
+- In-game check of field-map particles (only the Thunder Plains battle
+  map was looked at); Thunder and Cure only as previews.
