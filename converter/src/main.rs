@@ -109,14 +109,18 @@ fn main() -> Result<()> {
             let out = PathBuf::from(&a[4]);
             let mut specs: Vec<String> = a[5..].to_vec();
             if specs == ["all"] {
-                // the characters with pages the texture bake skips
+                // remodelled: the texture bake skips a page of it and under
+                // 60 % of its HD vertices sit on PS2 vertices (docs/models.md)
                 specs.clear();
                 for spec in all_characters(&d) {
                     let (kind, name) = spec.split_once('/').context("kind/name")?;
-                    if let Ok(Some(r)) = chrjob::skipped(&mut d, &pc, kind, name)
-                        && !r.skipped.is_empty()
-                    {
-                        specs.push(spec);
+                    if let Ok(Some(r)) = chrjob::skipped(&mut d, &pc, kind, name) {
+                        if std::env::var_os("DM_DEBUG").is_some() {
+                            eprintln!("select {spec} {:.3} {}", r.frame_share, r.skipped.len());
+                        }
+                        if !r.skipped.is_empty() && r.frame_share < 0.6 {
+                            specs.push(spec);
+                        }
                     }
                 }
                 eprintln!("{} remodelled characters", specs.len());

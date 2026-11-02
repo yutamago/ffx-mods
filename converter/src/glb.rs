@@ -1,7 +1,8 @@
-//! A minimal binary glTF writer for skinned triangle meshes, in the shape
-//! `ffx_phyre::import_into_cluster` reads: one mesh, its primitives tagged
-//! with `extras.ffx_segment` (or untagged for new segments), joints named
-//! like the model's skeleton nodes.
+//! A minimal binary glTF writer for triangle meshes, in the shape
+//! `ffx_phyre::import_into_cluster` reads: one glTF mesh per HD instance,
+//! its primitives tagged with `extras.ffx_segment` (or untagged for new
+//! segments, copies of the tagged one), joints named like the model's
+//! skeleton nodes.
 
 use serde_json::{Value, json};
 
@@ -16,7 +17,7 @@ pub struct Primitive {
     /// glTF convention: v down from the top of the image.
     pub uvs: Vec<[f32; 2]>,
     pub colors: Vec<[u8; 4]>,
-    /// Indices into [`Glb::joints`].
+    /// Indices into [`Glb::joints`]; empty for a rigid segment.
     pub joints: Vec<[u16; 4]>,
     pub weights: Vec<[f32; 4]>,
     pub indices: Vec<u32>,
@@ -26,7 +27,8 @@ pub struct Primitive {
 pub struct Glb {
     /// Joint node names (`SkeletonNode_i`).
     pub joints: Vec<String>,
-    pub primitives: Vec<Primitive>,
+    /// One glTF mesh per HD instance.
+    pub meshes: Vec<Vec<Primitive>>,
     /// Number of materials to declare (the model's).
     pub materials: usize,
 }
@@ -69,8 +71,10 @@ impl Glb {
             views: Vec::new(),
             accessors: Vec::new(),
         };
+        let mut meshes = Vec::new();
+        for mesh in &self.meshes {
         let mut prims = Vec::new();
-        for p in &self.primitives {
+        for p in mesh {
             let n = p.positions.len();
             let mut lo = [f32::MAX; 3];
             let mut hi = [f32::MIN; 3];
@@ -85,13 +89,16 @@ impl Glb {
             let uv = buf.add(&f32s(&p.uvs), 5126, "VEC2", n, false, None);
             let col: Vec<u8> = p.colors.iter().flatten().copied().collect();
             let col = buf.add(&col, 5121, "VEC4", n, true, None);
-            let jb: Vec<u8> = p.joints.iter().flat_map(|j| j.iter().flat_map(|x| x.to_le_bytes())).collect();
-            let joi = buf.add(&jb, 5123, "VEC4", n, false, None);
-            let wei = buf.add(&f32s(&p.weights), 5126, "VEC4", n, false, None);
             let ib: Vec<u8> = p.indices.iter().flat_map(|i| i.to_le_bytes()).collect();
             let ind = buf.add(&ib, 5125, "SCALAR", p.indices.len(), false, None);
+            let mut attributes = json!({"POSITION": pos, "NORMAL": nor, "TEXCOORD_0": uv, "COLOR_0": col});
+            if !p.joints.is_empty() {
+                let jb: Vec<u8> = p.joints.iter().flat_map(|j| j.iter().flat_map(|x| x.to_le_bytes())).collect();
+                attributes["JOINTS_0"] = json!(buf.add(&jb, 5123, "VEC4", n, false, None));
+                attributes["WEIGHTS_0"] = json!(buf.add(&f32s(&p.weights), 5126, "VEC4", n, false, None));
+            }
             let mut prim = json!({
-                "attributes": {"POSITION": pos, "NORMAL": nor, "TEXCOORD_0": uv, "COLOR_0": col, "JOINTS_0": joi, "WEIGHTS_0": wei},
+                "attributes": attributes,
                 "indices": ind,
                 "material": p.material,
                 "mode": 4,
@@ -101,18 +108,27 @@ impl Glb {
             }
             prims.push(prim);
         }
+        meshes.push(json!({"name": format!("ps2mesh{}", meshes.len()), "primitives": prims}));
+        }
         let mut nodes: Vec<Value> = self.joints.iter().map(|n| json!({"name": n})).collect();
         let joint_ids: Vec<usize> = (0..self.joints.len()).collect();
-        nodes.push(json!({"name": "ps2mesh", "mesh": 0, "skin": 0}));
-        let root = nodes.len() - 1;
+        let mut roots = Vec::new();
+        for (i, mesh) in self.meshes.iter().enumerate() {
+            let mut node = json!({"name": format!("ps2mesh{i}"), "mesh": i});
+            if mesh.iter().any(|p| !p.joints.is_empty()) {
+                node["skin"] = json!(0);
+            }
+            roots.push(nodes.len());
+            nodes.push(node);
+        }
         let materials: Vec<Value> = (0..self.materials).map(|i| json!({"name": format!("m{i}")})).collect();
         let doc = json!({
             "asset": {"version": "2.0", "generator": "demaster"},
             "scene": 0,
-            "scenes": [{"nodes": [root]}],
+            "scenes": [{"nodes": roots}],
             "nodes": nodes,
             "skins": [{"joints": joint_ids}],
-            "meshes": [{"name": "ps2mesh", "primitives": prims}],
+            "meshes": meshes,
             "materials": materials,
             "buffers": [{"byteLength": buf.bin.len()}],
             "bufferViews": buf.views,
