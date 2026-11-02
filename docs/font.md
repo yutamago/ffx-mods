@@ -62,7 +62,9 @@ moved by `0x018716e0`/`0x018716e4`, and the edge kinds draw `shadow_0_n`
 ten times around the glyph. The HD pages are white with the coverage in
 alpha (with a baked top-to-bottom grey gradient), and the shadow pages are
 black with exactly the same alpha. The text colour and gradient come from
-the vertex colours (`0x00b5f890`, top/bottom pairs per colour).
+the vertex colours (top/bottom pairs per colour; the table's address is not
+known yet: `0x00b5f890`, given here before, is `TOGetTextureName`'s size
+table).
 
 ### Damage numbers
 

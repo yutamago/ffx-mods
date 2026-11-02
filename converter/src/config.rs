@@ -165,6 +165,9 @@ pub enum AppliedBy {
     Converter,
     /// Code in the C# mod, read from `demaster.toml` when the game starts.
     Mod,
+    /// Both: files written by `demaster build` (a rebuild when it changes)
+    /// and code in the mod that draws with them.
+    Both,
 }
 
 /// Every setting with who applies it. `docs/config.md` describes them; the
@@ -188,7 +191,7 @@ pub const SETTINGS: &[(&str, AppliedBy)] = {
         ("render.shadows", Mod),
         ("render.aspect", Mod),
         ("render.texture_filter", Mod),
-        ("ui.menus", Converter),
+        ("ui.menus", Both),
         ("ui.portraits", Converter),
         ("ui.font", Converter),
         ("ui.title", Converter),
@@ -314,6 +317,7 @@ mod tests {
             let by_cs = match by {
                 AppliedBy::Converter => "Converter",
                 AppliedBy::Mod => "Mod",
+                AppliedBy::Both => "Both",
             };
             let line = settings
                 .lines()
@@ -324,7 +328,7 @@ mod tests {
             assert!(docs.contains(&format!("`{key}`")), "{key} missing from docs/config.md");
             assert_eq!(
                 patches.contains(&format!("new(\"{key}\",")),
-                *by == AppliedBy::Mod,
+                *by != AppliedBy::Converter,
                 "{key} in mod/Patches.cs"
             );
         }

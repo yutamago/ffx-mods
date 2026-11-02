@@ -752,6 +752,10 @@ struct MapsJob {
 }
 
 impl Job for MapsJob {
+    /// 2: textures with mip chains (phyretex::mip_chain).
+    fn version(&self) -> u32 {
+        2
+    }
     fn name(&self) -> &'static str {
         self.name
     }

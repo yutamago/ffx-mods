@@ -24,7 +24,7 @@ writes `<out>/efl/x/<HD path>` and a preview per file
 | Battle atlas (`menu_de`, `menu_us` `battle`): CTB faces, markers, letters; the damage digits with `ui.font` (also into `menu_fr`, `menu_it`, `menu_es`, `font.md`) | 2 (15 and 16 PS2 elements each), 5 with `ui.font` | checked (`battle-attack.txt`): PS2 CTB faces |
 | Menu faces `face_ply`, `face_smn`, `sface_ply` | 14 (every language folder) | checked (`tools/replays/ui-status.txt`): PS2 face on the Status page |
 | Button glyphs (`menu/d3d11/pad_icon`) | 1 | not checked (the harness pad shows no prompt in these replays) |
-| Message window atlas `meswin` | 0 | no element matches: the HD redrew it |
+| Message window atlas `meswin`: the PS2 window pieces (below, "The PS2 windows") | 8 (every language folder) | checked (`tools/replays/ui-dialogue.txt`, `ui-dialogue-field.txt`): PS2 message windows |
 
 60 files in all; 20 HD textures have no PS2 counterpart (listed by
 `demaster ui`). Previews and screenshots: `~/ffx-work/demaster/research/ui/`
@@ -203,10 +203,126 @@ been grey with coloured symbols as drawn by the vertex colour.
   `loading/autosaving`, `savedataicons/*`.
 - Title layers 3 (Chinese), 14, 15 and `titl01`'s "Fine" layers.
 
+## The PS2 windows (`ui.menus`: texture and code)
+
+**What the PS2 drew.** The PS2's message windows come from one routine,
+`TOMkpWindowPlain` (FFX.exe `0x008f9a40`, SLPM_675.13 `0x001fa550`). It
+stretches four meswin shapes, 200-203, over the window. They are FFX.exe's
+meswin layout table (`0x00c5b460`) entries 0-3, in PS2 texels: (160, 56)
+16x24 top-left corner, (176, 56) 8x24 top edge, (160, 80) 16x8 left edge,
+(176, 80) 8x8 body. The corner goes at (x, y), the top edge stretches to
+`w - 16`, the left edge to `h - 24`, and the body covers the rest. The
+pieces are white, and their alpha gives the window its brushed top-left
+edge. The top edge and the body take a horizontal gradient from
+`col_mssgwind0` on the left to `col_mssgwind1` on the right. The corner and
+the left edge take `col_mssgwind0`. These colours come from the PS2 menu
+sequence data: `TOSeqInitParam` (`0x008ae6f0`) reads them into
+`0x025d16b4` / `0x025d16b0`, and the PC still does so at run time. Values
+read in the game (harness), bytes R G B A:
+
+| Name (global) | RGBA |
+|---|---|
+| `col_mssgwind0` (`0x025d16b4`) | `19 00 31 6b` |
+| `col_mssgwind1` (`0x025d16b0`) | `34 00 66 6b` |
+| `col_complt0/1` (`0x025d163c/38`) | `4f 28 78 80` / `58 4a 82 80` |
+| `col_nameplt0/1` (`0x025d166c/68`) | `24 3e 53 80` / `11 18 40 80` |
+| `col_helpplt0/1` (`0x025d1614/10`) | `09 09 09 80` both |
+| `col_placeplt*`, `col_helpsubplt*` | `7b 66 28 80` |
+| `col_bsoplt0/1` (`0x025d16a0/9c`) | `3a 3a 3a 80` / `27 27 27 80` |
+| `col_bitemplt0/1` (`0x025d1698/94`) | `51 42 23 80` / `3c 3f 12 80` |
+| `col_babplt0/1` (`0x025d1690/8c`) | `4a 1e 55 80` / `42 0d 39 80` |
+| `col_lmtplt0/1` (`0x025d1688/84`) | `1f 38 55 80` / `14 1c 38 80` |
+| `col_menubg`, `col_menubg0`, `col_menubg1` (bytes at `0x025d1680`, `167c`, `1678`) | `80 be be be`, `80 aa cd 6b`, `80 c3 87 ba` (the byte order of `TOSeqGetColorRGBA` not worked out) |
+
+So a message window is a translucent (alpha `0x6b`, 84 %) violet-blue
+gradient, darker on the left, with no separate border: the PS2's kind-0
+code draws nothing else. On screen (harness, 1280x720, over black) the left
+end is (42, 0, 82) and the right end (86, 0, 169). That is exactly the
+GS's modulate (`texel * colour >> 7`) with alpha `0x6b / 0x80`, so the PC's
+menu shader reproduces the PS2 arithmetic for these vertex colours.
+
+**Who used it on the PS2.** In the window kinds' handler table (SLPM_675.13
+`0x00323710`, 6 words a kind, like FFX.exe's `g_YiWindowHandlers`
+`0x00c5d788`), the draws of kind 0 (`0x00208758`) and kinds 3-9 call
+`TOMkpWindowPlain` with the window rectangle, then set the text scissor
+(x0 + 12, y0 + 4, x1 - 12, y1 - 4). Kinds 1 and 2 (`0x00208870`) draw no
+plate, only the scissor, on the PS2 as on the PC. Other callers are the
+yes/no window (`0x002362c0`, centred: the PC's `TOMenuDrawYesNoWindow`)
+and fixed-place windows at `0x00223880`, `0x002238e0`, `0x002239b0` and
+`0x0023d758` (not identified). `0x001fa0f0`, `0x001fa210` and `0x001fa448`
+read the same colours but have no caller.
+
+**What the remaster changed.** FFX.exe keeps `TOMkpWindowPlain` and the
+draw of kinds 3-9, `yiWindowDrawPlate` (`0x00907390`), unchanged. Kind 0's
+draw, `yiWindowDrawMenu` (`0x00907060`), instead draws
+`TODrawMenuPlateXYWHType(x0 + 4, y0, w - 8, h, 10)`: the HD message box
+(a shadow, the `stonetexture` body through shape -4, a gradient
+`0x608f2c45` / `0x60501826`, the HD `meswin` frame). The HD `meswin` atlas
+is empty where the PS2 pieces were, so the plain window drew nothing
+visible.
+
+**The restoration.**
+
+- Converter (`ui.menus` job, `uijob::paste_window_pieces`): the PS2 texels
+  of entries 0-3 (the box at (160, 56), 24x32) go into every
+  `menu*/meswin` (8 folders; no text in them), 4x, texel for texel, and
+  only where the HD atlas is empty.
+- Mod (`mod/MenuPatches.cs`): a hook on `yiWindowDrawMenu` runs
+  `yiWindowDrawPlate`, which is exactly the PS2's kind-0 draw. A hook on
+  `TODrawMenuPlateXYWHType` draws type 10 (the remaster's message-box
+  plate, also used by the yes/no questions and the battle-end notice) as
+  `TOMkpWindowPlain(x, y, w, h)`. The other plate types stay HD.
+
+So `ui.menus` is applied by both (`AppliedBy::Both` in `config.rs` and
+`mod/Settings.cs`): changing it needs a `demaster build` and a restart.
+
+**Checked.** In the ffx-rust harness, which can't run the mod's hooks: a
+call to `TOSetWindowKind` (`0x00906e60`) sets the window's kind to 3, so
+the game itself runs `yiWindowDrawPlate` (the function the hook runs) with
+the converter's `meswin`. Two replays: `tools/replays/ui-dialogue.txt`
+(New Game's sphere grid choice, both windows kind 0) and
+`tools/replays/ui-dialogue-field.txt` (Rin's agency: the spoken line is
+kind 1 and stays without a plate; the choice is kind 0). Each is shot at
+16:9 and again after `render.aspect`'s 4:3 write. Screenshots in
+`~/ffx-work/demaster/research/ui/menus/`: `choice-hd.png`,
+`choice-ps2.png`, `choice-ps2-43.png`, `field-line.png`,
+`field-choice-hd.png`, `field-choice-ps2.png`, `field-choice-ps2-43.png`,
+`meswin-preview.png`. In the PS2 shots of the field choice the cursor is a
+small arrow because the cursor depends on the window kind, which the
+harness changed; with the hook the kind stays 0 and the cursor is the
+game's. In the Fahrenheit install (2026-11-02) both hooks installed (log:
+`ui.menus = ps2: PS2 message windows`) and the 8 `meswin` files were
+served. No window came on screen there (that install has no input). The
+type-10 hook was not seen drawing (the harness can't run it in place).
+
+**Uncertain.** These shots were not compared with PS2 screenshots; the
+look follows the PS2 code and data. This path draws no light border; if
+PS2 shots show one, another routine draws it. The pieces are upscaled 4x
+by nearest neighbour, so the stretched body's edges fade over a quarter
+of a PS2 texel instead of the whole texel the PS2's bilinear filter would
+blend.
+
 ## Not done
 
-- `meswin` (message window frame, cursor, `?`/`!` icons): no HD element
-  passes the rules; the cursor in the game is the HD silver cone.
+- The rest of `meswin`: the cursor, the `?`/`!` icons, and the brush
+  plates (entries 4-7 and 16-28) that the PS2 menus tinted with the
+  `col_*plt` colours above. The HD cursor (a silver cone with a glow) is
+  close to the PS2 one (shape 208: a white ball, entry 8 at (80, 144),
+  under a silver triangle at (0, 168)), but the remaster draws it from its
+  own cells.
+- Main menu and sub-menus: the PC's `TkMn2*` draw functions were rewritten
+  for the HD layout (`TODrawMenuPlateXYWHType` types 1-9 and 11-14,
+  `menu_new`, `ffx_bg`). The PS2 versions exist only in SLPM_675.13; they
+  draw brush plates from meswin tinted `col_complt`, `col_nameplt`,
+  `col_helpplt`, `col_placeplt` and so on. Restoring them means porting
+  those PS2 draws to the PC's draw layer. Not started.
+- Battle command windows: `TODrawWaitBtlWin*` (`0x008a2da0..0x008a7dc0`)
+  and `TODrawBtlNetWindowXYWHType` (`0x008f41b0`, a nine-slice from HD
+  cells of the `battle` atlas) are HD rewrites with their own animations.
+  The PS2's battle rows used `TOAdpShapeByKind` (`0x008f1b50`), which is
+  still in FFX.exe but called only from the menu: meswin shapes 0xda/0xdb
+  tinted `col_bsoplt` (commands), `col_bitemplt` (items), `col_babplt`
+  (abilities) or `col_lmtplt` (overdrives). Not ported.
 - `icon` and `strtex` (item icons, "Miss/Immune/Overkill" graphics in
   `icon`, menu labels): CLUTs made at run time. A table of the RGBA the
   code passes per icon (`TOAddPktMenuIconRGBA` callers) would allow it.

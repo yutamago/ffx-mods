@@ -443,8 +443,34 @@ pub fn blend_segments(edit: &mut ClusterEdit, segs: &[u32], variants: &Variants)
     for &s in segs {
         by_material.entry(edit.segment_material(s)?).or_default().push(s);
     }
-    let mut out = String::new();
+    // per material, the segments of one mesh at a time: a material copy
+    // joins the material set of one mesh (models with several skinned
+    // instances share materials across meshes)
+    let mut groups: Vec<(u32, Vec<u32>)> = Vec::new();
     for (m, ss) in by_material {
+        let mut rest = ss;
+        while !rest.is_empty() {
+            // on a scratch copy: which of them see the new material at its index
+            let mut trial = edit.clone();
+            let mine = match trial.add_material(m, rest[0]) {
+                Ok((copy, index)) => {
+                    let mut mine = vec![rest[0]];
+                    for &s in &rest[1..] {
+                        trial.set_segment_material(s, index)?;
+                        if trial.segment_material(s).ok() == Some(copy) {
+                            mine.push(s);
+                        }
+                    }
+                    mine
+                }
+                Err(_) => rest.clone(),
+            };
+            rest.retain(|s| !mine.contains(s));
+            groups.push((m, mine));
+        }
+    }
+    let mut out = String::new();
+    for (m, ss) in groups {
         // A copy, else (meshes without their own material set: the rigid
         // objects' meshes) the material itself when only these segments
         // use it.
@@ -468,7 +494,7 @@ pub fn blend_segments(edit: &mut ClusterEdit, segs: &[u32], variants: &Variants)
                 m
             }
         };
-        match blend(edit, copy, variants, false)? {
+        match blend(edit, copy, variants, true)? {
             Ok(c) => {
                 let what = match c {
                     Change::Switched(id) => id.rsplit('#').next().unwrap_or(&id).to_owned(),

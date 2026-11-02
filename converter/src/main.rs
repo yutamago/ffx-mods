@@ -1,30 +1,4 @@
-mod bake;
-mod bgjob;
-mod build;
-mod chralpha;
-mod chrjob;
-mod config;
-mod disc;
-mod fontjob;
-mod fsb5;
-mod fxjob;
-mod glb;
-mod gsmem;
-mod jobs;
-mod mapjob;
-mod models;
-mod moviejob;
-mod musicjob;
-mod phyretex;
-mod ps2chr;
-mod ps2fx;
-mod ps2map;
-mod ps2mesh;
-mod ps2movie;
-mod spu2;
-mod sqseq;
-mod texanim;
-mod uijob;
+use demaster::{bgjob, build, chralpha, chrjob, config, disc, fxjob, jobs, mapjob, models, moviejob, musicjob, ps2fx, ps2movie, texanim, uijob};
 
 use std::path::{Path, PathBuf};
 

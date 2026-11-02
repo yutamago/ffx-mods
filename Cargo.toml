@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["converter", "tools/ps2x"]
+members = ["converter", "studio", "tools/ps2x"]
 exclude = ["tools/shotrun"]
 
 [workspace.package]
@@ -11,6 +11,7 @@ license = "MIT OR Apache-2.0"
 [workspace.dependencies]
 ffx-vbf = { git = "https://github.com/yutamago/ffx-rust.git", rev = "681cb391957099939fc181fae122fabca3d4917b" }
 ffx-phyre = { git = "https://github.com/yutamago/ffx-rust.git", rev = "681cb391957099939fc181fae122fabca3d4917b" }
+ffx-dxbc = { git = "https://github.com/yutamago/ffx-rust.git", rev = "681cb391957099939fc181fae122fabca3d4917b" }
 
 [profile.release]
 opt-level = 3

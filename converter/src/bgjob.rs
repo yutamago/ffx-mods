@@ -28,6 +28,10 @@ pub fn jobs() -> Vec<Box<dyn Job>> {
 struct BgJob;
 
 impl Job for BgJob {
+    /// 2: textures with mip chains (phyretex::mip_chain).
+    fn version(&self) -> u32 {
+        2
+    }
     fn name(&self) -> &'static str {
         "maps.backgrounds"
     }

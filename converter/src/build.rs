@@ -129,7 +129,7 @@ fn converter_settings(config: &Config) -> (BTreeMap<String, String>, String) {
     let all = config.settings();
     let s: BTreeMap<String, String> = SETTINGS
         .iter()
-        .filter(|(_, by)| *by == AppliedBy::Converter)
+        .filter(|(_, by)| *by != AppliedBy::Mod)
         .map(|(k, _)| (k.to_string(), all[*k].clone()))
         .collect();
     let text: String = s.iter().map(|(k, v)| format!("{k}={v}\n")).collect();
@@ -208,7 +208,7 @@ fn steam_libraries() -> Vec<PathBuf> {
 
 /// The game's `FFX_Data.vbf`: the argument, the config, a game folder above
 /// the converter, then the Steam libraries.
-fn find_vbf(arg: Option<&Path>, loaded: &Loaded) -> Result<PathBuf> {
+pub fn find_vbf(arg: Option<&Path>, loaded: &Loaded) -> Result<PathBuf> {
     if let Some(p) = arg
         .map(Path::to_path_buf)
         .or_else(|| loaded.resolve(&loaded.config.source.game))

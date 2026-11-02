@@ -284,65 +284,94 @@ the draw. Checked on the variants' pixel shaders and pass states:
 | Switches | Pass | Texture alpha |
 |---|---|---|
 | neither | `Opaque` | ignored (`AlphaThreshold` unused in 41 of 43 pixel shaders): solid quads |
-| `UATFOPQ` | `Opaque` | alpha test at `AlphaThreshold` (0.5 on most): hard, ragged cut-outs |
+| `UATFOPQ` | `Opaque` | alpha to coverage (blend state `AlphaToCoverageEnable`) and the alpha test at `AlphaThreshold` (0.5 on most) |
 | `ALPHA_ENABLED` | `Transparent` only | blend src alpha / inverse src alpha, depth write on, texels under `AlphaThreshold` dropped (used by all 43 pixel shaders) |
 
 Before this fix, the converted PS2 mesh went into one template material:
-an `UATFOPQ` one for most of the party (Tidus's and Kimahri's hair cut at
-0.5), a blended one at threshold 0.8 for Wakka, and on kept-mesh models
-the PS2 texels went into HD pages whose material may not use alpha at all.
+an `UATFOPQ` one at 0.5 for most of the party (Tidus's and Kimahri's hair
+cut hard), a blended one at threshold 0.8 for Wakka; PS2 cloth now goes
+into the HD cloth segments with their HD materials (Kimahri's fur and mane:
+`UATFOPQ` and blended at 0.5, and opaque ones that ignore alpha); and on
+kept-mesh models the PS2 texels went into HD pages whose material may not
+use alpha at all.
 
 **What the converter does.**
 
-- Remodelled models (`models.*`): each PS2 triangle that samples a texel
-  with alpha under 240 (PS2 `0x78`; texel centres inside its UV
-  triangle, its centroid texel for tiny ones; not the corner texels, which
-  sit on the island's edge) goes into segments of its own, whose material
-  is a copy of the template's (`ClusterEdit::add_material`) switched to the
-  **blended twin** of its variant: the variant of the same effect with the
-  same switches, `ALPHA_ENABLED` on, `UATFOPQ` off (and, if no such
-  variant exists, without the z-prepass switches `ADDITIONAL_ZPREPASS`,
-  `BUILT_IN_ZPREPASS`, `ZPP_IGNORE_Z`), whose material has the same
-  parameter layout (the location tables address the buffer by offset).
-  Its `AlphaThreshold` becomes at most 0.1. Opaque triangles stay in the
-  template. `chralpha::blend_segments` does this for any segment list
-  (PS2 cloth put into HD cloth segments would use it too: the cloth
-  variants have blended twins).
+- **The variant: the `UATFOPQ` twin.** The variant of the same effect with
+  the same switches and `UATFOPQ` on (`ALPHA_ENABLED` off), whose own
+  material has the same parameter layout (the location tables address the
+  buffer by offset); if there is none, without the z pre-pass switches
+  (`ADDITIONAL_ZPREPASS`, `BUILT_IN_ZPREPASS`, `ZPP_IGNORE_Z`). With MSAA
+  (8x at max settings) alpha to coverage turns texture alpha into partial
+  coverage, so fringes fade out in the opaque pass, depth-sorted like the
+  rest of the body; without MSAA it is an alpha test at the threshold.
+  `AlphaThreshold` becomes at most 0.1. A variant the model did not use
+  before is added to the character's `.ahwin32` (the list loads the shader
+  variants; `chralpha::list_entries`).
+- **Not the blended twin.** `ALPHA_ENABLED` twins were tried first. In cut
+  scenes they look right (Tidus's hair, Wakka's crest), but in battle the
+  blended parts that lie over the character's own body were not drawn:
+  Lulu's necklace and the lower half of her collar, Kimahri's leg wraps
+  and belt trim, Tidus's wristband (`alpha-blend-battle-lulu.png`:
+  unchanged, blended twin, `UATFOPQ` twin). Not caused by the appended
+  materials, the shader list, the face animation or the PS2 cloth (each
+  ruled out by a build without it); the cause is open
+  (`docs/ffx-rust-findings.md`). The `UATFOPQ` twins draw everything.
+- Remodelled models (`models.*`): each PS2 triangle of the template that
+  samples a texel with alpha under 240 (PS2 `0x78`; texel centres inside
+  its UV triangle, its centroid texel for tiny ones; not the corner texels,
+  which sit on the island's edge) goes into segments of its own with a
+  copy of the template material (`ClusterEdit::add_material`) given the
+  twin. A PS2 cloth segment with any see-through texel, and the face
+  segment with 1 % or more, get a twin copy of their material whole (cloth
+  segments keep their tag; cloth variants have `UATFOPQ` twins). A copied
+  material that blends or tests already (Tidus's hair, Wakka's crest, the
+  HD cloth materials) keeps its variant and only gets the lower threshold.
+  Copies join the material set of the copied segment's mesh, so segments
+  of other meshes (monsters with several skinned instances) get copies of
+  their own. Rigid objects whose meshes have no material set of their own
+  keep their material when other segments share it.
 - Kept-mesh models (`chr.*`): an HD segment whose PS2 twins sample 1 % or
-  more see-through texels gets its material blended in place (same rule),
-  and the job writes the model's `.dae.phyre` next to the painted pages
-  (not for remodelled models, whose model is the `models.*` job's).
-  Materials that blend already only get the threshold lowered to 0.1.
+  more see-through texels gets its material changed in place: opaque ones
+  to the `UATFOPQ` twin, blended HD materials (fur, feathers, flans) keep
+  blending with the threshold lowered to 0.1. The job writes the model's
+  `.dae.phyre` (and `.ahwin32` when a variant is new) next to the painted
+  pages, not for remodelled models (the `models.*` job's).
 - **The threshold.** The PS2's alpha test for characters (`TEST_2`) was
-  not found; with 0.03 every fringe texel shows, but the faint ones write
-  depth over feathers the same draw puts behind them later (pale outlines
-  on the Condor's wings); 0.1 keeps the soft fringe with the outlines as
-  faint as the HD's 0.3.
+  not found. For blended HD materials, 0.03 let the faint fringe texels
+  write depth over feathers the same draw puts behind them (pale outlines
+  on the Condor's wings); 0.1 keeps the soft fringe with outlines as faint
+  as the HD's 0.3.
 
-**Counts** (`demaster build`, 2026-11-02, German PAL disc). Remodelled:
-149 of the 165 models have see-through triangles, in 171 segments; 31
-materials switched to the blended twin (the `UATFOPQ` templates, e.g. c001,
-c002, c004, c006), 113 template copies blended already and got the
-threshold lowered (c005 from 0.8, c101 from 0.4), 4 left as they were (rigid
-objects whose meshes have no material set of their own and share the
-template material: f093-f118). Kept meshes: 430 models get a new
-`.dae.phyre`, 128 materials switched to the blended twin, 627 thresholds
-lowered (the HD's 0.27-0.5 on fur, feathers, flans). No texture changes:
-the atlases and pages carried the PS2 alpha already.
+**Counts** (`demaster build`, 2026-11-03, German PAL disc; two builds of
+`chr.*` and `models.*` byte-identical, 5,083 files). Remodelled: 149 of the
+165 models have see-through texels, in 335 segments (template parts, PS2
+cloth, faces); 31 materials switched to the `UATFOPQ` twin, 242 thresholds
+lowered (HD blended or `UATFOPQ` materials at 0.2-0.8), 10 left (6 variants
+without a twin, e.g. c002's texture-animation material; 4 rigid objects
+whose material is shared). Kept meshes: 398 models get a new `.dae.phyre`,
+77 materials switched, 633 thresholds lowered, 12 left without a twin. No
+texture changes: the atlases and pages carried the PS2 alpha already.
 
-**Checked in the game** (`tools/shotrun`, max settings; HD, before, after;
+**Checked in the game** (`tools/shotrun`, max settings incl. 8x MSAA;
 crops in `~/ffx-work/demaster/shots/cmp/alpha-*.png`):
 
-- Tidus (c101), ffx-rust `event-arrival.txt` shot 2: the hair tips fade
-  out instead of ending in hard cut edges (`alpha-tidus-hair.png`,
-  `alpha-tidus-hair-zoom.png`). No sorting errors in the hair.
-- Besaid battle (`tools/replays/battle-besaid.txt`, new): Condor (m028)
-  feather fringes soft (`alpha-condor-wing.png`: before, threshold 0.03,
-  threshold 0.1), Water Flan (m016) translucent, Dingo (m009) unchanged
-  (`alpha-flan-dingo.png`). The full build in the same battle:
-  `alpha-full-build.png`.
-- Kimahri (c004), devsave 51 battle (`kimahri.txt` in the cmp folder): no
-  visible change, see the gaps.
+- Kimahri (c004), devsave 51 battle (`kimahri.txt` in the cmp folder): his
+  mane and shoulder fur (PS2 cloth in the HD cloth segments) and leg wraps
+  draw with soft fringes; nothing missing (`alpha-kimahri.png`: unchanged,
+  fixed; `alpha-kimahri-vs-hd.png`: HD, unchanged, fixed;
+  `alpha-kimahri-mane-blend.png`: unchanged, threshold only, blended twin).
+  The battle camera keeps him small at 1280x720; the user's PS2 close-up
+  was not reproduced shot for shot.
+- Lulu (c006) in the same battle: necklace, collar, wristbands drawn
+  (`alpha-blend-battle-lulu.png`: unchanged, blended twin with the parts
+  missing, final).
+- Tidus (c101) and Wakka (c005), ffx-rust `event-arrival.txt`: hair tips
+  soft (`alpha-tidus-hair.png`), Wakka's crest drawn and soft
+  (`alpha-wakka-crest.png`: HD, unchanged, fixed).
+- Besaid battle (`tools/replays/battle-besaid.txt`): Condor (m028) feather
+  fringes soft (`alpha-condor-wing.png`), Water Flan (m016) translucent,
+  Dingo (m009) unchanged (`alpha-flan-dingo.png`).
 
 ## Checked in the game
 
