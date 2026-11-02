@@ -247,21 +247,20 @@ on a busy machine). `FFX_HOOK_LOG_OPENS=1` shows `mods:` for `magic_0076`,
 `0390`, `0595`, `0596`, `0604` and `btlmap/kami/kami00_a/fp`. Every effect
 draws, in the right orientation, with the PS2 textures.
 
-The runs reach the spell at different updates (the battle start differs
-by about 180 updates between runs), so random particles land elsewhere;
-compare looks, not pixels. Energy Blast at the same point of the effect
-shows the alpha difference above: the HD trails saturate to white, the PS2
-ones keep the effect's purple vertex colour. Worth checking against PS2
-footage.
-
-`magic_0668` ships big-endian PS3 clusters (`PHYR...GCM`) in its d3d11
-folder. Their asset reference names the texture they copy
-(`PS3Data/magic/magic_0611/tex/<name>.dds`); the converter uses that
-texture's D3D11 file as the template, which carries the same reference.
+With the brightness moved into alpha (2026-11-02, max graphics settings,
+`fx2` shots), Energy Blast's trails burn out white as on the PS2 and in
+the HD version (they were purple-blue with the PS2's split), and Fire,
+Thunder, Cure, Valefor's entry and Ifrit's entry look like the HD effects
+at the same frame, at PS2 resolution. Runs can reach the spell at
+different updates (the battle start varies), in which case random
+particles land elsewhere.
 
 ## Open
 
 - The PS2 images that no HD texture is named after (most are partial
   uploads whose `TEX0` image went in instead).
 - In-game check of field-map particles (only the Thunder Plains battle
-  map was looked at); Thunder and Cure only as previews.
+  map was looked at).
+- Textures the HD did not turn white keep the PS2 split; a draw of one of
+  them with vertex alpha above `0x80` still lacks the PS2's headroom (no
+  case seen).
