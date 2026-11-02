@@ -10,8 +10,8 @@ Rows 12, 16 and 22 of [`differences.md`](differences.md). Converter:
 writes `<out>/efl/x/<HD path>` and a preview per file
 (`<out>/preview/<folder>_<name>.png`, HD left, result right). In
 `demaster build` the jobs are `ui.menus` (settings `ui.menus` and
-`ui.portraits`), `ui.title`, `ui.loading` and `ui.glyphs`
-(`ui.button_glyphs`).
+`ui.portraits`), `ui.title`, `ui.loading`, `ui.glyphs`
+(`ui.button_glyphs`) and `ui.font` (`fontjob.rs`, [`font.md`](font.md)).
 
 ## Summary (German disc, 2026-11-02)
 
@@ -21,7 +21,7 @@ writes `<out>/efl/x/<HD path>` and a preview per file
 | "FINAL FANTASY X PROJECT" logo (`titl02`), "Fine" screen pieces (`titl01`) | 4 (the HD kept the PS2 pictures) | logo checked |
 | "HD Remaster" under the opening's logo (`magic_0662/logo_hdremaster`) | 1, transparent | not reached by a replay |
 | Loading screen (`menu/loading`: `ld00..24`, `loadingbg`) | 26, transparent | not seen: the harness loads hide it |
-| Battle atlas (`menu_de`, `menu_us` `battle`): CTB faces, markers, letters | 2 (15 and 16 PS2 elements each) | checked (`battle-attack.txt`): PS2 CTB faces |
+| Battle atlas (`menu_de`, `menu_us` `battle`): CTB faces, markers, letters; the damage digits with `ui.font` (also into `menu_fr`, `menu_it`, `menu_es`, `font.md`) | 2 (15 and 16 PS2 elements each), 5 with `ui.font` | checked (`battle-attack.txt`): PS2 CTB faces |
 | Menu faces `face_ply`, `face_smn`, `sface_ply` | 14 (every language folder) | checked (`tools/replays/ui-status.txt`): PS2 face on the Status page |
 | Button glyphs (`menu/d3d11/pad_icon`) | 1 | not checked (the harness pad shows no prompt in these replays) |
 | Message window atlas `meswin` | 0 | no element matches: the HD redrew it |

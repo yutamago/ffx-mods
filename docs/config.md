@@ -65,7 +65,7 @@ every file.
 | `render.aspect` | 14 | 4:3 with black bars and the PS2 projection | 16:9 | mod | planned (`docs/screen.md`) |
 | `ui.menus` | 12 | the PS2 pieces of the menu and battle atlases (the menu layout and the Flash screens stay HD, `docs/ui.md`) | HD | converter (`ui.menus`) | battle HUD markers only; the PS2 window look needs code |
 | `ui.portraits` | 12 | PS2 portraits: menu faces, aeons, CTB list | HD | converter (`ui.menus`) | done (`docs/ui.md`) |
-| `ui.font` | 13 | the PS2 font | the HD typeface | converter | planned (`docs/font.md`) |
+| `ui.font` | 13 | the PS2 font and its letter widths in English, French, Italian, German and Spanish (dialogue, menus, battle text, help), and the PS2 damage digits; Japanese, Chinese and Korean keep the HD font | the HD typeface | converter (`ui.font`; the damage digits of the battle atlas by `ui.menus`) | done (`docs/font.md`) |
 | `ui.title` | 16 | the PS2 title screen and logos | "HD Remaster" logo | converter (`ui.title`) | done |
 | `ui.loading` | 16 | no loading screen, no splash videos | HD | converter (`ui.loading`: loading screen textures transparent) and mod (splash videos) | loading screen textures done; splash videos skipped (`docs/patches.md`) |
 | `ui.battle_subtitles` | 17 | subtitles for battle dialogue | none | mod | scripted battle dialogue always subtitled (the PC already does this for its own saves); the missing "battle quotes" not found yet (`docs/patches.md`) |
