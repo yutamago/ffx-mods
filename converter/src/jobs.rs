@@ -23,6 +23,7 @@ pub fn registry() -> Vec<Box<dyn Job>> {
     jobs.extend(crate::uijob::jobs());
     jobs.extend(crate::models::jobs());
     jobs.extend(crate::moviejob::jobs());
+    jobs.extend(crate::musicjob::jobs());
     jobs
 }
 
@@ -62,6 +63,8 @@ pub struct Ctx<'a> {
     pub ffmpeg: Option<PathBuf>,
     /// Where a downloaded ffmpeg goes (`<mod>/tools`); `None`: no download.
     pub tools_dir: Option<PathBuf>,
+    /// The path of `FFX_Data.vbf`, for jobs that read part of a big file.
+    pub vbf: Option<PathBuf>,
 }
 
 impl<'a> Ctx<'a> {
@@ -74,6 +77,7 @@ impl<'a> Ctx<'a> {
             verbose,
             ffmpeg: None,
             tools_dir: None,
+            vbf: None,
         }
     }
 

@@ -4,6 +4,7 @@ mod build;
 mod chrjob;
 mod config;
 mod disc;
+mod fsb5;
 mod fxjob;
 mod glb;
 mod gsmem;
@@ -11,12 +12,15 @@ mod jobs;
 mod mapjob;
 mod models;
 mod moviejob;
+mod musicjob;
 mod phyretex;
 mod ps2chr;
 mod ps2fx;
 mod ps2map;
 mod ps2mesh;
 mod ps2movie;
+mod spu2;
+mod sqseq;
 mod uijob;
 
 use std::path::{Path, PathBuf};
@@ -25,7 +29,7 @@ use anyhow::{Context, Result, bail};
 
 fn usage() -> ! {
     eprintln!(
-        "FFX Demaster converter {}\nusage:\n{}\n  demaster chr <iso> <FFX_Data.vbf> <out dir> <kind/name>...\n      bake character textures (PNG previews + .dds.phyre)\n  demaster models <iso> <FFX_Data.vbf> <out dir> all|<kind/name>...\n      PS2 meshes into the remodelled characters (run after chr; docs/models.md)\n  demaster models-debug <chr file> <FFX_Data.vbf> <kind/name>\n      print a PS2 mesh against its HD model\n  demaster fx <iso> <FFX_Data.vbf> <out dir> all|<id>...\n      effect textures; id: 7, magic_0007, map/bika/bika00, btlmap/bika/bika00_a, chr/mon/m028\n  demaster maps <iso> <FFX_Data.vbf> <out dir> <map|area|kind>...|all\n      field and battle map textures (PNG previews, maps.tsv + .dds.phyre)\n  demaster ui <iso> <FFX_Data.vbf> <out dir>\n      menus, portraits, title, loading screen, button glyphs (PNG previews + .dds.phyre)\n  demaster movies <iso> <FFX_Data.vbf> <mod dir> all|<name>...\n      PS2 movies as WebM (name: opn, sak, ...; ffmpeg: $FFMPEG, else found or downloaded as by build; docs/movies.md)\n  demaster movie-debug <iso> <FFX_Data.vbf> <out dir> <name> [frame]...\n      decode one PS2 movie: statistics, PNGs of the frames, the sound as WAV",
+        "FFX Demaster converter {}\nusage:\n{}\n  demaster chr <iso> <FFX_Data.vbf> <out dir> <kind/name>...\n      bake character textures (PNG previews + .dds.phyre)\n  demaster models <iso> <FFX_Data.vbf> <out dir> all|<kind/name>...\n      PS2 meshes into the remodelled characters (run after chr; docs/models.md)\n  demaster models-debug <chr file> <FFX_Data.vbf> <kind/name>\n      print a PS2 mesh against its HD model\n  demaster fx <iso> <FFX_Data.vbf> <out dir> all|<id>...\n      effect textures; id: 7, magic_0007, map/bika/bika00, btlmap/bika/bika00_a, chr/mon/m028\n  demaster maps <iso> <FFX_Data.vbf> <out dir> <map|area|kind>...|all\n      field and battle map textures (PNG previews, maps.tsv + .dds.phyre)\n  demaster ui <iso> <FFX_Data.vbf> <out dir>\n      menus, portraits, title, loading screen, button glyphs (PNG previews + .dds.phyre)\n  demaster movies <iso> <FFX_Data.vbf> <mod dir> all|<name>...\n      PS2 movies as WebM (name: opn, sak, ...; ffmpeg: $FFMPEG, else found or downloaded as by build; docs/movies.md)\n  demaster movie-debug <iso> <FFX_Data.vbf> <out dir> <name> [frame]...\n      decode one PS2 movie: statistics, PNGs of the frames, the sound as WAV\n  demaster music <iso> <FFX_Data.vbf> <out dir> all|<id|name>...\n      render PS2 music tracks (musicNNN.bgm) as 48 kHz WAVs (docs/music.md)\n  demaster music-bank <bank.fsb> <out dir> [name...]\n      decode a music bank (FSB5, IMA ADPCM) to WAVs",
         build::VERSION,
         build::USAGE
     );
@@ -218,6 +222,18 @@ fn main() -> Result<()> {
             let out = jobs::Output::new(Path::new(&a[4]));
             let only: Vec<String> = a[5..].iter().filter(|s| *s != "all").cloned().collect();
             println!("{}", moviejob::run(&ctx, &out, &only)?);
+        }
+        "music" => {
+            if a.len() < 6 {
+                usage();
+            }
+            musicjob::debug(Path::new(&a[2]), &a[3], Path::new(&a[4]), &a[5..])?;
+        }
+        "music-bank" => {
+            if a.len() < 4 {
+                usage();
+            }
+            musicjob::bank_debug(Path::new(&a[2]), Path::new(&a[3]), &a[4..])?;
         }
         "movie-debug" => {
             if a.len() < 6 {

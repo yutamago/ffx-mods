@@ -93,6 +93,9 @@ button_glyphs = "ps2"
 [audio]
 # "ps2": the original soundtrack. "hd": the arranged one.
 soundtrack = "ps2"
+# "ps2": the original soundtrack played by a PS2 sound driver from the disc's
+# sequences and instruments. "hd": the PC's recordings of it.
+music_engine = "ps2"
 
 [fixes]
 # NPC mouths that hang open in some cutscenes.
