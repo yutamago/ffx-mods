@@ -47,9 +47,37 @@ const M_HEIGHT: usize = 0x20;
 /// Header word 20: the size of the top mip level.
 const HEADER_TOP_LEVEL: usize = 4 * 20;
 
+/// Replaces user fixup string `k` of `e` with `text` (NUL added).
+fn set_user_string(e: &mut ClusterEdit, k: usize, text: &str) -> Result<()> {
+    let [_, len, at] = e.user_records[k];
+    let (len, at) = (len as usize, at as usize);
+    let mut new = text.as_bytes().to_vec();
+    new.push(0);
+    let mut data = e.user_data[..at].to_vec();
+    data.extend_from_slice(&new);
+    data.extend_from_slice(&e.user_data[at + len..]);
+    let grow = new.len() as i64 - len as i64;
+    for r in &mut e.user_records {
+        if r[2] as usize > at {
+            r[2] = u32::try_from(i64::from(r[2]) + grow)?;
+        }
+    }
+    e.user_records[k][1] = new.len() as u32;
+    e.user_data = data;
+    Ok(())
+}
+
 /// Replaces `template` (an HD `*.dds.phyre`) with `image` as a one-level
 /// `ARGB8` texture.
 pub fn argb8_from(template: &[u8], image: &Rgba) -> Result<Vec<u8>> {
+    argb8_as(template, image, None)
+}
+
+/// [`argb8_from`], and with `id = (old, new)` the texture's asset id
+/// (`m_id`, its import id such as `PS3Data/chr/pc/c001/tex/c001.dds`)
+/// `old` becomes `new`, of the same length: a new texture made from an HD
+/// one.
+pub fn argb8_as(template: &[u8], image: &Rgba, id: Option<(&str, &str)>) -> Result<Vec<u8>> {
     let mut e = ClusterEdit::parse(template).context("parsing the HD texture")?;
     let list = e
         .list_of("PTexture2D")
@@ -77,20 +105,7 @@ pub fn argb8_from(template: &[u8], image: &Rgba) -> Result<Vec<u8>> {
         .iter()
         .position(|u| matches!(u.text.as_str(), "DXT1" | "DXT3" | "DXT5" | "ARGB8" | "L8"))
         .context("no format string")?;
-    let [_, len, at] = e.user_records[k];
-    let (len, at) = (len as usize, at as usize);
-    let new = b"ARGB8\0";
-    let mut data = e.user_data[..at].to_vec();
-    data.extend_from_slice(new);
-    data.extend_from_slice(&e.user_data[at + len..]);
-    let grow = new.len() as i64 - len as i64;
-    for r in &mut e.user_records {
-        if r[2] as usize > at {
-            r[2] = u32::try_from(i64::from(r[2]) + grow)?;
-        }
-    }
-    e.user_records[k][1] = new.len() as u32;
-    e.user_data = data;
+    set_user_string(&mut e, k, "ARGB8")?;
 
     // Pixels: B, G, R, A, rows bottom first.
     let mut px = Vec::with_capacity(image.pixels.len());
@@ -102,6 +117,22 @@ pub fn argb8_from(template: &[u8], image: &Rgba) -> Result<Vec<u8>> {
     }
     e.buffers = px;
     let mut out = e.write()?;
+    if let Some((old, new)) = id {
+        ensure!(old.len() == new.len(), "texture ids of different length");
+        let (old, new) = (old.as_bytes(), new.as_bytes());
+        let mut found = 0;
+        let mut i = 0;
+        while i + old.len() <= out.len() {
+            if &out[i..i + old.len()] == old {
+                out[i..i + old.len()].copy_from_slice(new);
+                found += 1;
+                i += old.len();
+            } else {
+                i += 1;
+            }
+        }
+        ensure!(found > 0, "texture id {} not found", String::from_utf8_lossy(old));
+    }
     put_u32(&mut out, HEADER_TOP_LEVEL, w * h * 4);
 
     // The result must read back as what we meant.

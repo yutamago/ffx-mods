@@ -4,13 +4,16 @@ mod chrjob;
 mod config;
 mod disc;
 mod fxjob;
+mod glb;
 mod gsmem;
 mod jobs;
 mod mapjob;
+mod models;
 mod phyretex;
 mod ps2chr;
 mod ps2fx;
 mod ps2map;
+mod ps2mesh;
 mod uijob;
 
 use std::path::{Path, PathBuf};
@@ -19,7 +22,7 @@ use anyhow::{Context, Result, bail};
 
 fn usage() -> ! {
     eprintln!(
-        "FFX Demaster converter {}\nusage:\n{}\n  demaster chr <iso> <FFX_Data.vbf> <out dir> <kind/name>...\n      bake character textures (PNG previews + .dds.phyre)\n  demaster fx <iso> <FFX_Data.vbf> <out dir> all|<id>...\n      effect textures; id: 7, magic_0007, map/bika/bika00, btlmap/bika/bika00_a, chr/mon/m028\n  demaster maps <iso> <FFX_Data.vbf> <out dir> <map|area|kind>...|all\n      field and battle map textures (PNG previews, maps.tsv + .dds.phyre)\n  demaster ui <iso> <FFX_Data.vbf> <out dir>\n      menus, portraits, title, loading screen, button glyphs (PNG previews + .dds.phyre)",
+        "FFX Demaster converter {}\nusage:\n{}\n  demaster chr <iso> <FFX_Data.vbf> <out dir> <kind/name>...\n      bake character textures (PNG previews + .dds.phyre)\n  demaster models <iso> <FFX_Data.vbf> <out dir> all|<kind/name>...\n      PS2 meshes into the remodelled characters (run after chr; docs/models.md)\n  demaster models-debug <chr file> <FFX_Data.vbf> <kind/name>\n      print a PS2 mesh against its HD model\n  demaster fx <iso> <FFX_Data.vbf> <out dir> all|<id>...\n      effect textures; id: 7, magic_0007, map/bika/bika00, btlmap/bika/bika00_a, chr/mon/m028\n  demaster maps <iso> <FFX_Data.vbf> <out dir> <map|area|kind>...|all\n      field and battle map textures (PNG previews, maps.tsv + .dds.phyre)\n  demaster ui <iso> <FFX_Data.vbf> <out dir>\n      menus, portraits, title, loading screen, button glyphs (PNG previews + .dds.phyre)",
         build::VERSION,
         build::USAGE
     );
@@ -126,6 +129,23 @@ fn main() -> Result<()> {
             eprintln!("disc: region {}, {} files", d.region, d.file_count());
             let out = PathBuf::from(&a[4]);
             maps(&mut d, &pc, &out, &a[5..])?;
+        }
+        "models" => {
+            if a.len() < 6 {
+                usage();
+            }
+            models_cmd(&a[2], &a[3], Path::new(&a[4]), &a[5..])?;
+        }
+        "models-debug" => {
+            if a.len() < 5 {
+                usage();
+            }
+            let chr = std::fs::read(&a[2])?;
+            let pc = ffx_vbf::Archive::open(&a[3])?;
+            let (kind, name) = a[4].split_once('/').context("kind/name")?;
+            let p = format!("ffx_data/gamedata/ps3data/chr/{kind}/{name}/mdl/d3d11/{name}.dae.phyre");
+            let hd = pc.read(pc.find(&p).context("no HD model")?)?;
+            models::debug(&chr, &hd)?;
         }
         "fx" => {
             if a.len() < 6 {
@@ -350,5 +370,50 @@ fn fx(iso: &str, vbf: &str, out: &Path, specs: &[String]) -> Result<()> {
         "total: {} sources, {done} converted, {hd_only} HD-only, {runtime} runtime (trxtex), {other} other language (kept HD), {unused} PS2 images unused, {nopal} without palette, {failed} failed",
         sources.len()
     );
+    Ok(())
+}
+
+fn models_cmd(iso: &str, vbf: &str, out: &Path, specs: &[String]) -> Result<()> {
+    let pc = ffx_vbf::Archive::open(vbf)?;
+    let mut d = disc::Disc::open(Path::new(iso), &pc)?;
+    eprintln!("disc: region {}, {} files", d.region, d.file_count());
+    let mut specs: Vec<String> = specs.to_vec();
+    if specs == ["all"] {
+        specs.clear();
+        for (kind, name) in chrjob::models(&d) {
+            let Some(chr) = d.read(&format!("jppc/chr/{kind}/{name}/mdl/{name}.chr"))? else {
+                continue;
+            };
+            if models::remodelled(&chr, &pc, &kind, &name).unwrap_or(false) {
+                specs.push(format!("{kind}/{name}"));
+            }
+        }
+        eprintln!("{} remodelled characters", specs.len());
+    }
+    let (mut ok, mut failed) = (0, 0);
+    for spec in &specs {
+        let (kind, name) = spec.split_once('/').context("kind/name")?;
+        let c = match models::convert(&mut d, &pc, kind, name) {
+            Ok(Some(c)) => c,
+            Ok(None) => {
+                println!("{spec}: no PS2 or HD model");
+                continue;
+            }
+            Err(e) => {
+                println!("{spec}: error: {e:#}");
+                failed += 1;
+                continue;
+            }
+        };
+        println!("{spec}:\n{}", c.report.trim_end());
+        for (path, bytes) in &c.files {
+            write(&out.join("efl/x").join(path), bytes)?;
+        }
+        let png = ffx_phyre::png(c.atlas.width, c.atlas.height, &c.atlas.pixels);
+        write(&out.join("preview").join(format!("{name}-atlas.png")), &png)?;
+        write(&out.join("preview").join(format!("{name}.glb")), &c.glb)?;
+        ok += 1;
+    }
+    eprintln!("{ok} converted, {failed} failed");
     Ok(())
 }

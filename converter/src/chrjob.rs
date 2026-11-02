@@ -51,6 +51,22 @@ pub fn bake(
 
 /// [`bake`] with the PS2 `.chr` already read.
 pub fn bake_chr(chr: &[u8], pc: &ffx_vbf::Archive, kind: &str, name: &str) -> Result<Option<Report>> {
+    bake_chr_with(chr, pc, kind, name, true)
+}
+
+/// The HD pages [`bake_chr`] would skip (remodelled meshes), without
+/// painting.
+pub fn skipped_chr(chr: &[u8], pc: &ffx_vbf::Archive, kind: &str, name: &str) -> Result<Option<Report>> {
+    bake_chr_with(chr, pc, kind, name, false)
+}
+
+fn bake_chr_with(
+    chr: &[u8],
+    pc: &ffx_vbf::Archive,
+    kind: &str,
+    name: &str,
+    paint: bool,
+) -> Result<Option<Report>> {
     let chr = Chr::parse(chr).with_context(|| format!("{name}.chr"))?;
     let hd_path = format!("ffx_data/gamedata/ps3data/chr/{kind}/{name}/mdl/d3d11/{name}.dae.phyre");
     let Some(entry) = pc.find(&hd_path) else {
@@ -103,6 +119,13 @@ pub fn bake_chr(chr: &[u8], pc: &ffx_vbf::Archive, kind: &str, name: &str) -> Re
     for (path, (mut jobs, pending, total)) in by_page {
         // within a quarter of a PS2 texel of a 256 page
         let more = bake::second_pass(&index, &jobs, &pending, 1.0 / 1024.0);
+        if !paint {
+            let matched = (jobs.len() + more.len()) as f32 / total.max(1) as f32;
+            if matched < MIN_MATCHED {
+                report.skipped.push((path, matched));
+            }
+            continue;
+        }
         if std::env::var_os("DM_DEBUG").is_some() {
             let count = |js: &[bake::Job]| {
                 let mut c = std::collections::BTreeMap::new();
