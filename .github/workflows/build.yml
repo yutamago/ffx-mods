@@ -1,0 +1,73 @@
+# SPDX-License-Identifier: MIT
+# Builds the converter (demaster.exe) and the mod on Windows, runs the tests,
+# and packages the release zip as a CI artifact (no release is published).
+#
+# The converter depends on ffx-rust (private). The repository secret
+# FFX_RUST_TOKEN must hold a token that can read github.com/yutamago/ffx-rust.
+name: Build
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v7
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v6
+      with:
+        dotnet-version: 10.0.x
+
+    - name: Access to ffx-rust
+      env:
+        TOKEN: ${{ secrets.FFX_RUST_TOKEN }}
+      run: |
+        if (-not $env:TOKEN) { throw 'the FFX_RUST_TOKEN secret is not set; cargo cannot fetch ffx-rust' }
+        git config --global url."https://x-access-token:$env:TOKEN@github.com/yutamago/ffx-rust".insteadOf "https://github.com/yutamago/ffx-rust"
+
+    - name: Test the converter
+      env:
+        CARGO_NET_GIT_FETCH_WITH_CLI: "true"
+      run: cargo test -p demaster
+
+    - name: Build demaster.exe
+      env:
+        CARGO_NET_GIT_FETCH_WITH_CLI: "true"
+      run: cargo build --release -p demaster --target x86_64-pc-windows-msvc
+
+    - name: Build the mod
+      run: dotnet build -c Release ffx-demaster.slnx
+
+    - name: Package
+      run: |
+        $PSNativeCommandUseErrorActionPreference = $true
+        dotnet run tools/package.cs -- yuta.demaster-ci.zip
+        Add-Type -AssemblyName System.IO.Compression.FileSystem
+        $zip = [IO.Compression.ZipFile]::OpenRead("$PWD/yuta.demaster-ci.zip")
+        $names = $zip.Entries.FullName
+        $zip.Dispose()
+        foreach ($f in 'yuta.demaster.dll', 'yuta.demaster.manifest.json', 'demaster.exe', 'demaster.toml') {
+          if ($names -notcontains "mods/yuta.demaster/$f") { throw "the zip has no $f" }
+        }
+        if ($names | Where-Object { $_ -match '/efl/|\.phyre$|\.iso$' }) { throw 'the zip contains game data' }
+
+    - name: Check demaster.exe runs
+      run: |
+        $PSNativeCommandUseErrorActionPreference = $true
+        target/x86_64-pc-windows-msvc/release/demaster.exe --version
+        target/x86_64-pc-windows-msvc/release/demaster.exe jobs
+
+    - name: Upload
+      uses: actions/upload-artifact@v5
+      with:
+        name: yuta.demaster-ci
+        path: yuta.demaster-ci.zip

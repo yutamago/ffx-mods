@@ -1,0 +1,13 @@
+<Project Sdk="Fahrenheit.Sdk/1.0.0-alpha12">
+    <PropertyGroup>
+        <AssemblyName>yuta.demaster</AssemblyName>
+        <RootNamespace>Yuta.Demaster</RootNamespace>
+        <AssemblyTitle>FFX Demaster</AssemblyTitle>
+        <Product>FFX Demaster</Product>
+        <Description>Restores the PS2 look: PS2 models, textures and presentation, built by demaster.exe from your own PS2 disc. F8 shows whether the build matches demaster.toml.</Description>
+        <Version>0.1.0</Version>
+        <Authors>Yutamago</Authors>
+        <FhManifestFlags>NONE</FhManifestFlags>
+        <FhManifestHomePage>https://github.com/yutamago/ffx-demaster</FhManifestHomePage>
+    </PropertyGroup>
+</Project>

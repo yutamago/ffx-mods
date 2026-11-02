@@ -294,6 +294,36 @@ mod tests {
         assert_eq!(keys, listed);
     }
 
+    /// The C# mod keeps its own copy of the list (mod/Settings.cs) and has a
+    /// code patch for each setting it applies (mod/Patches.cs); docs/config.md
+    /// describes each.
+    #[test]
+    fn mod_and_docs_know_every_setting() {
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../mod");
+        let settings = std::fs::read_to_string(dir.join("Settings.cs")).unwrap();
+        let patches = std::fs::read_to_string(dir.join("Patches.cs")).unwrap();
+        let docs = std::fs::read_to_string(dir.join("../docs/config.md")).unwrap();
+        let defaults = Config::default().settings();
+        for (key, by) in SETTINGS {
+            let by_cs = match by {
+                AppliedBy::Converter => "Converter",
+                AppliedBy::Mod => "Mod",
+            };
+            let line = settings
+                .lines()
+                .find(|l| l.contains(&format!("new(\"{key}\",")))
+                .unwrap_or_else(|| panic!("{key} missing from mod/Settings.cs"));
+            assert!(line.contains(&format!("AppliedBy.{by_cs},")), "{key}: {line}");
+            assert!(line.contains(&format!("\"{}\")", defaults[*key])), "{key}: {line}");
+            assert!(docs.contains(&format!("`{key}`")), "{key} missing from docs/config.md");
+            assert_eq!(
+                patches.contains(&format!("new(\"{key}\",")),
+                *by == AppliedBy::Mod,
+                "{key} in mod/Patches.cs"
+            );
+        }
+    }
+
     #[test]
     fn defaults_follow_the_rule() {
         for (k, v) in Config::default().settings() {
