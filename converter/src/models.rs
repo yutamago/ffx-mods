@@ -352,7 +352,8 @@ pub fn convert_bytes(
         ensure!(plain(material), "no plain material to copy (segment {template})");
         let texture = model.materials[material].base_color().context("no base texture")?.archive_path();
         let color = {
-            let mut c: HashMap<[u8; 4], usize> = HashMap::new();
+            // BTreeMap: a tie must not be settled by HashMap order
+            let mut c: BTreeMap<[u8; 4], usize> = BTreeMap::new();
             for x in &model.segments[template].colors {
                 *c.entry(*x).or_default() += 1;
             }
@@ -854,6 +855,19 @@ pub fn debug(chr: &[u8], hd: &[u8]) -> Result<()> {
     }
     for (i, inst) in model.instances.iter().enumerate() {
         println!("instance {i} {:?}: skeleton {:?}, segments {:?}", inst.name, inst.skeleton, inst.segments);
+    }
+    for (i, m) in model.materials.iter().enumerate() {
+        let anim: Vec<String> = m
+            .parameters
+            .iter()
+            .filter(|p| p.name.contains("Anim") || p.name.contains("Cloth"))
+            .map(|p| format!("{}={:?}", p.name, p.values))
+            .collect();
+        println!(
+            "material {i}: {:?} {}",
+            m.textures.iter().map(|t| format!("{}={}", t.sampler, t.path)).collect::<Vec<_>>(),
+            anim.join(" ")
+        );
     }
     for (s, seg) in model.segments.iter().enumerate() {
         let mat = seg.material.and_then(|m| model.materials.get(m));
