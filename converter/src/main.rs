@@ -9,11 +9,13 @@ mod gsmem;
 mod jobs;
 mod mapjob;
 mod models;
+mod moviejob;
 mod phyretex;
 mod ps2chr;
 mod ps2fx;
 mod ps2map;
 mod ps2mesh;
+mod ps2movie;
 mod uijob;
 
 use std::path::{Path, PathBuf};
@@ -22,7 +24,7 @@ use anyhow::{Context, Result, bail};
 
 fn usage() -> ! {
     eprintln!(
-        "FFX Demaster converter {}\nusage:\n{}\n  demaster chr <iso> <FFX_Data.vbf> <out dir> <kind/name>...\n      bake character textures (PNG previews + .dds.phyre)\n  demaster models <iso> <FFX_Data.vbf> <out dir> all|<kind/name>...\n      PS2 meshes into the remodelled characters (run after chr; docs/models.md)\n  demaster models-debug <chr file> <FFX_Data.vbf> <kind/name>\n      print a PS2 mesh against its HD model\n  demaster fx <iso> <FFX_Data.vbf> <out dir> all|<id>...\n      effect textures; id: 7, magic_0007, map/bika/bika00, btlmap/bika/bika00_a, chr/mon/m028\n  demaster maps <iso> <FFX_Data.vbf> <out dir> <map|area|kind>...|all\n      field and battle map textures (PNG previews, maps.tsv + .dds.phyre)\n  demaster ui <iso> <FFX_Data.vbf> <out dir>\n      menus, portraits, title, loading screen, button glyphs (PNG previews + .dds.phyre)",
+        "FFX Demaster converter {}\nusage:\n{}\n  demaster chr <iso> <FFX_Data.vbf> <out dir> <kind/name>...\n      bake character textures (PNG previews + .dds.phyre)\n  demaster models <iso> <FFX_Data.vbf> <out dir> all|<kind/name>...\n      PS2 meshes into the remodelled characters (run after chr; docs/models.md)\n  demaster models-debug <chr file> <FFX_Data.vbf> <kind/name>\n      print a PS2 mesh against its HD model\n  demaster fx <iso> <FFX_Data.vbf> <out dir> all|<id>...\n      effect textures; id: 7, magic_0007, map/bika/bika00, btlmap/bika/bika00_a, chr/mon/m028\n  demaster maps <iso> <FFX_Data.vbf> <out dir> <map|area|kind>...|all\n      field and battle map textures (PNG previews, maps.tsv + .dds.phyre)\n  demaster ui <iso> <FFX_Data.vbf> <out dir>\n      menus, portraits, title, loading screen, button glyphs (PNG previews + .dds.phyre)\n  demaster movies <iso> <FFX_Data.vbf> <mod dir> all|<name>...\n      PS2 movies as WebM (name: opn, sak, ...; ffmpeg from 'FFMPEG' or the PATH; docs/movies.md)\n  demaster movie-debug <iso> <FFX_Data.vbf> <out dir> <name> [frame]...\n      decode one PS2 movie: statistics, PNGs of the frames, the sound as WAV",
         build::VERSION,
         build::USAGE
     );
@@ -178,6 +180,24 @@ fn main() -> Result<()> {
                 println!("{n}");
             }
             println!("{} files, {} left HD", done.len(), notes.len());
+        }
+        "movies" => {
+            if a.len() < 6 {
+                usage();
+            }
+            let pc = ffx_vbf::Archive::open(&a[3])?;
+            let config = config::Config::default();
+            let mut ctx = jobs::Ctx::new(&config, &pc, Path::new(&a[2]), true);
+            ctx.ffmpeg = std::env::var_os("FFMPEG").map(PathBuf::from);
+            let out = jobs::Output::new(Path::new(&a[4]));
+            let only: Vec<String> = a[5..].iter().filter(|s| *s != "all").cloned().collect();
+            println!("{}", moviejob::run(&ctx, &out, &only)?);
+        }
+        "movie-debug" => {
+            if a.len() < 6 {
+                usage();
+            }
+            movie_debug(&a[2], &a[3], Path::new(&a[4]), &a[5], &a[6..])?;
         }
         _ => bail!("unknown command {cmd} (demaster help)"),
     }
@@ -415,5 +435,37 @@ fn models_cmd(iso: &str, vbf: &str, out: &Path, specs: &[String]) -> Result<()> 
         ok += 1;
     }
     eprintln!("{ok} converted, {failed} failed");
+    Ok(())
+}
+
+/// Decodes one PS2 movie: statistics, PNGs of the given frames, and
+/// `<name>.wav`.
+fn movie_debug(iso: &str, vbf: &str, out: &Path, name: &str, frames: &[String]) -> Result<()> {
+    let pc = ffx_vbf::Archive::open(vbf)?;
+    let mut d = disc::Disc::open(Path::new(iso), &pc)?;
+    let sz = d.read(&format!("jppc/movie/adpcm/{name}.sz"))?.context("no .sz")?;
+    let dat = d.read(&format!("jppc/movie/adpcm/{name}.dat"))?.context("no .dat")?;
+    let index = ps2movie::Index::parse(&sz)?;
+    let want: Vec<usize> = frames.iter().filter_map(|f| f.parse().ok()).collect();
+    let mut dec = ps2movie::Decoder::new(&index);
+    let mut off = 0usize;
+    let mut pcm: Vec<u8> = Vec::new();
+    for (i, &s) in index.sizes.iter().enumerate() {
+        let chunk = dat.get(off..off + s as usize).context("chunk past the file")?;
+        off += s as usize;
+        let u = dec.chunk(chunk).with_context(|| format!("frame {i}"))?;
+        for v in &u.sound {
+            pcm.extend(v.to_le_bytes());
+        }
+        if want.contains(&i) {
+            let p = &u.picture;
+            write(
+                &out.join(format!("{name}-{i:05}.png")),
+                &ffx_phyre::png(p.width as u32, p.height as u32, &p.rgba()),
+            )?;
+        }
+    }
+    write(&out.join(format!("{name}.wav")), &ps2movie::wav(&pcm))?;
+    println!("{name}: {:?}, sound {:.2} s", dec.stats, pcm.len() as f64 / 4.0 / 48000.0);
     Ok(())
 }

@@ -21,6 +21,9 @@ iso = ''
 # The game folder, the one with FFX.exe and data\FFX_Data.vbf. Leave empty to
 # look in the usual Steam folders.
 game = ''
+# ffmpeg.exe, which converts the movies (https://ffmpeg.org, not included).
+# Leave empty to use the ffmpeg on your PATH.
+ffmpeg = ''
 
 [build]
 # The mod folder the PS2 files are written to. Leave empty for the folder

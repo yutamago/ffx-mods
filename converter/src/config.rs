@@ -51,6 +51,8 @@ pub struct Source {
     /// The game folder (holds `FFX.exe` and `data/FFX_Data.vbf`). Empty: look
     /// in the usual Steam folders.
     pub game: String,
+    /// ffmpeg (for the movies). Empty: `ffmpeg` on the PATH.
+    pub ffmpeg: String,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
