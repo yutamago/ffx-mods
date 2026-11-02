@@ -17,7 +17,8 @@ use crate::disc::Disc;
 pub fn registry() -> Vec<Box<dyn Job>> {
     let mut jobs: Vec<Box<dyn Job>> = Vec::new();
     jobs.extend(crate::chrjob::jobs());
-    // Further jobs (maps, effects, models) go here: jobs.extend(crate::<module>::jobs());
+    jobs.extend(crate::fxjob::jobs());
+    // Further jobs (maps, models) go here: jobs.extend(crate::<module>::jobs());
     jobs
 }
 
