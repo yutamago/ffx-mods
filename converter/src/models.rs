@@ -22,6 +22,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use anyhow::{Context, Result, bail, ensure};
 
+use crate::chralpha;
 use crate::config::Config;
 use crate::disc::Disc;
 use crate::jobs::{Ctx, Job, Output};
@@ -211,7 +212,8 @@ impl Job for ModelsJob {
                     let hd_path =
                         format!("ffx_data/gamedata/ps3data/chr/{kind}/{name}/mdl/d3d11/{name}.dae.phyre");
                     let original = ctx.pc.read(ctx.pc.find(&hd_path).context("no HD model")?)?;
-                    convert_bytes(&chr, &original, &hd_path, |p| {
+                    let variants = crate::chralpha::Variants::get(ctx.pc)?;
+                    convert_bytes(&chr, &original, &hd_path, variants, |p| {
                         ctx.pc.find(p).map(|e| ctx.pc.read(e)).transpose().map_err(Into::into)
                     })
                     .map(Some)
@@ -251,8 +253,11 @@ pub fn convert(disc: &mut Disc, pc: &ffx_vbf::Archive, kind: &str, name: &str) -
         return Ok(None);
     };
     let original = pc.read(entry)?;
-    convert_bytes(&chr_bytes, &original, &hd_path, |p| pc.find(p).map(|e| pc.read(e)).transpose().map_err(Into::into))
-        .map(Some)
+    let variants = crate::chralpha::Variants::get(pc)?;
+    convert_bytes(&chr_bytes, &original, &hd_path, variants, |p| {
+        pc.find(p).map(|e| pc.read(e)).transpose().map_err(Into::into)
+    })
+    .map(Some)
 }
 
 #[allow(clippy::too_many_lines)]
@@ -260,6 +265,7 @@ pub fn convert_bytes(
     chr_bytes: &[u8],
     original: &[u8],
     hd_path: &str,
+    variants: &crate::chralpha::Variants,
     read: impl Fn(&str) -> Result<Option<Vec<u8>>>,
 ) -> Result<Converted> {
     let mut report = String::new();
@@ -568,6 +574,10 @@ pub fn convert_bytes(
     let mut prim_bones: Vec<BTreeSet<u16>> = Vec::new();
     let mut prim_keys: Vec<HashMap<(usize, u16, u16, [u16; 2], u8), u32>> = Vec::new();
     let mut prim_slot: Vec<usize> = Vec::new();
+    // Triangles that sample see-through texels go into segments of their
+    // own, drawn blended like the PS2 (`chralpha`).
+    let mut prim_blend: Vec<bool> = Vec::new();
+    let page_image: HashMap<u8, &Rgba> = pages.iter().map(|p| (p.0, &p.1)).collect();
     // Order: by model, then texture, keeping the strip order.
     let mut order: Vec<(usize, usize)> = Vec::new();
     for (mi, m) in mesh.models.iter().enumerate() {
@@ -641,15 +651,22 @@ pub fn convert_bytes(
         let bones: BTreeSet<u16> = vs.iter().flat_map(|v| v.bones.iter().filter(|b| b.1 > 0.0).map(|b| b.0)).collect();
         let k = target[mi];
         let slot = &slots[&k];
+        let blend = {
+            let img = page_image[&t.texture];
+            chralpha::translucent(t.corners.map(|c| c.uv.map(|x| f64::from(x) / 16.0)), |x, y| {
+                img.get(x.clamp(0, i64::from(img.width) - 1) as u32, y.clamp(0, i64::from(img.height) - 1) as u32)[3]
+            })
+        };
         let fits = |p: usize| {
             prim_slot[p] == k
+                && prim_blend[p] == blend
                 && prim_bones[p].union(&bones).count() <= MAX_PALETTE
                 && prims[p].positions.len() + 3 <= 0xffff
         };
         let p = match (0..prims.len()).rev().find(|&p| fits(p)) {
             Some(p) => p,
             None => {
-                let first = !prim_slot.contains(&k);
+                let first = !(0..prims.len()).any(|p| prim_slot[p] == k && prims[p].segment.is_some());
                 prims.push(Primitive {
                     segment: first.then_some(slot.template),
                     material: slot.material,
@@ -658,6 +675,7 @@ pub fn convert_bytes(
                 prim_bones.push(BTreeSet::new());
                 prim_keys.push(HashMap::new());
                 prim_slot.push(k);
+                prim_blend.push(blend);
                 prims.len() - 1
             }
         };
@@ -713,10 +731,14 @@ pub fn convert_bytes(
         prim_bones.iter().map(BTreeSet::len).collect::<Vec<_>>()
     );
 
-    let mut meshes: BTreeMap<usize, Vec<Primitive>> = BTreeMap::new();
-    for (p, k) in prims.into_iter().zip(&prim_slot) {
-        meshes.entry(*k).or_default().push(p);
+    let mut meshes: BTreeMap<usize, Vec<(Primitive, bool)>> = BTreeMap::new();
+    for ((p, k), b) in prims.into_iter().zip(&prim_slot).zip(&prim_blend) {
+        meshes.entry(*k).or_default().push((p, *b));
     }
+    // per written segment, in the import's order: (index count, blended)
+    let blend_order: Vec<(usize, bool)> = meshes.values().flatten().map(|(p, b)| (p.indices.len(), *b)).collect();
+    let meshes: BTreeMap<usize, Vec<Primitive>> =
+        meshes.into_iter().map(|(k, v)| (k, v.into_iter().map(|x| x.0).collect())).collect();
     let glb = Glb {
         joints: joints.iter().map(|b| format!("SkeletonNode_{b}")).collect(),
         meshes: meshes.into_values().collect(),
@@ -770,6 +792,17 @@ pub fn convert_bytes(
     ensure!(new_id.len() == old_id.len(), "texture id {old_id} and {new_id} differ in length");
     let new_path = format!("{dir}/tex/d3d11/{file}.dds.phyre");
     let mut edit = ffx_phyre::edit::ClusterEdit::parse(&bytes).context("edit")?;
+    // The segments of see-through triangles get a blended copy of their
+    // material.
+    ensure!(imported.segments.len() == blend_order.len(), "import wrote {} segments", imported.segments.len());
+    let mut blended = Vec::new();
+    for (&s, &(n, b)) in imported.segments.iter().zip(&blend_order) {
+        ensure!(out_model.segments[s].indices.len() == n, "segment {s} is not the primitive written");
+        if b {
+            blended.push(u32::try_from(s)?);
+        }
+    }
+    report += &chralpha::blend_segments(&mut edit, &blended, variants)?;
     let mut materials = BTreeSet::new();
     for &s in &imported.segments {
         materials.insert(edit.segment_material(u32::try_from(s)?).context("segment material")?);

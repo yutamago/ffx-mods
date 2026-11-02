@@ -140,6 +140,90 @@ The party has up to 8 bones per vertex, m112 up to 14.
    HD texture. Other PS2 cloth pieces (Tidus's apron and shorts, plain
    skinned geometry in the HD) stay as skinned PS2 geometry.
 
+## Alpha (see-through texels)
+
+Code: `converter/src/chralpha.rs`; `demaster materials-debug <vbf>
+<kind/name>|<.dae.phyre>` prints each segment's texture, material, shader
+variant switches and `AlphaThreshold`.
+
+**How the PS2 drew it.** Every character polygon is drawn with alpha
+blending on: the GIF tag's `PRIM` has ABE (and context 2) set for every
+group (`FUN_008423c0`, the PS2 packet builder kept in FFX.exe: `PRIM` bits
+`0x240`, plus TME|FST `0x110` when the group's flag bit 1 says textured).
+The blend is `ALPHA_2` = `0x44`, (Cs − Cd) × As + Cd, written as register
+`0x43` from the texture-list entry's bytes `+8`, `+9` (`0x44 00` in every
+`.chr`; `FUN_008438b0`), with the texture's alpha (TEX0 TCC set by
+`Ch_TextureSetRegs`). So a texel with GS alpha under `0x80` is
+see-through: hair strands and fur and feather fringes fade out.
+
+**How the PC draws it.** A `PMaterial` names an effect variant
+(`m_effectVariant`, a user fixup indexing the `PAssetReferenceImport`s:
+`PS3Data/Shaders/PhyreChrLitShader.fx#<md5>`); the variant's switches decide
+the draw. Checked on the variants' pixel shaders and pass states:
+
+| Switches | Pass | Texture alpha |
+|---|---|---|
+| neither | `Opaque` | ignored (`AlphaThreshold` unused in 41 of 43 pixel shaders): solid quads |
+| `UATFOPQ` | `Opaque` | alpha test at `AlphaThreshold` (0.5 on most): hard, ragged cut-outs |
+| `ALPHA_ENABLED` | `Transparent` only | blend src alpha / inverse src alpha, depth write on, texels under `AlphaThreshold` dropped (used by all 43 pixel shaders) |
+
+Before this fix, the converted PS2 mesh went into one template material:
+an `UATFOPQ` one for most of the party (Tidus's and Kimahri's hair cut at
+0.5), a blended one at threshold 0.8 for Wakka, and on kept-mesh models
+the PS2 texels went into HD pages whose material may not use alpha at all.
+
+**What the converter does.**
+
+- Remodelled models (`models.*`): each PS2 triangle that samples a texel
+  with alpha under 240 (PS2 `0x78`; texel centres inside its UV
+  triangle, its centroid texel for tiny ones; not the corner texels, which
+  sit on the island's edge) goes into segments of its own, whose material
+  is a copy of the template's (`ClusterEdit::add_material`) switched to the
+  **blended twin** of its variant: the variant of the same effect with the
+  same switches, `ALPHA_ENABLED` on, `UATFOPQ` off (and, if no such
+  variant exists, without the z-prepass switches `ADDITIONAL_ZPREPASS`,
+  `BUILT_IN_ZPREPASS`, `ZPP_IGNORE_Z`), whose material has the same
+  parameter layout (the location tables address the buffer by offset).
+  Its `AlphaThreshold` becomes at most 0.1. Opaque triangles stay in the
+  template. `chralpha::blend_segments` does this for any segment list
+  (PS2 cloth put into HD cloth segments would use it too: the cloth
+  variants have blended twins).
+- Kept-mesh models (`chr.*`): an HD segment whose PS2 twins sample 1 % or
+  more see-through texels gets its material blended in place (same rule),
+  and the job writes the model's `.dae.phyre` next to the painted pages
+  (not for remodelled models, whose model is the `models.*` job's).
+  Materials that blend already only get the threshold lowered to 0.1.
+- **The threshold.** The PS2's alpha test for characters (`TEST_2`) was
+  not found; with 0.03 every fringe texel shows, but the faint ones write
+  depth over feathers the same draw puts behind them later (pale outlines
+  on the Condor's wings); 0.1 keeps the soft fringe with the outlines as
+  faint as the HD's 0.3.
+
+**Counts** (`demaster build`, 2026-11-02, German PAL disc). Remodelled:
+149 of the 165 models have see-through triangles, in 171 segments; 31
+materials switched to the blended twin (the `UATFOPQ` templates, e.g. c001,
+c002, c004, c006), 113 template copies blended already and got the
+threshold lowered (c005 from 0.8, c101 from 0.4), 4 left as they were (rigid
+objects whose meshes have no material set of their own and share the
+template material: f093-f118). Kept meshes: 430 models get a new
+`.dae.phyre`, 128 materials switched to the blended twin, 627 thresholds
+lowered (the HD's 0.27-0.5 on fur, feathers, flans). No texture changes:
+the atlases and pages carried the PS2 alpha already.
+
+**Checked in the game** (`tools/shotrun`, max settings; HD, before, after;
+crops in `~/ffx-work/demaster/shots/cmp/alpha-*.png`):
+
+- Tidus (c101), ffx-rust `event-arrival.txt` shot 2: the hair tips fade
+  out instead of ending in hard cut edges (`alpha-tidus-hair.png`,
+  `alpha-tidus-hair-zoom.png`). No sorting errors in the hair.
+- Besaid battle (`tools/replays/battle-besaid.txt`, new): Condor (m028)
+  feather fringes soft (`alpha-condor-wing.png`: before, threshold 0.03,
+  threshold 0.1), Water Flan (m016) translucent, Dingo (m009) unchanged
+  (`alpha-flan-dingo.png`). The full build in the same battle:
+  `alpha-full-build.png`.
+- Kimahri (c004), devsave 51 battle (`kimahri.txt` in the cmp folder): no
+  visible change, see the gaps.
+
 ## Checked in the game
 
 Replays through `tools/shotrun` (max graphics settings) with the mod
@@ -183,6 +267,18 @@ comparisons in its `cmp/` folder (game data, not committed):
   would need the PS2 cloth triangles in an HD cloth segment and a matching
   `.cdf` (format not decoded).
 - NPCs and monsters were not looked at close up in a replay.
+- **See-through cloth** (the user's report of Kimahri's armour fur): the
+  fur on Kimahri's shoulders and back and his mane are PS2 cloth pieces
+  (11 pieces, 432 triangles; their texels, the tan fur and the grey mane of
+  the atlas, are used by no other triangle), so they are drawn by the HD
+  cloth segments 0-12 with the HD texture: the HD's own fur, alpha tested
+  at 0.5 (segments 2, 7, 12) or opaque (0, 1, 6, 10), with ragged
+  hand-painted edges, where the PS2 had soft blended fur. The alpha fix
+  cannot reach them; they need the PS2 cloth drawn (see Cloth), and then
+  `chralpha::blend_segments` on those segments. Wakka's (c005) hair crest is
+  cloth too (3 pieces, 652 triangles, HD cloth segments 2-4) and is not
+  drawn at all in the arrival close-up, with or without this fix
+  (`alpha-wakka-crest.png`); the HD draws it.
 - **4-bone limit**: up to 15 % of a vertex's weight is dropped
   (renormalised). Not visible in the shots.
 - **Lighting**: the HD character shader lights the PS2 mesh; the face
