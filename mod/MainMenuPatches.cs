@@ -141,7 +141,6 @@ internal static unsafe class MainMenuPatches {
     private static BoxC2? _box;
     private static BoxRGBA? _box_rgba;
     private static Plate2? _plate_lr, _plate_rl;
-    private static ShapeXY? _shape;
     private static ShapeXYWHC2? _shape_wh;
     private static ShapePart? _part;
     private static Font? _font;
@@ -166,7 +165,6 @@ internal static unsafe class MainMenuPatches {
         _box_rgba = Native.fn<BoxRGBA>(BOX_RGBA).fnptr!;
         _plate_lr = Native.fn<Plate2>(PLATE_LR).fnptr!;
         _plate_rl = Native.fn<Plate2>(PLATE_RL).fnptr!;
-        _shape = Native.fn<ShapeXY>(SHAPE_XY).fnptr!;
         _shape_wh = Native.fn<ShapeXYWHC2>(SHAPE_XYWH).fnptr!;
         _part = Native.fn<ShapePart>(SHAPE_PART).fnptr!;
         _font = Native.fn<Font>(FONT_1612).fnptr!;
@@ -353,12 +351,12 @@ internal static unsafe class MainMenuPatches {
             _plate_lr!(4, 5, x, y, nw, c0, c1);
             _shape_wh!(0x16, x + i16(NMBLKLINE_X), y + i16(NMBLKLINE_Y), i16(NMBLKLINE_W), 0, GREY, GREY);
             _font!(_chr_name!(chr), x + namestr.x, y + namestr.y, _damage!(chr));
-            _shape!(0x21, x + hptex.x, y + hptex.y);
+            Ps2Menu.shape(0x21, x + hptex.x, y + hptex.y);
             // PS2 0x001f6500: "%5d/%5d", "%4d/%4d" in font S, colour 0x25 (black, light shadow)
             Ps2Menu.font_s($"{_hp!(chr),5}/{_max_hp!(chr),5}", x + hpstr.x, y + hpstr.y, 0x25);
-            _shape!(0x22, x + mptex.x, y + mptex.y);
+            Ps2Menu.shape(0x22, x + mptex.x, y + mptex.y);
             Ps2Menu.font_s($"{_mp!(chr),4}/{_max_mp!(chr),4}", x + mpstr.x, y + mpstr.y, 0x25);
-            _shape!(0x3d, x + slv.x, y + slv.y);
+            Ps2Menu.shape(0x3d, x + slv.x, y + slv.y);
             // PS2 0x001f5e88: "%d" in font M, colour 0, the last cell ending at x + 2 (0x001f5f58)
             Ps2Menu.value_m(_sphere!(chr), x + spstr.x + slv.x, y + slv.y + spstr.y, 0);
             int cx = x + namestr.x, cy = y + namestr.y;
@@ -378,14 +376,14 @@ internal static unsafe class MainMenuPatches {
         Ps2Menu.play_time(t, timestr.x, timestr.y, 0x25, (t & 1) != 0 ? 0x25 : 1);
         var gilshape = seq_point("pos_gilshape");
         var gilshape2 = seq_point("pos_gilshape2");
-        _shape!(0xd5, gilshape.x, gilshape.y);
-        _shape!(0xd6, gilshape.x + gilshape2.x, gilshape.y + gilshape2.y);
+        Ps2Menu.shape(0xd5, gilshape.x, gilshape.y);
+        Ps2Menu.shape(0xd6, gilshape.x + gilshape2.x, gilshape.y + gilshape2.y);
         _plate_rl!(0xd2, 0xd3, i16(PLACESUB_X), i16(PLACESUB_Y), i16(PLACESUB_W), u32(COL_PLACESUB0), u32(COL_PLACESUB1));
         int px = i16(PLACE_X), py = i16(PLACE_Y);
         _plate_rl!(0xd8, 0xd9, px, py, i16(PLACE_W), u32(COL_PLACE0), u32(COL_PLACE1));
         var placeshape = point(POS_PLACESHAPE);
         var placestr = point(POS_PLACESTR);
-        _shape!(0x27, px + placeshape.x, py + placeshape.y);
+        Ps2Menu.shape(0x27, px + placeshape.x, py + placeshape.y);
         _font!(_dic_name!(_save_dic!(), _english!()), px + placestr.x, py + placestr.y, 0);
         _kick!();
         first(2, "ui.menus: main menu drawn the PS2 way");
@@ -461,20 +459,13 @@ internal static unsafe class MainMenuPatches {
         return _sync!();
     });
 
-    private const uint MESWIN_LAYOUT = 0x00c5b460; // FFX.exe's meswin layout table (= SLPM_675.13 0x00321328)
-
     /// <summary>
     /// Shape 0x3e as the PS2 draws it (TOMkpShapeXY, 0x001fe1f0): all 17 parts, a black brush strip
     /// of 16 pieces (uv (0, 104) 8 x 16 at dx -80..40, the last 88 wide) and the "HELP" text (uv
     /// (168, 240) 88 x 8 at -67, 7). The PC's TOAdpEasyShapeXYWHC2 (0x008ed380) skips every part of
-    /// 0x3e but the last, so its label floats on the gradient; here each part goes through
-    /// TOMkpShapePartIndexXYWHC2 with w = h = 0 (the part's own size and offset).
+    /// 0x3e but the last, so its label floats on the gradient; Ps2Menu.shape draws every part.
     /// </summary>
-    public static void help_label(int x, int y) {
-        byte* table = Native.ptr(MESWIN_LAYOUT);
-        int n = *(int*)(table + *(uint*)(table + 4 + 4 * 0x3e));
-        for (int k = 0; k < n; k++) _part!(0x3e, k, x, y, 0, 0, GREY, GREY);
-    }
+    public static void help_label(int x, int y) => Ps2Menu.shape(0x3e, x, y);
 
     // ---- install ------------------------------------------------------------------------------------
 

@@ -79,8 +79,35 @@ internal static unsafe class Ps2Menu {
     public static void box_rgba(int x, int y, int w, int h, int r, int g, int b, int a) => fn<BoxRGBA>(BOX_RGBA)(x, y, w, h, r, g, b, a);
     public static void plate_lr(int a, int b, int x, int y, int w, uint c0, uint c1) => fn<Plate2>(PLATE_LR)(a, b, x, y, w, c0, c1);
     public static void plate_rl(int a, int b, int x, int y, int w, uint c0, uint c1) => fn<Plate2>(PLATE_RL)(a, b, x, y, w, c0, c1);
-    public static void shape(int id, int x, int y) => fn<ShapeXY>(SHAPE_XY)(id, x, y);
-    public static void shape_c2(int id, int x, int y, uint c0, uint c1) => fn<ShapeXYC2>(SHAPE_XYC2)(id, x, y, c0, c1);
+    public static void shape(int id, int x, int y) => shape_c2(id, x, y, GREY, GREY);
+
+    public const uint MESWIN_LAYOUT = 0x00c5b460; // FFX.exe's meswin layout table (= SLPM_675.13 0x00321328)
+
+    /// <summary>
+    /// A meswin shape at its own size (PS2 0x001fe1f0 / TOMkpShapeXY): every part of the layout entry
+    /// (id, or id - 200 from 200) as a sprite at (x + dx, y + dy), w x h, with the UVs half a texel
+    /// inside the part's cell (TOMkpShapeXYWHUVC2, PS2 atlas 256 x 256). The PS2 drew these 1:1, so
+    /// it sampled texel centres; the PC's TOAdpEasyShapeXYWHC2 samples to the cell edges, and at
+    /// the PC's scale the filter pulls in the neighbouring texels: shapes tiled from 8-texel pieces
+    /// (0xd7's line, 0x3e's strip) showed as dashes. It also skips all parts of 0x3e but the last.
+    /// Other sheets (ids 400 and up) go to TOMkpShapeXYC2.
+    /// </summary>
+    public static void shape_c2(int id, int x, int y, uint c0, uint c1) {
+        if (id < 0 || id >= 399 || id == 199) { fn<ShapeXYC2>(SHAPE_XYC2)(id, x, y, c0, c1); return; }
+        byte* table = Native.ptr(MESWIN_LAYOUT);
+        byte* e = table + *(uint*)(table + 4 + 4 * (id % 200));
+        int n = *(int*)e;
+        var uv = fn<ShapeUV>(SHAPE_UV);
+        for (int k = 0; k < n; k++) {
+            byte* p = e + 4 + 12 * k;
+            int u = p[0], v = p[1], dx = *(sbyte*)(p + 2), dy = *(sbyte*)(p + 3);
+            int w = *(ushort*)(p + 4), h = *(ushort*)(p + 6);
+            float u0 = (u + 0.5f) / 256f, u1 = (u + w - 0.5f) / 256f, v0 = (v + 0.5f) / 256f, v1 = (v + h - 0.5f) / 256f;
+            if (*(ushort*)(p + 8) == 1) (u0, u1) = (u1, u0);
+            if (*(ushort*)(p + 10) == 1) (v0, v1) = (v1, v0);
+            uv(id, x + dx, y + dy, w, h, u0, v0, u1, v1, c0, c1);
+        }
+    }
     public static void shape_wh(int id, int x, int y, int w, int h, uint c0, uint c1) => fn<ShapeXYWHC2>(SHAPE_XYWH)(id, x, y, w, h, c0, c1);
     public static void part(int id, int p, float x, float y, float w, float h, uint c0, uint c1) => fn<ShapePart>(SHAPE_PART)(id, p, x, y, w, h, c0, c1);
     public static void font(nint text, int x, int y, int colour) => fn<Font>(FONT_1612)(text, x, y, colour);

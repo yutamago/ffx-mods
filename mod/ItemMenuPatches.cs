@@ -131,8 +131,6 @@ internal static unsafe class ItemMenuPatches {
     private static BoxC2? _box;
     private static BoxRGBA? _box_rgba;
     private static Plate2? _plate_lr, _plate_rl;
-    private static ShapeXY? _shape;
-    private static ShapeXYC2? _shape_c2;
     private static ShapeXYWHC2? _shape_wh;
     private static Font? _font;
     private static StrS? _str;
@@ -157,8 +155,6 @@ internal static unsafe class ItemMenuPatches {
         _box_rgba = Native.fn<BoxRGBA>(BOX_RGBA).fnptr!;
         _plate_lr = Native.fn<Plate2>(PLATE_LR).fnptr!;
         _plate_rl = Native.fn<Plate2>(PLATE_RL).fnptr!;
-        _shape = Native.fn<ShapeXY>(SHAPE_XY).fnptr!;
-        _shape_c2 = Native.fn<ShapeXYC2>(SHAPE_XYC2).fnptr!;
         _shape_wh = Native.fn<ShapeXYWHC2>(SHAPE_XYWH).fnptr!;
         _font = Native.fn<Font>(FONT_1612).fnptr!;
         _str = Native.fn<StrS>(STR_S).fnptr!;
@@ -246,7 +242,7 @@ internal static unsafe class ItemMenuPatches {
         _shape_wh!(0xda, x, y, 0, 0, c0, c0);
         _shape_wh!(0xdb, x + 16, y, 209, 0, c0, c1);
         int extra = (kind & 3) switch { 1 => 0xd7, 2 => 0x10b, 3 => 0x10a, _ => 0 };
-        if (extra != 0) _shape_c2!(extra, x + 97, y, SHADOW, SHADOW);
+        if (extra != 0) Ps2Menu.shape_c2(extra, x + 97, y, SHADOW, SHADOW);
     }
 
     /// <summary>An icon and a name (PS2 0x001f5100 / 0x001f5068 / 0x001f5420): icon at (+12, +1), 15 x 18; name at (+29, +1) in the 16x12 font.</summary>
@@ -389,9 +385,9 @@ internal static unsafe class ItemMenuPatches {
             _box!(b1 + sl, s5 + 91, w1, 29, u32(COL_ISNMPLT_A), u32(COL_ISNMPLT));
             _box!(b2 + sl, y, w1, 29, u32(COL_IBNMPLT0), u32(COL_IBNMPLT1));
             int px = b2 + sl;
-            _shape!(0x52, px + line.x, line.y + y);
+            Ps2Menu.shape(0x52, px + line.x, line.y + y);
             _plate_lr!(0xe5, 0xe6, px, y, w3, u32(COL_INMPLT0), u32(COL_INMPLT1));
-            _shape!(mp ? 0x22 : 0x21, px + tex.x, y + tex.y);
+            Ps2Menu.shape(mp ? 0x22 : 0x21, px + tex.x, y + tex.y);
             int now = mp ? _mp!(chr) : _hp!(chr), max = mp ? _max_mp!(chr) : _max_hp!(chr);
             // PS2 0x001f63c0 (font S values) and 0x001f6500 ("/" at hp2 - 60), colour 0x25
             Ps2Menu.value_s(now, px + hp1.x, y + hp1.y, 0x25);
@@ -463,9 +459,9 @@ internal static unsafe class ItemMenuPatches {
                 if (wi8(w, 0x45) <= 0) MainMenuPatches.cursor(tx, y + 2);
                 else {
                     // PS2 0x002020a8 at rest: shapes 0xe2, 0xe3 (stretched), 0xe4 under the text
-                    _shape!(0xe2, tx - 5, y + 2);
+                    Ps2Menu.shape(0xe2, tx - 5, y + 2);
                     _shape_wh!(0xe3, tx + 11, y + 2, tw - 11, 0, GREY, GREY);
-                    _shape!(0xe4, tx + tw, y + 2);
+                    Ps2Menu.shape(0xe4, tx + tw, y + 2);
                 }
             }
             tx += tw + spacing;
@@ -493,16 +489,16 @@ internal static unsafe class ItemMenuPatches {
         _font!(_chr_name!(chr), x + namestr.x, y + namestr.y, _damage!(chr));
         var hptex = point(POS_HPTEX);
         var hpstr = point(POS_HPSTR);
-        _shape!(0x21, x + hptex.x, y + hptex.y);
+        Ps2Menu.shape(0x21, x + hptex.x, y + hptex.y);
         Ps2Menu.font_s($"{_hp!(chr),5}/{_max_hp!(chr),5}", x + hpstr.x, y + hpstr.y, 0x25);
         var mptex = point(POS_MPTEX);
         var mpstr = point(POS_MPSTR);
-        _shape!(0x22, x + mptex.x, y + mptex.y);
+        Ps2Menu.shape(0x22, x + mptex.x, y + mptex.y);
         Ps2Menu.font_s($"{_mp!(chr),4}/{_max_mp!(chr),4}", x + mpstr.x, y + mpstr.y, 0x25);
         _box_rgba!(0, y + 33, 512, 3, 0, 0, 0, 0x80);
         var slv = point(POS_SLVSHAPE);
         var spstr = point(POS_SPSTR);
-        _shape!(0x107, x + slv.x + 0x68, y + slv.y);
+        Ps2Menu.shape(0x107, x + slv.x + 0x68, y + slv.y);
         Ps2Menu.value_m(_sphere!(chr), x + slv.x + spstr.x, y + slv.y + spstr.y, 0);
         Ps2Menu.value_s(_next_ap!(chr) - _save_next_ap!(chr), x + slv.x + 139, y + slv.y - 13, 0x25);
     }
