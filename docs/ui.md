@@ -586,10 +586,26 @@ cursors): `~/ffx-work/demaster/research/ui/battle/btl-2-ps2.png`,
 - The `?`/`!` icons and the other `meswin` cells outside the ported draws.
 - The battle help bar (`TOBtlDrawHelpWin`): HD.
 - `icon` and `strtex` (item icons, "Miss/Immune/Overkill" graphics in
-  `icon`, menu labels): CLUTs made at run time. A table of the RGBA the
-  code passes per icon (`TOAddPktMenuIconRGBA` callers) would allow it.
-  Not looked for in this round (2026-11-03); the battle windows draw the HD
-  icons.
+  `icon`, menu labels). Found (2026-11-03): the item icons' colours are not
+  made at run time. The PS2 `TOAddPktMenuIconRGBA` (SLPM_675.13
+  `0x001f9798`) writes two `TEX0`s: the first (PSMT8, `CLD` 2) loads the
+  256-colour CLUT at block `0x2ec0 + 4 (id >> 4)`, the second draws the
+  PSMT4 `icon` (`0x3dc0`) with `CSA = id & 15`; cell `id` is at
+  ((id % 17) 15, (id / 17) 18), 15 x 18 texels. `menu.clp` sits at block
+  `0x2ea0` (meswin's CBP; battle's `0x2ea4` is CLUT 1), so the icon CLUTs
+  are `menu.clp` CLUTs 8, 9, 12, 13, 10, 11, 14, 15 for id >> 4 = 0..7
+  (the PSMCT32 block order), each icon its own 16-colour row (entries 16c ..
+  16c + 15 in 8-bit index order). Rendered so
+  (`research/ui/mainmenu/icon-ps2-palettes.png` against `icon-hd.png`) the
+  first 56 icons get the HD's colours (blue/green/purple potions, the eight
+  sphere colours, the weapon icons); entries 0 and 1 of every row are
+  transparent, but each icon's background index (7, 11, 4, ...) is opaque,
+  so every icon shows a coloured box. Either the PS2 icons had that box or a
+  detail is missing (alpha test is `TEST` `0xf`: alpha != 0 passes); not
+  resolved, so the converter does not write `icon` yet. The rows from id 64
+  (SELECT/START, the German "DANEBEN"/"VERNICHTEND" miss/overkill words)
+  come out wrong with these CLUTs: they are drawn by other code (the battle
+  damage draws, not looked at). `strtex` not looked at.
 - `worldmap` (airship map): 512x416 PS2 against a 1920x1080 HD layout.
 - Sphere grid (`menu/abmap/dat00/tex`): named after VRAM pages
   (`14080_19` ...), PS2 source `jppc/menu/abmap/dat00.dat` (700 KB); not
