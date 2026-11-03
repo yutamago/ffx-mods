@@ -64,8 +64,6 @@ internal static unsafe class MainMenuPatches {
     private const uint SHAPE_XY    = 0x00903a10; // TOMkpShapeXY
     private const uint SHAPE_XYWH  = 0x00903b70; // TOMkpShapeXYWHC2
     private const uint SHAPE_PART  = 0x009034b0; // TOMkpShapePartIndexXYWHC2
-    private const uint FONT_1612   = 0x00901cb0; // TOMkpBaseMesFont(text, x, y, colour): the 16x12 font (PS2 0x001f3810)
-    private const uint FONT_1612A  = 0x00901ce0; // (text, x, y, colour, alpha) (PS2 0x001f3858)
     private const uint STR_S       = 0x00901660; // TOMkpCrossEasyStrFontSClut (PS2 0x001f6500)
     private const uint DIGIT_RIGHT = 0x009055c0; // ToMakeBtlEasyDigitRight: right edge at x
     private const uint TIMER       = 0x008e19f0; // TOMenuDrawTimer(t, x, y, colour, colon colour)
@@ -143,8 +141,6 @@ internal static unsafe class MainMenuPatches {
     private static Plate2? _plate_lr, _plate_rl;
     private static ShapeXYWHC2? _shape_wh;
     private static ShapePart? _part;
-    private static Font? _font;
-    private static FontA? _font_a;
     private static StrS? _str;
     private static DigitRight? _digits;
     private static Timer? _timer;
@@ -167,8 +163,6 @@ internal static unsafe class MainMenuPatches {
         _plate_rl = Native.fn<Plate2>(PLATE_RL).fnptr!;
         _shape_wh = Native.fn<ShapeXYWHC2>(SHAPE_XYWH).fnptr!;
         _part = Native.fn<ShapePart>(SHAPE_PART).fnptr!;
-        _font = Native.fn<Font>(FONT_1612).fnptr!;
-        _font_a = Native.fn<FontA>(FONT_1612A).fnptr!;
         _str = Native.fn<StrS>(STR_S).fnptr!;
         _digits = Native.fn<DigitRight>(DIGIT_RIGHT).fnptr!;
         _timer = Native.fn<Timer>(TIMER).fnptr!;
@@ -315,6 +309,7 @@ internal static unsafe class MainMenuPatches {
 
     private static int draw_all() {
         _all_next ??= Native.fn<Draw>(DRAW_ALL).chain_from(_all_hook!).fnptr!;
+        Ps2Menu.scenes_frame();
         _in_draw_all = true;
         try { return _all_next(); } finally { _in_draw_all = false; }
     }
@@ -322,6 +317,7 @@ internal static unsafe class MainMenuPatches {
     // ---- TkMenuDrawMain: SLPM_675.13 0x0024a4a8 ----------------------------------------------------
 
     private static int draw_main() => scoped(() => {
+        Ps2Menu.scenes("scene26");
         int n = _list_max!();
         _sync!();
         _open!();
@@ -350,7 +346,7 @@ internal static unsafe class MainMenuPatches {
             }
             _plate_lr!(4, 5, x, y, nw, c0, c1);
             _shape_wh!(0x16, x + i16(NMBLKLINE_X), y + i16(NMBLKLINE_Y), i16(NMBLKLINE_W), 0, GREY, GREY);
-            _font!(_chr_name!(chr), x + namestr.x, y + namestr.y, _damage!(chr));
+            Ps2Menu.font(_chr_name!(chr), x + namestr.x, y + namestr.y, _damage!(chr));
             Ps2Menu.shape(0x21, x + hptex.x, y + hptex.y);
             // PS2 0x001f6500: "%5d/%5d", "%4d/%4d" in font S, colour 0x25 (black, light shadow)
             Ps2Menu.font_s($"{_hp!(chr),5}/{_max_hp!(chr),5}", x + hpstr.x, y + hpstr.y, 0x25);
@@ -384,7 +380,7 @@ internal static unsafe class MainMenuPatches {
         var placeshape = point(POS_PLACESHAPE);
         var placestr = point(POS_PLACESTR);
         Ps2Menu.shape(0x27, px + placeshape.x, py + placeshape.y);
-        _font!(_dic_name!(_save_dic!(), _english!()), px + placestr.x, py + placestr.y, 0);
+        Ps2Menu.font(_dic_name!(_save_dic!(), _english!()), px + placestr.x, py + placestr.y, 0);
         _kick!();
         first(2, "ui.menus: main menu drawn the PS2 way");
         return _sync!();
@@ -433,7 +429,7 @@ internal static unsafe class MainMenuPatches {
         _box_rgba!(x + rx + 4, y + 4, rw, rh, 0, 0, 0, alpha);
         _box!(x + rx, y, rw, rh, (u32(COL_COMPLT0) & 0xffffff) | a, (u32(COL_COMPLT1) & 0xffffff) | a);
         int grey = (short)_option_on!(i) == 0 ? 1 : 0;
-        _font_a!(_main_mes!(_option_menu!(i)), x + rx + 15, y + 2, grey, alpha);
+        Ps2Menu.font_a(_main_mes!(_option_menu!(i)), x + rx + 15, y + 2, grey, alpha);
         if (i == cur && slide == 0x1000) cursor(x + rx + 15, y + 2);
     }
 
@@ -452,7 +448,7 @@ internal static unsafe class MainMenuPatches {
         nint mes = (nint)u32(HELP_MES);
         if (mes != 0) {
             var at = point(POS_HELPSTR);
-            _font!(mes, hx + at.x, hy + at.y, 0);
+            Ps2Menu.font(mes, hx + at.x, hy + at.y, 0);
         }
         _kick!();
         first(8, "ui.menus: menu help bar drawn the PS2 way");

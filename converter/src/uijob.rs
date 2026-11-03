@@ -222,6 +222,11 @@ fn dilate(mask: &[bool], w: u32, h: u32) -> Vec<bool> {
 /// The menu folders the disc's menu files are in: `(disc dir, HD folder)`.
 /// `jppc/menu` holds the disc's own language (German on the German disc),
 /// `uspc/menu` English where the disc has it.
+/// The menu sequence layout (`TOSeqInitParam`'s words, the scenes): the PC's copy it reads, and
+/// the disc's (the PS2 reads its main folder's).
+const MENU_SCRIPT_PC: &str = "ffx_ps2/ffx/master/jppc/menu/menu_script.bin";
+const MENU_SCRIPT_PS2: &str = "jppc/menu/menu_script.bin";
+
 fn menu_sources(region: &str) -> Vec<(&'static str, &'static str)> {
     let own = match region {
         "de" => "menu_de",
@@ -992,6 +997,19 @@ pub fn convert(disc: &mut Disc, pc: &ffx_vbf::Archive, parts: Parts) -> Result<(
     }
 
     if parts.menus {
+        // the menu layout words (TOSeqInitParam's, TkMn2SeqGet*): the PC reads the Japanese
+        // International's `jppc/menu/menu_script.bin` for every language; the PAL game reads
+        // its own disc's, whose words differ (Config: plates from y 65, 47 apart, not 55 / 45)
+        if let (Some(raw), Some(e)) = (disc.read(MENU_SCRIPT_PS2)?, pc.find(MENU_SCRIPT_PC)) {
+            if pc.read(e)? != raw {
+                done.push(Done {
+                    path: MENU_SCRIPT_PC.to_string(),
+                    file: raw,
+                    preview: Rgba::new(1, 1),
+                    note: format!("{MENU_SCRIPT_PC}: the disc's menu layout ({MENU_SCRIPT_PS2})"),
+                });
+            }
+        }
         let sources = menu_sources(&region);
         for folder in ALL_MENU_FOLDERS {
             // the English game reads some sheets (`icon`) from `menu`, not `menu_us`
@@ -1269,9 +1287,9 @@ impl Job for UiJob {
     /// 2: textures with mip chains (phyretex::mip_chain). 3: the PS2 meswin
     /// as its own texture (`ps2win`, ui.menus). 4: `ps2btl`, the PS2 item
     /// icons and battle words (`icon`), `strtex`. 5: `ps2fnt`, the PS2 fonts
-    /// M and S.
+    /// M and S. 6: the disc's `menu_script.bin` (the PAL menu layout).
     fn version(&self) -> u32 {
-        5
+        6
     }
     fn name(&self) -> &'static str {
         self.name

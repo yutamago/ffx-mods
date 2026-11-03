@@ -40,7 +40,6 @@ internal static unsafe class ItemMenuPatches {
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] public delegate int IntOfInt2(int a, int b);
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] public delegate nint PtrOfInt(int a);
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] public delegate nint ComData(int cmd, int* strings);
-    [UnmanagedFunctionPointer(CallingConvention.Cdecl)] public delegate int TextWidth(nint text);
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] public delegate int Usable(nint w, int i, int z);
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] public delegate int SeqPoint(int scene, nint name, int* x, int* y);
 
@@ -59,7 +58,6 @@ internal static unsafe class ItemMenuPatches {
     private const uint SHAPE_XY   = 0x00903a10; // TOMkpShapeXY
     private const uint SHAPE_XYC2 = 0x00903a50; // TOMkpShapeXYC2
     private const uint SHAPE_XYWH = 0x00903b70; // TOMkpShapeXYWHC2
-    private const uint FONT_1612  = 0x00901cb0; // TOMkpBaseMesFont (PS2 0x001f3810)
     private const uint STR_S      = 0x00901660; // TOMkpCrossEasyStrFontSClut (PS2 0x001f6500)
     private const uint DIGIT_RIGHT = 0x009055c0; // ToMakeBtlEasyDigitRight: the PS2's "%d" right-aligned (font M / S stand-in)
     private const uint ICON       = 0x008e6af0; // DrawCrossMenuIconXYWHRGBA (PS2 0x001f9798 draws 15 x 18 1:1)
@@ -83,7 +81,6 @@ internal static unsafe class ItemMenuPatches {
     private const uint MENU_TIMER   = 0x008a9c60; // TkMenuGetTimer
     // TkMn2StringWidth: TOGetMessageWH's width in the low half (TkMenuDraw1612Width, the PS2's
     // 0x00226ad8 name, sums f32 bit patterns as integers on the PC and returns garbage)
-    private const uint TEXT_WIDTH   = 0x008c2cb0;
     private const uint PLAYERS      = 0x008a9b30; // TkMenuGetPlayerListMax
     private const uint SUMMONS      = 0x008a9bf0; // TkMenuGetSummonListMax
     private const uint PLAYER       = 0x008a9ad0; // TkMenuGetPlayerFromIndex2
@@ -132,7 +129,6 @@ internal static unsafe class ItemMenuPatches {
     private static BoxRGBA? _box_rgba;
     private static Plate2? _plate_lr, _plate_rl;
     private static ShapeXYWHC2? _shape_wh;
-    private static Font? _font;
     private static StrS? _str;
     private static DigitRight? _digits;
     private static IconXYWH? _icon;
@@ -143,7 +139,6 @@ internal static unsafe class ItemMenuPatches {
     private static IntOfInt2? _ease;
     private static PtrOfInt? _ply_command, _chr_name;
     private static ComData? _com, _key_ptr;
-    private static TextWidth? _width;
     private static SeqPoint? _seq_point;
 
     private static void first(int bit, string message) {
@@ -156,7 +151,6 @@ internal static unsafe class ItemMenuPatches {
         _plate_lr = Native.fn<Plate2>(PLATE_LR).fnptr!;
         _plate_rl = Native.fn<Plate2>(PLATE_RL).fnptr!;
         _shape_wh = Native.fn<ShapeXYWHC2>(SHAPE_XYWH).fnptr!;
-        _font = Native.fn<Font>(FONT_1612).fnptr!;
         _str = Native.fn<StrS>(STR_S).fnptr!;
         _digits = Native.fn<DigitRight>(DIGIT_RIGHT).fnptr!;
         _icon = Native.fn<IconXYWH>(ICON).fnptr!;
@@ -189,7 +183,6 @@ internal static unsafe class ItemMenuPatches {
         _chr_name = Native.fn<PtrOfInt>(CHR_NAME).fnptr!;
         _com = Native.fn<ComData>(COM_DATA).fnptr!;
         _key_ptr = Native.fn<ComData>(KEY_PTR).fnptr!;
-        _width = Native.fn<TextWidth>(TEXT_WIDTH).fnptr!;
         _seq_point = Native.fn<SeqPoint>(SEQ_POINT).fnptr!;
         _box = Native.fn<BoxC2>(BOX_C2).fnptr!;
     }
@@ -235,7 +228,7 @@ internal static unsafe class ItemMenuPatches {
     /// <summary>An icon and a name (PS2 0x001f5100 / 0x001f5068 / 0x001f5420): icon at (+12, +1), 15 x 18; name at (+29, +1) in the 16x12 font.</summary>
     private static void icon_name(int icon, nint name, int x, int y, int colour) {
         _icon!(x + 12, y + 1, 15, 18, icon, 0x80, 0x80, 0x80, 0x80);
-        _font!(name, x + 29, y + 1, colour);
+        Ps2Menu.font(name, x + 29, y + 1, colour);
     }
 
     /// <summary>PS2 0x00226c80 -> 0x001f5f58: "%d" in font M right-aligned ending at x + 2, colour 0 or 1 (grey).</summary>
@@ -245,6 +238,7 @@ internal static unsafe class ItemMenuPatches {
 
     private static int list_draw(nint w) => packet(() => {
         int kind = wu8(w, 0x43);
+        Ps2Menu.scenes("scene0", kind == 2 ? "scene10" : "scene9"); // Abilities (kind 2) or Items
         int count = wu16(w, 0x30), top = wi16(w, 0x32), next = wi16(w, 0x34), shown = wu16(w, 0x3a);
         // the scroll bar (PS2 0x00200a60): rect_iscroll from the item list's target, else rect_abscroll
         uint r = i32_at(TARGET_FROM_ITEM) == 1 ? RECT_ISCROLL : RECT_ABSCROLL;
@@ -375,7 +369,7 @@ internal static unsafe class ItemMenuPatches {
             Ps2Menu.value_s(max, px + hp2.x, y + hp2.y, 0x25);
             Ps2Menu.font_s("/", px + hp2.x - 60, y + hp2.y, 0x25);
             int colour = (mask & (1u << i)) != 0 ? _damage!(chr) : 1;
-            _font!(_chr_name!(chr), px + nm.x, y + nm.y, colour);
+            Ps2Menu.font(_chr_name!(chr), px + nm.x, y + nm.y, colour);
             if (wi16(w, 0x52) == 0x1000 && (single ? i == cur : ((timer / 2 + i) & 1) == 0))
                 MainMenuPatches.cursor(px + nm.x - 4, y + nm.y);
         }
@@ -384,7 +378,7 @@ internal static unsafe class ItemMenuPatches {
 
     // ---- the sub-command bars: SLPM_675.13 0x00236e68, 0x00237188 ------------------------------
 
-    private static int text_w(nint text) => (short)(_width!(text) & 0xffff);
+    private static int text_w(nint text) => Ps2Menu.text_width(text);
 
     /// <summary>An entry of a sub-command window: text at +0x58 + 12 i.</summary>
     private static nint entry_text(nint w, int i) => *(nint*)(w + 0x58 + 12 * i);
@@ -434,7 +428,7 @@ internal static unsafe class ItemMenuPatches {
             nint t = entry_text(w, i);
             int tw = text_w(t);
             _scissor!(clip_x, 0, clip_x + clip_w, 415);
-            _font!(t, tx, y + 2, 0);
+            Ps2Menu.font(t, tx, y + 2, 0);
             _scissor!(0, 0, 512, 416);
             if (i == k) {
                 if (wi8(w, 0x45) <= 0) MainMenuPatches.cursor(tx, y + 2);
@@ -467,7 +461,7 @@ internal static unsafe class ItemMenuPatches {
     private static void party_plate(int chr, int x, int y) {
         _plate_lr!(4, 5, x, y, i16(NAMEPLT_W), u32(COL_NAMEPLT0), u32(COL_NAMEPLT1));
         var namestr = point(POS_NAMESTR);
-        _font!(_chr_name!(chr), x + namestr.x, y + namestr.y, _damage!(chr));
+        Ps2Menu.font(_chr_name!(chr), x + namestr.x, y + namestr.y, _damage!(chr));
         var hptex = point(POS_HPTEX);
         var hpstr = point(POS_HPSTR);
         Ps2Menu.shape(0x21, x + hptex.x, y + hptex.y);

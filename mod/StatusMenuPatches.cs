@@ -197,6 +197,7 @@ internal static unsafe class StatusMenuPatches {
     // ---- the main window: SLPM_675.13 0x0022ad00 -------------------------------------------------
 
     private static int main_draw(nint w) => Ps2Menu.packet(() => {
+        Ps2Menu.scenes("scene0", "scene11");
         int chr = call(CURRENT);
         int t = wi16(w, 0x52);
         page0(0, 0, chr, t);

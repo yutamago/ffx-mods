@@ -22,8 +22,6 @@ internal static unsafe class BattlePatches {
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] public delegate void BoxXYWHC2(int x, int y, int w, int h, uint c0, uint c1);
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] public delegate void ScrollParts(float x, float y, float w, float h, int first, int rows, int lines);
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] public delegate void Scissor(int x0, int y0, int x1, int y1);
-    [UnmanagedFunctionPointer(CallingConvention.Cdecl)] public delegate void EdgeFont(nint text, float x, float y, int grey, float sx, float sy);
-    [UnmanagedFunctionPointer(CallingConvention.Cdecl)] public delegate void FontWidth(nint text, float* w, int zero, float sx, float sy);
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] public delegate nint ComData(int cmd, int* strings);
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] public delegate int CheckUse(int chr, int cmd);
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] public delegate void SetCurPos(int i, int x, int y);
@@ -49,8 +47,6 @@ internal static unsafe class BattlePatches {
     private const uint BOX_XYWHC2      = 0x008f3db0; // TODrawBoxXYWHC2: untextured, c0 left -> c1 right
     private const uint SCROLL_PARTS    = 0x008e6cc0; // DrawCrossMenuScrollParts
     private const uint SCISSOR         = 0x008fdee0; // TOMakePktScissor
-    private const uint EDGE_FONT       = 0x00905930; // ToMakeBtlEasyEdgeFont
-    private const uint FONT_WIDTH      = 0x00905290; // ToGetBtlEasyFontWidth
     private const uint COM_DATA        = 0x0079a4b0; // MsGetComData
     private const uint CHECK_USE       = 0x0089aca0; // TOCheckBtlCommandUse
     private const uint SET_CUR_POS     = 0x008999f0; // TOBtlSetCurPos
@@ -86,8 +82,6 @@ internal static unsafe class BattlePatches {
     private static BoxXYWHC2? _box;
     private static ScrollParts? _scroll;
     private static Scissor? _scissor;
-    private static EdgeFont? _font;
-    private static FontWidth? _width;
     private static ComData? _com;
     private static CheckUse? _use;
     private static SetCurPos? _cur;
@@ -109,8 +103,6 @@ internal static unsafe class BattlePatches {
         if (_box is not null) return;
         _scroll = Native.fn<ScrollParts>(SCROLL_PARTS).fnptr!;
         _scissor = Native.fn<Scissor>(SCISSOR).fnptr!;
-        _font = Native.fn<EdgeFont>(EDGE_FONT).fnptr!;
-        _width = Native.fn<FontWidth>(FONT_WIDTH).fnptr!;
         _com = Native.fn<ComData>(COM_DATA).fnptr!;
         _use = Native.fn<CheckUse>(CHECK_USE).fnptr!;
         _cur = Native.fn<SetCurPos>(SET_CUR_POS).fnptr!;
@@ -154,11 +146,8 @@ internal static unsafe class BattlePatches {
         return strings + *(ushort*)rec;
     }
 
-    private static float width_of(nint text) {
-        float w = 0;
-        _width!(text, &w, 0, SX, SY);
-        return w;
-    }
+    /// <summary>A name's width: the 16x12 font at the PS2's size (the PS2's 1612 draw 0x001f3810, Ps2Menu.text_width).</summary>
+    private static float width_of(nint text) => Ps2Menu.text_width(text);
 
     /// <summary>
     /// Window kinds whose PS2 parts had no command icon (SLPM_675.13 0x002105d8: kinds 1-4 and 0xe
@@ -240,7 +229,7 @@ internal static unsafe class BattlePatches {
             nint name = name_of(cmd, out nint rec);
             float x = cell_x(l, e), y = cell_y(l, e);
             if (centred) {
-                _font!(name, x + MathF.Floor((l.colw - width_of(name)) / 2), y, grey, SX, SY);
+                Ps2Menu.font(name, (int)(x + MathF.Floor((l.colw - width_of(name)) / 2)), (int)y, grey);
                 continue;
             }
             for (int k = 0; k < parts; k++) {
@@ -264,7 +253,7 @@ internal static unsafe class BattlePatches {
                         break;
                     }
                     case 0x10:
-                        _font!(name, x, y, grey, SX, SY);
+                        Ps2Menu.font(name, (int)x, (int)y, grey);
                         x += l.namew;
                         break;
                 }

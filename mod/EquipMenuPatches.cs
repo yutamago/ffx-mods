@@ -94,6 +94,7 @@ internal static unsafe class EquipMenuPatches {
     // ---- the screen: SLPM_675.13 0x0022cc28 ---------------------------------------------------------
 
     private static int equip_draw() {
+        Ps2Menu.scenes("scene0", "scene11", "scene20"); // the PC's open starts them too (0x008cf830)
         // the PC's packet steps before its page (TODrawMenuBG and MenuDrawDividerShapes(4) dropped:
         // the PS2 has the menu gradient only)
         Ps2Menu.fn<Ps2Menu.IntFn>(KICK_MENU)();

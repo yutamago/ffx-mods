@@ -33,7 +33,6 @@ internal static unsafe class ConfigMenuPatches {
     private const uint CONFIG_HELP = 0x008dc970; // TkMenuConfigHelp(id) (PS2 0x002496b0)
     private const uint SET_HELP    = 0x008aaeb0; // TkMenuSetHelpMessage (PS2 0x002437e0)
     private const uint GET_LOC     = 0x006412d0; // SaveDataGetLoc(id, out): the PC row's texts
-    private const uint TEXT_WIDTH  = 0x008c2cb0; // TkMn2StringWidth: low half (the PS2's TkMenuDraw1612Width 0x00226ad8 is broken on the PC)
     private const uint WIN_LAYOUT  = 0x008fa4f0; // TOGetWindowLayout(id): u16 w +8, h +10
 
     // read
@@ -66,7 +65,7 @@ internal static unsafe class ConfigMenuPatches {
         Ps2Menu.fn<GetLoc>(GET_LOC)(id, buf);
         return buf;
     }
-    private static int width(nint text) => (short)(Ps2Menu.fn<Ps2Menu.IntOfPtr>(TEXT_WIDTH)(text) & 0xffff);
+    private static int width(nint text) => Ps2Menu.text_width(text);
 
     // ---- the draw: SLPM_675.13 0x00235a68 -----------------------------------------------------
 
@@ -74,6 +73,7 @@ internal static unsafe class ConfigMenuPatches {
         var kick = Ps2Menu.fn<Ps2Menu.IntFn>(DRAW_KICK);
         kick();
         kick();
+        Ps2Menu.scenes("scene4", "scene17");
         return Ps2Menu.packet(() => {
             int rows = (int)u32(ROWS);
             for (int r = 0; r < rows; r++) row(r);

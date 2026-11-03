@@ -110,8 +110,57 @@ internal static unsafe class Ps2Menu {
     }
     public static void shape_wh(int id, int x, int y, int w, int h, uint c0, uint c1) => fn<ShapeXYWHC2>(SHAPE_XYWH)(id, x, y, w, h, c0, c1);
     public static void part(int id, int p, float x, float y, float w, float h, uint c0, uint c1) => fn<ShapePart>(SHAPE_PART)(id, p, x, y, w, h, c0, c1);
-    public static void font(nint text, int x, int y, int colour) => fn<Font>(FONT_1612)(text, x, y, colour);
-    public static void font_a(nint text, int x, int y, int colour, int alpha) => fn<FontA>(FONT_1612A)(text, x, y, colour, alpha);
+    /// <summary>The 16x12 font at the PS2's size (TOMkpBaseMesFont inside ps2_sized; PS2 0x001f3810).</summary>
+    public static void font(nint text, int x, int y, int colour) => ps2_sized(() => { fn<Font>(FONT_1612)(text, x, y, colour); return 0; });
+    /// <summary>The 16x12 font with alpha at the PS2's size (PS2 0x001f3858).</summary>
+    public static void font_a(nint text, int x, int y, int colour, int alpha) => ps2_sized(() => { fn<FontA>(FONT_1612A)(text, x, y, colour, alpha); return 0; });
+    /// <summary>A 16x12 string's width at the PS2's size: TkMn2StringWidth's low half inside ps2_sized (PS2 TkMenuDraw1612Width 0x00226ad8).</summary>
+    public static int text_width(nint text) => ps2_sized(() => (short)(fn<IntOfPtr>(TEXT_WIDTH)(text) & 0xffff));
+
+    public const uint TEXT_WIDTH = 0x008c2cb0; // TkMn2StringWidth: TOGetMessageWH's width (low half), height (high)
+
+    // the 16x12 font's size words (docs/ui.md, "The 16x12 font's size")
+    private const uint FONT_SX = 0x00c5d778, FONT_SY = 0x00c5d77c;      // glyph extent factors in x, y (1.0, .data, never written by the game)
+    private const uint SCALE_X = 0x018716a8, SCALE_Y = 0x018716ac;      // screen units per PS2 unit for widths (1920 / 512, 1080 / 416)
+    private const uint SPACE_0 = 0x018716b4, SPACE_1 = 0x018716b8;      // the letter space, cached (0.8; kinds 1 / 3: the second)
+    private const uint SHADOW_X = 0x018716e0, SHADOW_Y = 0x018716e4;    // the shadow's extra offset in PS2 units (0)
+    private const uint FFX_LANG = 0x006410e0;                           // TOGetFFXLang
+    private static int _sized;
+
+    /// <summary>
+    /// Runs a 16x12 font draw (or width) at the PS2's size. The PS2 (0x001f43c8 -> glyphs
+    /// 0x001f0ec8 / 0x001f11e8) drew each glyph 1:1: w x 18 at the pen, the shadow at (+2, +2),
+    /// advance w + 2. The PC (TOAddPktBaseMesFontLClutTypeRGBA 0x008e92a0) draws it 0.78 times as
+    /// big, with x and y in the same screen pixels (graphicFontDraw: x0 * 3.75 but the extent
+    /// * 1080 / 416), so a glyph is 0.54 w PS2 columns wide and 0.78 x 18 lines high, from
+    /// y + 0.78 (the languages' y offset). For the call: the extent factors 0x00c5d778 /
+    /// 0x00c5d77c make it w columns and 18 lines, g_TkMenuScissorScales (1, 1 / 0.78) make
+    /// TOGetFontWidthInPiexl answer w, the cached letter space is 2, and the shadow offset makes
+    /// the PC's fixed 2 screen pixels (2, 2) PS2 units. Restored afterwards (the shapes read the
+    /// same factors).
+    /// </summary>
+    public static T ps2_sized<T>(Func<T> draw) {
+        if (_sized > 0) return draw();
+        float* g = stackalloc float[8];
+        for (int k = 0; k < 8; k++) g[k] = *(float*)Native.ptr(_size_words[k]);
+        var v = ps2_size_values(fn<IntFn>(FFX_LANG)());
+        for (int k = 0; k < 8; k++) *(float*)Native.ptr(_size_words[k]) = v[k];
+        _sized++;
+        try { return draw(); }
+        finally {
+            _sized--;
+            for (int k = 0; k < 8; k++) *(float*)Native.ptr(_size_words[k]) = g[k];
+        }
+    }
+
+    private static readonly uint[] _size_words = [FONT_SX, FONT_SY, SCALE_X, SCALE_Y, SPACE_0, SPACE_1, SHADOW_X, SHADOW_Y];
+
+    /// <summary>The values ps2_sized writes, for a TOGetFFXLang language (y offset 1 for 1..8, -1 for 10, else 0).</summary>
+    private static float[] ps2_size_values(int lang) {
+        float yoff = lang == 10 ? -1f : lang >= 1 && lang <= 8 ? 1f : 0f;
+        const float pc = 0.78f, ux = 1920f / 512, uy = 1080f / 416;
+        return [ux / uy / pc, (18 + pc * yoff) / (pc * (18 + yoff)), 1f, 1f / pc, 2f, 2f, 2 - 2 / ux, 2 - 2 / uy];
+    }
     public static void icon(int x, int y, int id) => fn<IconXYWH>(ICON)(x, y, 15, 18, id, 0x80, 0x80, 0x80, 0x80);
     public static void scissor(int x0, int y0, int x1, int y1) => fn<Scissor>(SCISSOR)(x0, y0, x1, y1);
     public static void cursor(int x, int y) => MainMenuPatches.cursor(x, y);
@@ -141,6 +190,54 @@ internal static unsafe class Ps2Menu {
         return ((short)x, (short)y);
     }
 
+    // ---- the menu sequence scenes ---------------------------------------------------------------
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)] public delegate int SeqScene(int seq, nint name);
+    public const uint SEQ_START = 0x008af0d0; // TOSeqStartScene(seq, name) (PS2 0x0020d840)
+    public const uint SEQ_STOP  = 0x008af4f0; // TOSeqStopScene(seq, name) (PS2 0x0020db20)
+    private const uint SEQ_SLOTS = 0x01865f20; // g_TOSeqSlots: 0x100 per sequence, 8 slots of 0x20 (+0 u16 state, +8 name)
+    private static readonly HashSet<string> _asked = [], _ours = [];
+
+    /// <summary>
+    /// The menu sequence (1) scenes a ported screen shows, asked for at each of its draws. The PS2
+    /// starts them when the screen opens and stops them when it closes (TkMn2SeqStart/StopScene,
+    /// PS2 0x00227488 / 0x00227498; seen in PCSX2: main menu scene26; Items scene0 + scene9,
+    /// Abilities scene0 + scene10, Overdrive scene0 + scene14, Status scene0 + scene11, Config
+    /// scene4 + scene17, Equip scene0 + scene11 + scene20, Customize scene0 + scene21, its ability list + scene23). The PC
+    /// starts only Equip's. A scene that is not on starts here (its slide-in plays as on the PS2);
+    /// scenes_frame stops the ones started here that no draw asked for in the last frame.
+    /// </summary>
+    public static void scenes(params string[] names) {
+        lock (_ours) {
+            foreach (string n in names) {
+                _asked.Add(n);
+                if (scene_on(n)) continue;
+                if (fn<SeqScene>(SEQ_START)(1, cstr(n)) != 0) _ours.Add(n);
+            }
+        }
+    }
+
+    /// <summary>Once a frame, before the menu draws (TkMenuDrawAll): stops our scenes no draw asked for since the last call.</summary>
+    public static void scenes_frame() {
+        lock (_ours) {
+            foreach (string n in _ours.ToArray()) {
+                if (_asked.Contains(n)) continue;
+                if (scene_on(n)) fn<SeqScene>(SEQ_STOP)(1, cstr(n));
+                _ours.Remove(n);
+            }
+            _asked.Clear();
+        }
+    }
+
+    private static bool scene_on(string name) {
+        byte* s = Native.ptr(SEQ_SLOTS + 0x100);
+        for (int k = 0; k < 8; k++, s += 0x20) {
+            short state = *(short*)s; // 0 free, 1..3 running, 4 stopped (the name cleared)
+            if (state >= 1 && state <= 3 && Marshal.PtrToStringAnsi((nint)(s + 8)) == name) return true;
+        }
+        return false;
+    }
+
     /// <summary>A string for one call (the PS2's sprintf into a stack buffer).</summary>
     public static void text(string s, Action<nint> use) {
         nint p = Marshal.StringToHGlobalAnsi(s);
@@ -158,7 +255,7 @@ internal static unsafe class Ps2Menu {
 
     /// <summary>
     /// A list row's plate by kind (PS2 0x00226d90 -> TOAdpShapeByKind 0x001f4c60; the PC's builder
-    /// 0x008f1a90 lost kind 1's line): meswin 0xda at x in c0, 0xdb from x + 16, 209 wide, c0 -> c1;
+    /// 0x008f1a90 lost kind 1's line): meswin 0xda (16 wide) at x in c0, 0xdb from x + 16 to x + 209 (0xd1 in all), c0 -> c1;
     /// kind &amp; 3 adds 0xd7, 0x10b or 0x10a at x + 97 in black; kind &gt;&gt; 3 picks col_bsoplt (grey),
     /// col_bitemplt (gold), col_babplt (purple), col_lmtplt.
     /// </summary>
@@ -166,7 +263,7 @@ internal static unsafe class Ps2Menu {
         uint at = COL_BSOPLT0 - 8 * (uint)((kind >> 3) & 3);
         uint c0 = u32(at), c1 = u32(at - 4);
         shape_wh(0xda, x, y, 0, 0, c0, c0);
-        shape_wh(0xdb, x + 16, y, 209, 0, c0, c1);
+        shape_wh(0xdb, x + 16, y, 209 - 16, 0, c0, c1); // PS2 0x001f4820: 0xd1 - w(0xda) from x + w(0xda): 209 in all
         int extra = (kind & 3) switch { 1 => 0xd7, 2 => 0x10b, 3 => 0x10a, _ => 0 };
         if (extra != 0) shape_c2(extra, x + 97, y, SHADOW, SHADOW);
     }

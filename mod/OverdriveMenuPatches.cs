@@ -41,7 +41,6 @@ internal static unsafe class OverdriveMenuPatches {
     private const uint STATUS_NUM   = 0x00790200; // MsMenuStatusNum(0, &n): the command lists
     private const uint CMD_OFFSET   = 0x008d2dc0; // TkMenuGetCommandOffset(list, 5, chr, 0x48)
     private const uint CMD_NAME     = 0x008c1a20; // TkMn2GetCommandName(id) (PS2 0x002275f8)
-    private const uint TEXT_WIDTH   = 0x008c2cb0; // TkMn2StringWidth (the PS2's TkMenuDraw1612Width 0x00226ad8 is broken on the PC)
     private const uint MENU1_MES    = 0x008ddfc0; // TkMenuMenu1Mes(id) (PS2 0x00249368)
     private const uint NAME_KIND2   = 0x00873b50; // the PC's twin of PS2 0x0014f1c0 (row kind 2)
     private const uint COM_DATA     = 0x0079a4b0; // MsGetComData(id, &strings) -> record (name u16 +0, icon +0x14)
@@ -100,6 +99,7 @@ internal static unsafe class OverdriveMenuPatches {
     // ---- the record's draw: SLPM_675.13 0x002312d0 ------------------------------------------------
 
     private static int record_draw() => Ps2Menu.packet(() => {
+        Ps2Menu.scenes("scene0", "scene14");
         int chr = Ps2Menu.fn<Ps2Menu.IntFn>(CURRENT)();
         var p = pos("pos_4nameplt");
         status_plate(p.x, p.y, chr);
@@ -174,7 +174,7 @@ internal static unsafe class OverdriveMenuPatches {
             nint list = Ps2Menu.fn<Ps2Menu.PtrOfIntPtr>(STATUS_NUM)(0, &n);
             int k = Ps2Menu.fn<CommandOffset>(CMD_OFFSET)(list, 5, chr, 0x48);
             nint name = Ps2Menu.fn<Ps2Menu.PtrOfInt>(CMD_NAME)(*(ushort*)(list + 2 + 4 * k));
-            int tw = (short)(Ps2Menu.fn<Ps2Menu.IntOfPtr>(TEXT_WIDTH)(name) & 0xffff);
+            int tw = Ps2Menu.text_width(name);
             Ps2Menu.font(name, r.x + (r.w - tw) / 2, r.y + 4, 0);
         } else {
             // the mode list: PS2 0x00201a70 at rect_lmojiplt: a black plate 0xda / 0xdb 213 wide, strtex label 0
@@ -236,7 +236,7 @@ internal static unsafe class OverdriveMenuPatches {
         if (idx < 0 || idx >= wu16(w, 0x30)) return;
         uint c0 = Ps2Menu.u32(COL_BABPLT0), c1 = Ps2Menu.u32(COL_BABPLT0 - 4);
         Ps2Menu.shape_wh(0xda, x, y, 0, 0, c0, c0);
-        Ps2Menu.shape_wh(0xdb, x + 16, y, 209, 0, c0, c1);
+        Ps2Menu.shape_wh(0xdb, x + 16, y, 209 - 16, 0, c0, c1); // PS2 0x001f4820: 0xd1 - w(0xda) from x + w(0xda): 209 in all
         var pm = pos("pos_pmshape");
         Ps2Menu.shape(0xd7, x + pm.x + 0x58, y + pm.y);
         byte* e = Native.ptr(ITEM_LIST + 4 * (uint)idx);

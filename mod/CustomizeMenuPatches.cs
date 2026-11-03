@@ -52,7 +52,6 @@ internal static unsafe class CustomizeMenuPatches {
     private const uint ROM_ITEM     = 0x007909f0; // MsGetRomItem(id, &strings): name u16 +0, icon +0x14 (PS2 0x001bc2c0)
     private const uint ITEM_NUM     = 0x007904b0; // MsGetSaveItemNum (PS2 0x001bfe30)
     private const uint MAIN_MES     = 0x008ddf80; // TkMenuMainMes (PS2 0x00249330)
-    private const uint TEXT_WIDTH   = 0x008c2cb0; // TkMn2StringWidth: the width in the low half (PS2 0x0020e7e8)
     private const uint STATUS_BG    = 0x008d4910; // TkMn2GetStatusBG (PS2 0x00228b88)
     private const uint CHR_NAME     = 0x008ac850; // TOGetSaveChrName
     private const uint DAMAGE_CLASS = 0x008a99f0; // MenuPlayer_DamageClass
@@ -166,6 +165,7 @@ internal static unsafe class CustomizeMenuPatches {
     // ---- the equipment list: SLPM_675.13 0x00232188 ----------------------------------------------
 
     private static int list_draw(nint w) => Ps2Menu.packet(() => {
+        Ps2Menu.scenes("scene0", "scene21");
         var at = pos("pos_ksobiplt");
         var pm = pos("pos_pmshape");
         int count = wu16(w, 0x30);
@@ -214,6 +214,7 @@ internal static unsafe class CustomizeMenuPatches {
     // ---- the abilities to add: SLPM_675.13 0x00232730 --------------------------------------------
 
     private static int add_draw(nint w) => Ps2Menu.packet(() => {
+        Ps2Menu.scenes("scene0", "scene21", "scene23"); // scene23: the ability list (PS2 0x00232948)
         var pm = pos("pos_pmshape");
         byte* e = Native.ptr(ITEM_LIST + 4 * (uint)wi16(w, 0x48));
         if (e[3] != 0xff) {
@@ -269,7 +270,7 @@ internal static unsafe class CustomizeMenuPatches {
         int rx = x + shape.x + rr.x, ry = y + shape.y + rr.y;
         if (few == 1) {
             nint text = fn<Ps2Menu.PtrOfInt>(MAIN_MES)(0x15);
-            Ps2Menu.font(text, rx - (short)(fn<Ps2Menu.IntOfPtr>(TEXT_WIDTH)(text) & 0xffff), ry, 1);
+            Ps2Menu.font(text, rx - Ps2Menu.text_width(text), ry, 1);
         } else {
             Ps2Menu.value_m(held - need, rx, ry, 0);
         }
