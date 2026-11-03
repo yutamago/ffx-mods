@@ -231,6 +231,7 @@ impl WavWriter {
 /// The output stage: the gain ([`GAIN_DB`]) and a look-ahead peak limiter
 /// at -1 dBFS for the rare peaks the gain pushes over (0.06% of the
 /// samples on average). Its delay is compensated: frame n in is frame n out.
+#[derive(Clone)]
 pub struct Master {
     gain: f32,
     thr: f32,
