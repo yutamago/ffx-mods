@@ -416,6 +416,13 @@ const WINDOW_PIECES: [u32; 4] = [160, 56, 24, 32];
 /// texture id have the length of `meswin` so the mod can derive the name.
 pub const PS2_MESWIN: &str = "ps2win";
 const PS2_MESWIN_ID: &str = "ps2win.dds";
+/// The whole PS2 `battle` atlas (256x256, CLUT 1) the same way,
+/// `menu*/d3d11/ps2btl`: the battle sequence's Overdrive tab (battle
+/// layout 13, the "EKSTASE!!" brush plate) has no HD counterpart in the HD
+/// atlas's cell; the mod answers `TOGetShapTextureName(0x3f00)` with it while
+/// it draws that tab (`BattlePatches`, docs/ui.md "The Overdrive tab").
+pub const PS2_BATTLE: &str = "ps2btl";
+const PS2_BATTLE_ID: &str = "ps2btl.dds";
 
 /// Pastes [`WINDOW_PIECES`] into a `meswin` (HD or converted) where the
 /// HD has nothing. False if the sizes do not fit or the HD drew there.
@@ -463,6 +470,149 @@ fn paste_digits(a: &Atlas, idx: &[u8], clp: &[u8], img: &mut Rgba) -> bool {
     let d = DIGITS.map(|v| (v * s).round() as u32);
     blit(&ps2, DIGITS, img, d);
     true
+}
+
+// ------------------------------------------------------------- icon, strtex
+
+/// `icon.fmt`: 256x128 texels, 4 bit; item icon `id` is the 15 x 18 cell at
+/// `((id % 17) 15, (id / 17) 18)`. The PS2's `TOAddPktMenuIconRGBA`
+/// (SLPM_675.13 `0x001f9798`) loads the 256-colour CLUT at block
+/// `0x2ec0 + 4 (id >> 4)` and draws with `CSA = id & 15`: `menu.clp` CLUT
+/// `ICON_CLUTS[id >> 4]`, entries `16 (id & 15)` .. `+ 15` (8-bit index
+/// order). Every row's entries 2..15 are opaque (0x80), so each icon sits on
+/// an opaque slanted tile (index 0, alpha 0, only cuts its corners): the PS2
+/// look. The PC's `DrawCrossMenuIconXYWHRGBA` (`0x008e6af0`) samples the same
+/// cell UVs over `TOGetImageWH(0x3dc0)` = 256 x 128. docs/ui.md ("Item icons").
+const ICON_W: u32 = 256;
+const ICON_H: u32 = 128;
+const ICON_CLUTS: [usize; 8] = [8, 9, 12, 13, 10, 11, 14, 15];
+/// Ids 0..=44 are the item icons; 45..=50 hold the "NEW" label (text: the
+/// HD has it per language), the pink marker and the "B" box, and below them
+/// (from PS2 v 54) the button art: shapes 600+ drawn by other code with
+/// other CLUTs and HD-pixel UVs. Those stay HD.
+const ICON_ITEMS: u32 = 45;
+
+/// The battle words of `icon` (PS2 `0x001f9b50`, rectangles from its table
+/// `0x00570000`, PS2 texels x0, y0, x1, y1): kind 0 OVERKILL, 1 IMMUNE,
+/// 2 MISS, 3 MP; each in `menu.clp` CLUT 13 row `13 - kind` (CBP `0x2ecc`,
+/// `CSA = 13 - kind`). The PC's `TOMakePktBtlIconA` (`0x008fbcc0`) draws them
+/// from its own HD rectangles (HD pixels, the second box) at about half the
+/// PS2 width; the mod (ui.menus) draws them from the PS2 rectangles at the
+/// PS2 size (`BattlePatches.battle_word`), so the converter puts every
+/// folder's words at the PS2 places: the disc's own words where the folder
+/// has a disc source, else the HD words resampled there.
+pub const BATTLE_WORDS: [([u32; 4], [u32; 4]); 4] = [
+    ([0, 110, 164, 127], [108, 452, 550, 506]),
+    ([164, 96, 231, 118], [632, 382, 952, 474]),
+    ([55, 96, 152, 110], [304, 392, 464, 432]),
+    ([0, 96, 45, 106], [0, 382, 73, 420]),
+];
+
+/// 4-bit texels, low nibble first.
+fn nibbles(raw: &[u8]) -> Vec<u8> {
+    raw.iter().flat_map(|b| [b & 15, b >> 4]).collect()
+}
+
+/// Row `row` (16 colours) of `menu.clp` CLUT `clut`.
+fn clut_row(clp: &[u8], clut: usize, row: usize) -> Vec<[u8; 4]> {
+    clp_palette(clp, clut)[16 * row..16 * row + 16].to_vec()
+}
+
+/// The rectangle `r` (x, y, w, h) of a `w`-wide indexed image in `pal`.
+fn crop_indexed(idx: &[u8], w: u32, r: [u32; 4], pal: &[[u8; 4]]) -> Rgba {
+    let mut img = Rgba::new(r[2], r[3]);
+    for y in 0..r[3] {
+        for x in 0..r[2] {
+            let k = idx.get(((r[1] + y) * w + r[0] + x) as usize).copied().unwrap_or(0);
+            img.put(x, y, pal.get(usize::from(k)).copied().unwrap_or([0; 4]));
+        }
+    }
+    img
+}
+
+fn crop(src: &Rgba, r: [u32; 4]) -> Rgba {
+    let mut img = Rgba::new(r[2], r[3]);
+    for y in 0..r[3] {
+        for x in 0..r[2] {
+            img.put(x, y, src.get((r[0] + x).min(src.width - 1), (r[1] + y).min(src.height - 1)));
+        }
+    }
+    img
+}
+
+fn clear(img: &mut Rgba, r: [u32; 4]) {
+    for y in r[1]..(r[1] + r[3]).min(img.height) {
+        for x in r[0]..(r[0] + r[2]).min(img.width) {
+            img.put(x, y, [0; 4]);
+        }
+    }
+}
+
+/// `src` scaled bilinear into `dst`'s rectangle, edges clamped to `src`.
+fn paste_scaled(src: &Rgba, dst: &mut Rgba, d: [u32; 4]) {
+    blit(src, [0.0, 0.0, src.width as f32, src.height as f32], dst, d);
+}
+
+/// The HD `icon` (1024 x 512) with the PS2 item icons (ids below
+/// [`ICON_ITEMS`], every folder: no text) and the battle words at their PS2
+/// places ([`BATTLE_WORDS`]; `words` = the disc's for this folder, else the
+/// HD's moved there). None if the HD atlas is not the PS2 layout at 4x.
+fn convert_icon(idx: &[u8], clp: &[u8], hd: &Rgba, words: bool) -> Option<Rgba> {
+    if hd.width != ICON_W * 4 || hd.height != ICON_H * 4 || idx.len() < (ICON_W * ICON_H) as usize {
+        return None;
+    }
+    let s = 4;
+    let mut img = hd.clone();
+    for id in 0..ICON_ITEMS {
+        let r = [(id % 17) * 15, (id / 17) * 18, 15, 18];
+        let pal = clut_row(clp, ICON_CLUTS[(id >> 4) as usize], (id & 15) as usize);
+        let cell = crop_indexed(idx, ICON_W, r, &pal);
+        // the cell alone: its neighbours use other palettes
+        paste_scaled(&cell, &mut img, r.map(|v| v * s));
+    }
+    let pieces: Vec<(Rgba, [u32; 4])> = BATTLE_WORDS
+        .iter()
+        .enumerate()
+        .map(|(kind, &(p, h))| {
+            let ps2 = [p[0], p[1], p[2] - p[0], p[3] - p[1]];
+            let piece = if words {
+                crop_indexed(idx, ICON_W, ps2, &clut_row(clp, 13, 13 - kind))
+            } else {
+                crop(hd, [h[0], h[1], h[2] - h[0], h[3] - h[1]])
+            };
+            (piece, ps2.map(|v| v * s))
+        })
+        .collect();
+    for &(p, h) in &BATTLE_WORDS {
+        clear(&mut img, [h[0], h[1], h[2] - h[0], h[3] - h[1]]);
+        clear(&mut img, [p[0] * s, p[1] * s, (p[2] - p[0]) * s, (p[3] - p[1]) * s]);
+    }
+    for (piece, d) in &pieces {
+        paste_scaled(piece, &mut img, *d);
+    }
+    Some(img)
+}
+
+/// `strtex.fmt`: 512 x 128, 4 bit, 27 menu labels in 3 columns x 9 rows of
+/// 170 x 14 texels (cell n at ((n / 9) 170, (n % 9) 14)). The PS2 draws them
+/// (`0x00201768`, `0x002018e4`) with `menu.clp` CLUT 13 row 7 (a grey ramp
+/// with an alpha ramp); the PC's `TOMkpShape2ECCCell_008f8d50` takes the
+/// same cells over `TOGetImageWH(0x2ecc)` = 512 x 128. Text: only into the
+/// folder of the disc source's language.
+fn convert_strtex(idx: &[u8], clp: &[u8], hd: &Rgba) -> Option<Rgba> {
+    let (w, h) = (512u32, 128u32);
+    if hd.width % w != 0 || hd.height % h != 0 || hd.width / w != hd.height / h || idx.len() < (w * h) as usize {
+        return None;
+    }
+    let s = hd.width / w;
+    let pal = clut_row(clp, 13, 7);
+    let mut img = Rgba::new(hd.width, hd.height);
+    for n in 0..27 {
+        let r = [(n / 9) * 170, (n % 9) * 14, 170, 14];
+        let cell = crop_indexed(idx, w, r, &pal);
+        paste_scaled(&cell, &mut img, r.map(|v| v * s));
+    }
+    Some(img)
 }
 
 // --------------------------------------------------------------- portraits
@@ -801,22 +951,57 @@ pub fn convert(disc: &mut Disc, pc: &ffx_vbf::Archive, parts: Parts) -> Result<(
     if parts.menus {
         let sources = menu_sources(&region);
         for folder in ALL_MENU_FOLDERS {
-            let dir = sources.iter().find(|(_, f)| *f == folder).map_or(sources[0].0, |(d, _)| *d);
-            let (Some(clp), Some(idx)) = (disc.read(&format!("{dir}/menu.clp"))?, disc.read(&format!("{dir}/meswin.fmt"))?)
-            else {
-                continue;
-            };
-            let hd_path = format!("{PS3}/{folder}/d3d11/meswin.dds.phyre");
-            let Some((template, hd)) = load_hd(pc, &hd_path)? else { continue };
-            let a = &ATLASES[0];
-            let img = indexed(a.w, a.h, &idx, &clp_palette(&clp, a.palette));
-            let path = format!("{PS3}/{folder}/d3d11/{PS2_MESWIN}.dds.phyre");
-            done.push(Done {
-                file: phyretex::argb8_as(&template, &img, Some(("meswin.dds", PS2_MESWIN_ID)))?,
-                preview: side_by_side(&hd, &resize(&img, hd.width, hd.height)),
-                note: format!("{path}: the whole PS2 meswin, PS2 size ({dir})"),
-                path,
-            });
+            // the English game reads some sheets (`icon`) from `menu`, not `menu_us`
+            // (seen in the harness: the words drawn were `menu`'s), so `menu` gets the
+            // English source too
+            let lang = if folder == "menu" { "menu_us" } else { folder };
+            let own = sources.iter().any(|(_, f)| *f == lang);
+            let dir = sources.iter().find(|(_, f)| *f == lang).map_or(sources[0].0, |(d, _)| *d);
+            let Some(clp) = disc.read(&format!("{dir}/menu.clp"))? else { continue };
+            for (a, (name, id)) in ATLASES.iter().zip([(PS2_MESWIN, PS2_MESWIN_ID), (PS2_BATTLE, PS2_BATTLE_ID)]) {
+                let Some(idx) = disc.read(&format!("{dir}/{}.fmt", a.name))? else { continue };
+                let hd_path = format!("{PS3}/{folder}/d3d11/{}.dds.phyre", a.name);
+                let Some((template, hd)) = load_hd(pc, &hd_path)? else { continue };
+                let img = indexed(a.w, a.h, &idx, &clp_palette(&clp, a.palette));
+                let path = format!("{PS3}/{folder}/d3d11/{name}.dds.phyre");
+                done.push(Done {
+                    file: phyretex::argb8_as(&template, &img, Some((&format!("{}.dds", a.name), id)))?,
+                    preview: side_by_side(&hd, &resize(&img, hd.width, hd.height)),
+                    note: format!("{path}: the whole PS2 {}, PS2 size ({dir})", a.name),
+                    path,
+                });
+            }
+            // the item icons and battle words
+            let path = format!("{PS3}/{folder}/d3d11/icon.dds.phyre");
+            if let (Some(raw), Some((template, hd))) = (disc.read(&format!("{dir}/icon.fmt"))?, load_hd(pc, &path)?) {
+                match convert_icon(&nibbles(&raw), &clp, &hd, own) {
+                    Some(img) => done.push(Done {
+                        file: phyretex::argb8_from(&template, &img)?,
+                        preview: side_by_side(&hd, &img),
+                        note: format!(
+                            "{path}: {ICON_ITEMS} PS2 item icons, battle words at the PS2 places ({})",
+                            if own { dir } else { "HD words" }
+                        ),
+                        path,
+                    }),
+                    None => notes.push(format!("{path}: not the PS2 layout at 4x, kept HD")),
+                }
+            }
+            // the battle and menu labels (text: the disc's languages only)
+            let path = format!("{PS3}/{folder}/d3d11/strtex.dds.phyre");
+            if own {
+                if let (Some(raw), Some((template, hd))) = (disc.read(&format!("{dir}/strtex.fmt"))?, load_hd(pc, &path)?) {
+                    match convert_strtex(&nibbles(&raw), &clp, &hd) {
+                        Some(img) => done.push(Done {
+                            file: phyretex::argb8_from(&template, &img)?,
+                            preview: side_by_side(&hd, &img),
+                            note: format!("{path}: the PS2 labels ({dir})"),
+                            path,
+                        }),
+                        None => notes.push(format!("{path}: not the PS2 layout, kept HD")),
+                    }
+                }
+            }
         }
     }
 
@@ -1021,9 +1206,10 @@ impl UiJob {
 
 impl Job for UiJob {
     /// 2: textures with mip chains (phyretex::mip_chain). 3: the PS2 meswin
-    /// as its own texture (`ps2win`, ui.menus).
+    /// as its own texture (`ps2win`, ui.menus). 4: `ps2btl`, the PS2 item
+    /// icons and battle words (`icon`), `strtex`.
     fn version(&self) -> u32 {
-        3
+        4
     }
     fn name(&self) -> &'static str {
         self.name

@@ -124,12 +124,14 @@ internal static unsafe class MainMenuPatches {
     private const uint HELP_MES  = 0x01841c00;   // g_TkMenuHelpMessage
 
     private const int MESWIN = 0x3e00;
+    private const int BATTLE = 0x3f00;
     private const uint GREY = 0x80808080;
 
     private static FhLogger? _log;
     private static int _logged;
     private static readonly List<Delegate> _keep = [];
     private static int _scope;        // > 0 while a ported draw runs: meswin is the PS2 atlas
+    private static int _btl_scope;    // > 0 while a ported battle draw runs: the battle atlas is the PS2 one
     private static bool _in_draw_all; // TkMenuDrawAll is running (its background is the PS2 one)
     private static readonly Dictionary<nint, nint> _ps2_names = [];
 
@@ -213,25 +215,35 @@ internal static unsafe class MainMenuPatches {
     /// loaded (PhyreScene_loadMenuTexture), the first time it is asked for; until the asynchronous
     /// load is done the menu manager skips the draws ("Need update TextureName").
     /// </summary>
-    private static nint ps2_name(nint meswin) {
+    private static nint ps2_name(nint hd, string from, string to) {
         lock (_ps2_names) {
-            if (_ps2_names.TryGetValue(meswin, out nint known)) return known;
-            string? name = Marshal.PtrToStringAnsi(meswin);
-            int at = name?.LastIndexOf("meswin.dds", StringComparison.OrdinalIgnoreCase) ?? -1;
-            nint ours = meswin;
+            if (_ps2_names.TryGetValue(hd, out nint known)) return known;
+            string? name = Marshal.PtrToStringAnsi(hd);
+            int at = name?.LastIndexOf(from, StringComparison.OrdinalIgnoreCase) ?? -1;
+            nint ours = hd;
             if (name is not null && at >= 0) {
-                ours = Marshal.StringToHGlobalAnsi(name[..at] + "ps2win.dds" + name[(at + "meswin.dds".Length)..]);
+                ours = Marshal.StringToHGlobalAnsi(name[..at] + to + name[(at + from.Length)..]);
                 _load!(ours);
                 _log?.Info($"ui.menus: PS2 atlas {Marshal.PtrToStringAnsi(ours)} loading");
             }
-            _ps2_names[meswin] = ours;
+            _ps2_names[hd] = ours;
             return ours;
         }
     }
 
     private static nint shape_name(int id) {
         nint name = _shape_name_next!(id);
-        return id == MESWIN && Volatile.Read(ref _scope) > 0 ? ps2_name(name) : name;
+        if (id == MESWIN && Volatile.Read(ref _scope) > 0) return ps2_name(name, "meswin.dds", "ps2win.dds");
+        // the PS2 battle atlas (converter uijob::PS2_BATTLE), only inside battle_scoped draws
+        if (id == BATTLE && Volatile.Read(ref _btl_scope) > 0) return ps2_name(name, "battle.dds", "ps2btl.dds");
+        return name;
+    }
+
+    /// <summary>Runs a draw with sheet 0x3f00 (the battle atlas) answered by the PS2 one, ps2btl.</summary>
+    public static void battle_scoped(Action draw) {
+        bind();
+        Interlocked.Increment(ref _btl_scope);
+        try { draw(); } finally { Interlocked.Decrement(ref _btl_scope); }
     }
 
     private static int scoped(Func<int> draw) {
