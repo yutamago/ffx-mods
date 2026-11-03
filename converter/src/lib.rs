@@ -6,6 +6,7 @@
 pub mod bake;
 pub mod bgjob;
 pub mod build;
+pub mod chralpha;
 pub mod chrjob;
 pub mod config;
 pub mod disc;

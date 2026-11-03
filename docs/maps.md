@@ -125,6 +125,24 @@ written opaque. Many PS2 textures carry alpha `0x40`/`0x7f` that the PS2
 blend mode ignores, and in the HD material it would make the surface
 see-through. Otherwise the PS2 alpha is kept (cut-outs: plants, fences).
 
+Checked against the PS2 draws (2026-11-02, the transparency report for
+characters, `docs/models.md` "Alpha"): unlike characters, map draws choose
+blending per draw. In bsil00's `.vpa` the GIF tags after the TEX0 writes
+carry `PRIM` `0x29d`/`0x2bb` (AA1, no ABE) 1,950 times, `0x25d`/`0x27b`
+(ABE: blended with `ALPHA_2` `0x44` and the texture's alpha) 1,012 times,
+and `0x23b`/`0x21d` (neither) 784 times; TEX0 has TCC set in 809 of 813
+writes. The same page is drawn both ways (`0x2f00`: 72 blended, 35 not), so
+which HD region was blended cannot be told from the page, and the region
+UVs of the draws are not decoded. The HD material decides anyway: of the
+463 Besaid textures whose HD art is opaque, 13 have PS2 texels with alpha
+0 on more than 5 % of the region, and those are drawn by opaque HD
+materials (bsil00 `12928_20_128_000`: segment 142, 1,217 triangles of
+ground, variant without `ALPHA_ENABLED`), where PS2 alpha would change
+nothing or punch holes. The 348 textures with HD alpha keep the PS2 alpha,
+and 219 of them have PS2 cut-outs. In game (`tools/replays/field-besaid.txt`)
+the palm leaves and hanging plants over the beach path are cut out, not
+solid. So the rule stays.
+
 ## Counts (German PAL disc, all 296 HD maps)
 
 | Result | Textures |

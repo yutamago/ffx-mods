@@ -33,6 +33,11 @@ pub struct Page {
 pub struct Report {
     pub frame_share: f32,
     pub pages: Vec<Page>,
+    /// The HD model with the materials of the segments that sample
+    /// see-through PS2 texels blended (`chralpha`) and its asset list with
+    /// the shader variants added: (archive path, bytes) each, and a note.
+    /// Only for models whose mesh was kept (not remodelled).
+    pub model: Option<(Vec<(String, Vec<u8>)>, String)>,
     /// HD pages skipped, with the share of matched triangles.
     pub skipped: Vec<(String, f32)>,
 }
@@ -74,7 +79,8 @@ fn bake_chr_with(
     let Some(entry) = pc.find(&hd_path) else {
         return Ok(None);
     };
-    let model = ffx_phyre::Model::parse(&pc.read(entry)?).with_context(|| hd_path.clone())?;
+    let hd_bytes = pc.read(entry)?;
+    let model = ffx_phyre::Model::parse(&hd_bytes).with_context(|| hd_path.clone())?;
 
     let ps2_pos: Vec<[i32; 3]> = chr
         .triangles
@@ -94,7 +100,10 @@ fn bake_chr_with(
     // HD triangles per base-colour texture.
     let mut by_page: BTreeMap<String, (Vec<bake::Job>, Vec<bake::Pending>, usize)> =
         BTreeMap::new();
-    for seg in &model.segments {
+    // Segments with a triangle whose PS2 twin samples see-through texels,
+    // with their page.
+    let mut see_through: Vec<(usize, String)> = Vec::new();
+    for (s, seg) in model.segments.iter().enumerate() {
         let Some(tex) = seg
             .material
             .and_then(|m| model.materials.get(m))
@@ -107,6 +116,21 @@ fn bake_chr_with(
         }
         let (jobs, pending, total) =
             bake::match_triangles(&index, &frame, &seg.positions, &seg.uvs, &seg.indices);
+        if paint {
+            let (mut n, mut all) = (0, 0);
+            for j in &jobs {
+                let (a, b) = see_through_job(&chr, j);
+                n += a;
+                all += b;
+            }
+            let share = n as f32 / all.max(1) as f32;
+            if std::env::var_os("DM_ALPHA").is_some() {
+                eprintln!("{name} seg {s}: {} tris, see-through {n} of {all} texels ({:.2}%)", jobs.len(), share * 100.0);
+            }
+            if share >= crate::chralpha::MIN_SHARE {
+                see_through.push((s, tex.archive_path()));
+            }
+        }
         let e = by_page.entry(tex.archive_path()).or_default();
         e.0.extend(jobs);
         e.1.extend(pending);
@@ -116,6 +140,7 @@ fn bake_chr_with(
     let mut report = Report {
         frame_share,
         pages: Vec::new(),
+        model: None,
         skipped: Vec::new(),
     };
     for (path, (mut jobs, pending, total)) in by_page {
@@ -183,7 +208,41 @@ fn bake_chr_with(
         });
         report.pages.extend(frames);
     }
+    // The PS2 drew those texels see-through (`chralpha`); where the HD
+    // material does not blend, it gets its blended twin. A remodelled
+    // model is the model converter's (`models::remodelled`).
+    let remodelled = !report.skipped.is_empty() && report.frame_share < 0.6;
+    let painted: std::collections::BTreeSet<&str> = report.pages.iter().map(|p| p.path.as_str()).collect();
+    let segs: Vec<u32> = see_through
+        .iter()
+        .filter(|(_, page)| painted.contains(page.as_str()))
+        .map(|&(s, _)| u32::try_from(s))
+        .collect::<Result<_, _>>()?;
+    if !remodelled && !segs.is_empty() {
+        let variants = crate::chralpha::Variants::get(pc)?;
+        let mut edit = ffx_phyre::edit::ClusterEdit::parse(&hd_bytes).context("edit")?;
+        let note = crate::chralpha::blend_in_place(&mut edit, &segs, variants)?;
+        if note.switched + note.lowered > 0 {
+            let mut files = vec![(hd_path.clone(), edit.write().context("writing")?)];
+            if note.switched > 0 {
+                let list_path = format!("ffx_data/gamedata/ps3data/chr/{kind}/{name}/{name}.ahwin32");
+                let list = pc.read(pc.find(&list_path).with_context(|| format!("no {list_path}"))?)?;
+                let entries = crate::chralpha::list_entries(&edit)?;
+                files.push((list_path, ffx_phyre::assets::add_files(&list, &entries)?));
+            }
+            report.model = Some((files, note.text));
+        }
+    }
     Ok(Some(report))
+}
+
+/// The texels the PS2 triangle of `job` samples and how many are
+/// see-through.
+fn see_through_job(chr: &Chr, job: &bake::Job) -> (usize, usize) {
+    let uv = job.ps2_uv.map(|[u, v]| [f64::from(u) / 16.0, f64::from(v) / 16.0]);
+    crate::chralpha::coverage(uv, |x, y| {
+        chr.sample(job.material, (x * 16 + 8) as f32, (y * 16 + 8) as f32).map_or(255, |c| c[3])
+    })
 }
 
 /// The animation textures of a kept mesh whose animated material
@@ -359,7 +418,7 @@ impl Job for ChrJob {
                 .filter(|(k, _)| self.kinds.contains(&k.as_str()))
                 .collect())
         })?;
-        let (mut pages, mut kept, mut failed) = (0, 0, 0);
+        let (mut pages, mut kept, mut failed, mut blended) = (0, 0, 0, 0);
         // A model can use another model's page. The page's own model wins,
         // then the first in name order; pages of other models wait until
         // the end. Baking runs in parallel in chunks, writing in name order,
@@ -393,6 +452,13 @@ impl Job for ChrJob {
                             ));
                         }
                         kept += r.skipped.len();
+                        if let Some((files, note)) = &r.model {
+                            ctx.note(format!("{kind}/{name}: see-through texels: {note}"));
+                            blended += 1;
+                            for (path, bytes) in files {
+                                out.put(path, bytes)?;
+                            }
+                        }
                         let own = format!("/chr/{kind}/{name}/");
                         for p in r.pages {
                             ctx.note(format!(
@@ -416,7 +482,7 @@ impl Job for ChrJob {
             pages += usize::from(out.put(&p.path, &p.file)?);
         }
         let mut s = format!(
-            "{} models, {pages} pages, {kept} pages of remodelled meshes left HD",
+            "{} models, {pages} pages, {kept} pages of remodelled meshes left HD, {blended} models with see-through materials blended",
             names.len()
         );
         if failed > 0 {

@@ -22,6 +22,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use anyhow::{Context, Result, bail, ensure};
 
+use crate::chralpha;
 use crate::config::Config;
 use crate::disc::Disc;
 use crate::jobs::{Ctx, Job, Output};
@@ -218,7 +219,8 @@ impl Job for ModelsJob {
                     let hd_path =
                         format!("ffx_data/gamedata/ps3data/chr/{kind}/{name}/mdl/d3d11/{name}.dae.phyre");
                     let original = ctx.pc.read(ctx.pc.find(&hd_path).context("no HD model")?)?;
-                    convert_bytes(&chr, &original, &hd_path, |p| {
+                    let variants = chralpha::Variants::get(ctx.pc)?;
+                    convert_bytes(&chr, &original, &hd_path, variants, |p| {
                         ctx.pc.find(p).map(|e| ctx.pc.read(e)).transpose().map_err(Into::into)
                     })
                     .map(Some)
@@ -258,8 +260,11 @@ pub fn convert(disc: &mut Disc, pc: &ffx_vbf::Archive, kind: &str, name: &str) -
         return Ok(None);
     };
     let original = pc.read(entry)?;
-    convert_bytes(&chr_bytes, &original, &hd_path, |p| pc.find(p).map(|e| pc.read(e)).transpose().map_err(Into::into))
-        .map(Some)
+    let variants = chralpha::Variants::get(pc)?;
+    convert_bytes(&chr_bytes, &original, &hd_path, variants, |p| {
+        pc.find(p).map(|e| pc.read(e)).transpose().map_err(Into::into)
+    })
+    .map(Some)
 }
 
 /// The face of a character with texture animation: its triangles go into
@@ -511,6 +516,7 @@ pub fn convert_bytes(
     chr_bytes: &[u8],
     original: &[u8],
     hd_path: &str,
+    variants: &chralpha::Variants,
     read: impl Fn(&str) -> Result<Option<Vec<u8>>>,
 ) -> Result<Converted> {
     let mut report = String::new();
@@ -836,6 +842,12 @@ pub fn convert_bytes(
     let mut prim_bones: Vec<BTreeSet<u16>> = Vec::new();
     let mut prim_keys: Vec<HashMap<(usize, u16, u16, [u16; 2], u8), u32>> = Vec::new();
     let mut prim_slot: Vec<(usize, usize)> = Vec::new();
+    // See-through texels (`chralpha`): template triangles that sample them
+    // go into segments of their own (blended); cloth and face segments are
+    // blended whole. Per primitive: blended, (see-through, sampled) texels.
+    let mut prim_blend: Vec<bool> = Vec::new();
+    let mut prim_cov: Vec<(usize, usize)> = Vec::new();
+    let page_image: HashMap<u8, &Rgba> = pages.iter().map(|p| (p.0, &p.1)).collect();
     // Order: by model, then texture, keeping the strip order.
     let mut order: Vec<(usize, usize)> = Vec::new();
     for (mi, m) in mesh.models.iter().enumerate() {
@@ -964,15 +976,23 @@ pub fn convert_bytes(
         // what the triangle goes into: 0 the template, 1 the face, 2 + c cloth target c
         let k = (target[mi], cloth.map_or(usize::from(on_face), |c| 2 + c));
         let slot = &slots[&k.0];
+        let cov = {
+            let img = page_image[&t.texture];
+            chralpha::coverage(t.corners.map(|c| c.uv.map(|x| f64::from(x) / 16.0)), |x, y| {
+                img.get(x.clamp(0, i64::from(img.width) - 1) as u32, y.clamp(0, i64::from(img.height) - 1) as u32)[3]
+            })
+        };
+        let blend = k.1 == 0 && cov.0 > 0;
         let fits = |p: usize| {
             prim_slot[p] == k
+                && prim_blend[p] == blend
                 && prim_bones[p].union(&bones).count() <= MAX_PALETTE
                 && prims[p].positions.len() + 3 <= 0xffff
         };
         let p = match (0..prims.len()).rev().find(|&p| fits(p)) {
             Some(p) => p,
             None => {
-                let first = !prim_slot.contains(&k);
+                let first = !(0..prims.len()).any(|p| prim_slot[p] == k && prims[p].segment.is_some());
                 let (segment, material) = match (&face, k.1) {
                     (_, c @ 2..) => (cloth_targets[c - 2].segment, cloth_targets[c - 2].material),
                     (Some(f), 1) => (Some(f.segment), f.material),
@@ -986,10 +1006,14 @@ pub fn convert_bytes(
                 prim_bones.push(BTreeSet::new());
                 prim_keys.push(HashMap::new());
                 prim_slot.push(k);
+                prim_blend.push(blend);
+                prim_cov.push((0, 0));
                 prims.len() - 1
             }
         };
         prim_bones[p].extend(bones.iter().copied());
+        prim_cov[p].0 += cov.0;
+        prim_cov[p].1 += cov.1;
         let pl = page_of[&t.texture];
         let mut idx = [0u32; 3];
         for (j, c) in t.corners.iter().enumerate() {
@@ -1049,16 +1073,21 @@ pub fn convert_bytes(
     let cloth_triangles: usize = prims.iter().zip(&prim_slot).filter(|(_, k)| k.1 >= 2).map(|(p, _)| p.indices.len() / 3).sum();
     // the glTF order (by instance, then primitive): the order of the
     // segments the import writes
-    let mut meshes: BTreeMap<usize, Vec<(Primitive, usize)>> = BTreeMap::new();
-    for (p, k) in prims.into_iter().zip(&prim_slot) {
-        meshes.entry(k.0).or_default().push((p, k.1));
+    let mut meshes: BTreeMap<usize, Vec<(Primitive, usize, bool)>> = BTreeMap::new();
+    for (((p, k), b), c) in prims.into_iter().zip(&prim_slot).zip(&prim_blend).zip(&prim_cov) {
+        // blended: a template primitive of see-through triangles, a cloth
+        // piece with any see-through texel, a face with 1 % or more
+        let b = *b
+            || (k.1 >= 2 && c.0 > 0)
+            || (k.1 == 1 && c.0 as f32 >= chralpha::MIN_SHARE * c.1 as f32 && c.0 > 0);
+        meshes.entry(k.0).or_default().push((p, k.1, b));
     }
-    // (vertices, indices, kind) per primitive: to find the segment each became
+    // (vertices, indices, kind, blended) per primitive: to find the segment each became
     let first = |p: &[[f32; 3]]| p.first().map(|v| v.map(f32::to_bits));
-    let kinds: Vec<(usize, usize, Option<[u32; 3]>, usize)> = meshes
+    let kinds: Vec<(usize, usize, Option<[u32; 3]>, usize, bool)> = meshes
         .values()
         .flatten()
-        .map(|x| (x.0.positions.len(), x.0.indices.len(), first(&x.0.positions), x.1))
+        .map(|x| (x.0.positions.len(), x.0.indices.len(), first(&x.0.positions), x.1, x.2))
         .collect();
     let meshes: BTreeMap<usize, Vec<Primitive>> =
         meshes.into_iter().map(|(k, v)| (k, v.into_iter().map(|x| x.0).collect())).collect();
@@ -1077,6 +1106,7 @@ pub fn convert_bytes(
     // What each written segment holds (the import lists them sorted).
     let mut unused = kinds.clone();
     let mut seg_kind: Vec<(usize, usize)> = Vec::new();
+    let mut blended: Vec<u32> = Vec::new();
     for &s in &imported.segments {
         let seg = &out_model.segments[s];
         let i = unused
@@ -1085,10 +1115,13 @@ pub fn convert_bytes(
             .with_context(|| format!("segment {s} matches no primitive"))?;
         let k = unused.remove(i);
         ensure!(
-            !unused.iter().any(|u| u.0 == k.0 && u.1 == k.1 && u.2 == k.2 && u.3 != k.3),
+            !unused.iter().any(|u| u.0 == k.0 && u.1 == k.1 && u.2 == k.2 && (u.3 != k.3 || u.4 != k.4)),
             "segment {s} matches primitives of two kinds"
         );
         seg_kind.push((s, k.3));
+        if k.4 {
+            blended.push(u32::try_from(s)?);
+        }
     }
     let mut hidden = 0;
     for (s, seg) in out_model.segments.iter_mut().enumerate() {
@@ -1167,6 +1200,10 @@ pub fn convert_bytes(
             if f.maya.is_some() { " (MAYA rectangle)" } else { "" }
         );
     }
+    // Segments with see-through texels draw blended like the PS2 (after the
+    // face's rectangle is set: a copied material keeps it).
+    report += &chralpha::blend_segments(&mut edit, &blended, variants)?;
+    let shader_entries = chralpha::list_entries(&edit)?;
     let bytes = edit.write().context("writing")?;
     let check = ffx_phyre::Model::parse(&bytes).context("re-reading")?;
     for &s in &imported.segments {
@@ -1204,6 +1241,8 @@ pub fn convert_bytes(
         }
         None => ffx_phyre::assets::add_files(&list, &[atlas_entry])?,
     };
+    // the blended twins' shader variants
+    let list = ffx_phyre::assets::add_files(&list, &shader_entries)?;
     files.push((list_path, list));
     Ok(Converted {
         files,
