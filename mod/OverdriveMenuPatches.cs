@@ -108,30 +108,7 @@ internal static unsafe class OverdriveMenuPatches {
         first(1, "ui.menus: Overdrive screen's plates drawn the PS2 way");
     });
 
-    /// <summary>PS2 0x00225f38(x, y, chr): the front-line band, then the party plate 0x00200c60.</summary>
-    private static void status_plate(int x, int y, int chr) {
-        if ((Ps2Menu.u32(PARTY_MASK) >> chr & 1) != 0)
-            Ps2Menu.box(x + Ps2Menu.i16(POS_NOACTIVE), y + Ps2Menu.i16(POS_NOACTIVE + 2), 512, Ps2Menu.i16(NOACTIVE_H),
-                Ps2Menu.u32(COL_NOACTIVE0), Ps2Menu.u32(COL_NOACTIVE1));
-        if ((uint)chr >= 8) return; // aeons have no Overdrive screen (the PS2's aeon branch: plates 0xcc/0xcd)
-        Ps2Menu.plate_lr(4, 5, x, y, Ps2Menu.i16(NAMEPLT_W), Ps2Menu.u32(COL_NAMEPLT0), Ps2Menu.u32(COL_NAMEPLT1));
-        var namestr = Ps2Menu.point(POS_NAMESTR);
-        Ps2Menu.font(Ps2Menu.fn<Ps2Menu.PtrOfInt>(CHR_NAME)(chr), x + namestr.x, y + namestr.y, call(DAMAGE_CLASS, chr));
-        var hptex = Ps2Menu.point(POS_HPTEX);
-        var hpstr = Ps2Menu.point(POS_HPSTR);
-        Ps2Menu.shape(0x21, x + hptex.x, y + hptex.y);
-        Ps2Menu.font_s($"{call(HP, chr),5}/{call(MAX_HP, chr),5}", x + hpstr.x, y + hpstr.y, 0x25);
-        var mptex = Ps2Menu.point(POS_MPTEX);
-        var mpstr = Ps2Menu.point(POS_MPSTR);
-        Ps2Menu.shape(0x22, x + mptex.x, y + mptex.y);
-        Ps2Menu.font_s($"{call(MP, chr),4}/{call(MAX_MP, chr),4}", x + mpstr.x, y + mpstr.y, 0x25);
-        Ps2Menu.shape_wh(0xe7, 0, y, 512, 0, GREY, GREY);
-        var slv = Ps2Menu.point(POS_SLVSHAPE);
-        var spstr = Ps2Menu.point(POS_SPSTR);
-        Ps2Menu.shape(0x107, x + slv.x + 0x68, y + slv.y);
-        Ps2Menu.value_m(call(SPHERE_LV, chr), x + slv.x + spstr.x, y + slv.y + spstr.y, 0);
-        Ps2Menu.value_s(call(NEXT_AP, chr) - call(SAVE_NEXT_AP, chr), x + slv.x + 0x8b, y + slv.y - 13, 0x25);
-    }
+    private static void status_plate(int x, int y, int chr) => Ps2Menu.party_plate(x, y, chr);
 
     /// <summary>
     /// PS2 0x00229d60(x, y, chr) (the Status screen's too): the Overdrive plate's pieces at their
@@ -282,13 +259,7 @@ internal static unsafe class OverdriveMenuPatches {
         }
     }
 
-    /// <summary>PS2 0x00225e90 -> 0x00200878: a dark track, a light thumb over rows top .. top + shown of total.</summary>
-    private static void scroll_bar(int x, int y, int w, int h, int top, int shown, int total) {
-        Ps2Menu.box_rgba(x, y, w, h, 0x11, 0x11, 0x11, 0x80);
-        float t = top == 0 ? y : y + (float)h * top / total;
-        float b = top + shown >= total ? y + h : y + (float)h * (top + shown) / total;
-        Ps2Menu.box_rgba(x + 1, (int)t, w - 2, (int)b - (int)t, 0xf0, 0xf0, 0xf0, 0x80);
-    }
+    private static void scroll_bar(int x, int y, int w, int h, int top, int shown, int total) => Ps2Menu.scroll_bar(x, y, w, h, top, shown, total);
 
     // ---- install ------------------------------------------------------------------------------------
 

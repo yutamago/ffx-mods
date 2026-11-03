@@ -150,6 +150,94 @@ internal static unsafe class Ps2Menu {
     /// <summary>The 16x12 font with a managed string.</summary>
     public static void font(string s, int x, int y, int colour) => text(s, p => font(p, x, y, colour));
 
+    // ---- shared PS2 menu pieces ------------------------------------------------------------------
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)] public delegate void SheetCell(int cell, float x, float y, float w, float h);
+    public const uint SHEET_CELL = 0x008f8bb0;  // TODrawSheetCell_008f8bb0: strtex (0x2ecc) cell (PS2 0x00201768)
+    public const uint COL_BSOPLT0 = 0x025d16a0; // plate colour pairs bso, bitem, bab, lmt (c0, c1 4 bytes apart)
+
+    /// <summary>
+    /// A list row's plate by kind (PS2 0x00226d90 -> TOAdpShapeByKind 0x001f4c60; the PC's builder
+    /// 0x008f1a90 lost kind 1's line): meswin 0xda at x in c0, 0xdb from x + 16, 209 wide, c0 -> c1;
+    /// kind &amp; 3 adds 0xd7, 0x10b or 0x10a at x + 97 in black; kind &gt;&gt; 3 picks col_bsoplt (grey),
+    /// col_bitemplt (gold), col_babplt (purple), col_lmtplt.
+    /// </summary>
+    public static void kind_plate(int x, int y, int kind) {
+        uint at = COL_BSOPLT0 - 8 * (uint)((kind >> 3) & 3);
+        uint c0 = u32(at), c1 = u32(at - 4);
+        shape_wh(0xda, x, y, 0, 0, c0, c0);
+        shape_wh(0xdb, x + 16, y, 209, 0, c0, c1);
+        int extra = (kind & 3) switch { 1 => 0xd7, 2 => 0x10b, 3 => 0x10a, _ => 0 };
+        if (extra != 0) shape_c2(extra, x + 97, y, SHADOW, SHADOW);
+    }
+
+    /// <summary>PS2 0x00200a60 / 0x00200878: a dark track, a light thumb over rows top .. top + shown of count.</summary>
+    public static void scroll_bar(int x, int y, int w, int h, int top, int shown, int count) {
+        box_rgba(x, y, w, h, 0x11, 0x11, 0x11, 0x80);
+        float t = top == 0 ? y : y + (float)h * top / count;
+        float b = top + shown >= count ? y + h : y + (float)h * (top + shown) / count;
+        box_rgba(x + 1, (int)t, w - 2, (int)b - (int)t, 0xf0, 0xf0, 0xf0, 0x80);
+    }
+
+    /// <summary>A label (PS2 0x00226218 -> 0x00201a70): a black plate 0xda/0xdb 213 wide, strtex cell k at (+21, +5), 170 x 14.</summary>
+    public static void label_plate(int x, int y, int k) {
+        plate_rl(0xda, 0xdb, x, y, 213, SHADOW, SHADOW);
+        fn<SheetCell>(SHEET_CELL)(k, x + 21, y + 5, 170, 14);
+    }
+
+    // the party plate's layout (TOSeqInitParam, mirrored points; TkMn2GetMainPos)
+    private const uint NAMEPLT_W = 0x025d1672, COL_NAMEPLT0 = 0x025d166c, COL_NAMEPLT1 = 0x025d1668;
+    private const uint POS_NAMESTR = 0x025d1662, POS_HPTEX = 0x025d165e, POS_HPSTR = 0x025d165a;
+    private const uint POS_MPTEX = 0x025d1656, POS_MPSTR = 0x025d1652, POS_SLVSHAPE = 0x025d164e, POS_SPSTR = 0x025d164a;
+    private const uint NOACTIVE_H = 0x023cc13e, POS_NOACTIVE = 0x023cc144, COL_NOACTIVE0 = 0x023cc148, COL_NOACTIVE1 = 0x023cc140;
+    private const uint PARTY_MASK = 0x01841c2c; // the front-line bits
+    private const uint CHR_NAME = 0x008ac850, DAMAGE_CLASS = 0x008a99f0, SPHERE_LV = 0x008a9b80;
+    private const uint HP = 0x008a98c0, MAX_HP = 0x008a9990, MP = 0x008a9970, MAX_MP = 0x008a99b0;
+    private const uint NEXT_AP = 0x00784e90, SAVE_NEXT_AP = 0x007852b0;
+
+    /// <summary>
+    /// PS2 0x00225f38 -> 0x00200c60 (the PC's MenuStatus_DrawLayoutRow / TOMenuDrawChrLayoutPlate):
+    /// the light band for a front-line member, then the party plate: plate 4/5, the name in the
+    /// damage colour, HP/MP labels and "%5d/%5d", "%4d/%4d" in font S 0x25, shape 0xe7 across the
+    /// screen, shape 0x107 (S.LV badge, "Next ... AP") at pos_slvshape + (0x68, 0), the sphere level
+    /// in font M 0 and the AP to the next level in font S 0x25 at pos_slvshape + (139, -13). Aeons
+    /// (chr 8 and up): plate 0xcc/0xcd, shapes 0xe9/0xea, 0xe7, 0x107. The places are the menu
+    /// sequence's (the main menu's party rows use the same); the MP string's last cell ends at x 296,
+    /// where the S.LV label begins.
+    /// </summary>
+    public static void party_plate(int x, int y, int chr) {
+        if (chr >= 0 && chr < 32 && (u32(PARTY_MASK) & (1u << chr)) != 0)
+            box(x + i16(POS_NOACTIVE), y + i16(POS_NOACTIVE + 2), 512, i16(NOACTIVE_H), u32(COL_NOACTIVE0), u32(COL_NOACTIVE1));
+        var hptex = point(POS_HPTEX);
+        var mptex = point(POS_MPTEX);
+        var slv = point(POS_SLVSHAPE);
+        int w = i16(NAMEPLT_W);
+        uint c0 = u32(COL_NAMEPLT0), c1 = u32(COL_NAMEPLT1);
+        if ((uint)chr >= 8) {
+            plate_lr(0xcc, 0xcd, x, y, w, c0, c1);
+            shape(0xe9, x + hptex.x, y + hptex.y);
+            shape(0xea, x + mptex.x, y + mptex.y);
+            shape_wh(0xe7, 0, y, 512, 0, GREY, GREY);
+            shape(0x107, x + slv.x + 0x68, y + slv.y);
+            return;
+        }
+        var v = fn<IntOfInt>;
+        plate_lr(4, 5, x, y, w, c0, c1);
+        var namestr = point(POS_NAMESTR);
+        font(fn<PtrOfInt>(CHR_NAME)(chr), x + namestr.x, y + namestr.y, v(DAMAGE_CLASS)(chr));
+        var hpstr = point(POS_HPSTR);
+        var mpstr = point(POS_MPSTR);
+        shape(0x21, x + hptex.x, y + hptex.y);
+        font_s($"{v(HP)(chr),5}/{v(MAX_HP)(chr),5}", x + hpstr.x, y + hpstr.y, 0x25);
+        shape(0x22, x + mptex.x, y + mptex.y);
+        font_s($"{v(MP)(chr),4}/{v(MAX_MP)(chr),4}", x + mpstr.x, y + mpstr.y, 0x25);
+        shape_wh(0xe7, 0, y, 512, 0, GREY, GREY);
+        var spstr = point(POS_SPSTR);
+        shape(0x107, x + slv.x + 0x68, y + slv.y);
+        value_m(v(SPHERE_LV)(chr), x + slv.x + spstr.x, y + slv.y + spstr.y, 0);
+        value_s(v(NEXT_AP)(chr) - v(SAVE_NEXT_AP)(chr), x + slv.x + 139, y + slv.y - 13, 0x25);
+    }
+
     // ---- the PS2 fonts M and S ------------------------------------------------------------------
 
     /// <summary>

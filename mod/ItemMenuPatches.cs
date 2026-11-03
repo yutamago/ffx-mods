@@ -230,20 +230,7 @@ internal static unsafe class ItemMenuPatches {
 
     // ---- shared pieces ------------------------------------------------------------------------
 
-    /// <summary>
-    /// A list row's plate by kind (PS2 TOAdpShapeByKind 0x001f4c60; the PC's 0x008f1b50 lost kind 1's
-    /// line): shape 0xda at x in c0, 0xdb from x + 16, 209 wide, c0 -> c1; kind &amp; 3 adds 0xd7, 0x10b
-    /// or 0x10a at x + 97 in black (alpha 0x80); kind &gt;&gt; 3 picks the colour pair col_bsoplt,
-    /// col_bitemplt, col_babplt, col_lmtplt.
-    /// </summary>
-    private static void plate(int x, int y, int kind) {
-        uint at = COL_BSOPLT0 - 8 * (uint)((kind >> 3) & 3);
-        uint c0 = u32(at), c1 = u32(at - 4);
-        _shape_wh!(0xda, x, y, 0, 0, c0, c0);
-        _shape_wh!(0xdb, x + 16, y, 209, 0, c0, c1);
-        int extra = (kind & 3) switch { 1 => 0xd7, 2 => 0x10b, 3 => 0x10a, _ => 0 };
-        if (extra != 0) Ps2Menu.shape_c2(extra, x + 97, y, SHADOW, SHADOW);
-    }
+    private static void plate(int x, int y, int kind) => Ps2Menu.kind_plate(x, y, kind);
 
     /// <summary>An icon and a name (PS2 0x001f5100 / 0x001f5068 / 0x001f5420): icon at (+12, +1), 15 x 18; name at (+29, +1) in the 16x12 font.</summary>
     private static void icon_name(int icon, nint name, int x, int y, int colour) {
@@ -291,13 +278,7 @@ internal static unsafe class ItemMenuPatches {
 
     private static int i32_at(uint va) => (int)u32(va);
 
-    /// <summary>PS2 0x00200a60: a dark track, a light thumb over rows top .. top + shown of count.</summary>
-    private static void scroll_bar(int x, int y, int w, int h, int top, int shown, int count) {
-        _box_rgba!(x, y, w, h, 0x11, 0x11, 0x11, 0x80);
-        float t = top == 0 ? y : y + (float)h * top / count;
-        float b = top + shown >= count ? y + h : y + (float)h * (top + shown) / count;
-        _box_rgba!(x + 1, (int)t, w - 2, (int)b - (int)t, 0xf0, 0xf0, 0xf0, 0x80);
-    }
+    private static void scroll_bar(int x, int y, int w, int h, int top, int shown, int count) => Ps2Menu.scroll_bar(x, y, w, h, top, shown, count);
 
     /// <summary>One row (PS2 0x0024ecf0) by the list kind (+0x43): 0 items, 1 key items, 2 commands.</summary>
     private static void row(nint w, int x, int y, int idx, int mode) {

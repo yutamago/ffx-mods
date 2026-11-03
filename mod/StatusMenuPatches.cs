@@ -186,19 +186,7 @@ internal static unsafe class StatusMenuPatches {
     /// <summary>PS2 0x00226fc8: the record's rectangle as an untextured box, c0 left -> c1 right.</summary>
     private static void box(in Plate p) => Ps2Menu.box(p.x, p.y, p.w, p.h, p.c0, p.c1);
 
-    /// <summary>
-    /// A list plate by kind (PS2 0x00226d90 -> TOAdpShapeByKind 0x001f4c60, as ItemMenuPatches.plate):
-    /// 0xda at x in c0, 0xdb from x + 16, 209 wide, c0 -> c1; kind &gt;&gt; 3 picks col_bsoplt,
-    /// col_bitemplt, col_babplt, col_lmtplt; kind &amp; 3 adds 0xd7 / 0x10b / 0x10a at x + 97 in black.
-    /// </summary>
-    private static void kind_plate(int x, int y, int kind) {
-        uint at = COL_BSOPLT0 - 8 * (uint)((kind >> 3) & 3);
-        uint c0 = u32(at), c1 = u32(at - 4);
-        Ps2Menu.shape_wh(0xda, x, y, 0, 0, c0, c0);
-        Ps2Menu.shape_wh(0xdb, x + 16, y, 209, 0, c0, c1);
-        int extra = (kind & 3) switch { 1 => 0xd7, 2 => 0x10b, 3 => 0x10a, _ => 0 };
-        if (extra != 0) Ps2Menu.shape_c2(extra, x + 97, y, Ps2Menu.SHADOW, Ps2Menu.SHADOW);
-    }
+    private static void kind_plate(int x, int y, int kind) => Ps2Menu.kind_plate(x, y, kind);
 
     /// <summary>An icon at (+12, +1) and a name at (+29, +1) (PS2 0x001f5068 / 0x001f5388 / 0x001f5298).</summary>
     private static void icon_name(int icon, nint name, int x, int y, int colour) {
@@ -333,36 +321,7 @@ internal static unsafe class StatusMenuPatches {
         return c;
     }
 
-    /// <summary>PS2 0x00225f38 / 0x00200c60: the party plate (the light band for a front-line member).</summary>
-    private static void party_row(int x, int y, int chr) {
-        if ((u32(PARTY_MASK) & (1u << chr)) != 0)
-            Ps2Menu.box(x + i16(POS_NOACTIVE), y + i16(POS_NOACTIVE + 2), 512, i16(NOACTIVE_H), u32(COL_NOACTIVE0), u32(COL_NOACTIVE1));
-        var hptex = Ps2Menu.point(POS_HPTEX);
-        var mptex = Ps2Menu.point(POS_MPTEX);
-        var slv = Ps2Menu.point(POS_SLVSHAPE);
-        if (chr < 8) {
-            Ps2Menu.plate_lr(4, 5, x, y, i16(NAMEPLT_W), u32(COL_NAMEPLT0), u32(COL_NAMEPLT1));
-            var namestr = Ps2Menu.point(POS_NAMESTR);
-            Ps2Menu.font(ptr(CHR_NAME, chr), x + namestr.x, y + namestr.y, call(DAMAGE_CLASS, chr));
-            var hpstr = Ps2Menu.point(POS_HPSTR);
-            var mpstr = Ps2Menu.point(POS_MPSTR);
-            shape(0x21, x + hptex.x, y + hptex.y);
-            Ps2Menu.font_s($"{call(HP, chr),5}/{call(MAX_HP, chr),5}", x + hpstr.x, y + hpstr.y, 0x25);
-            shape(0x22, x + mptex.x, y + mptex.y);
-            Ps2Menu.font_s($"{call(MP, chr),4}/{call(MAX_MP, chr),4}", x + mpstr.x, y + mpstr.y, 0x25);
-            Ps2Menu.shape_wh(0xe7, 0, y, 512, 0, GREY, GREY);
-            shape(0x107, x + slv.x + 0x68, y + slv.y);
-            var spstr = Ps2Menu.point(POS_SPSTR);
-            Ps2Menu.value_m(call(SPHERE_LV, chr), x + slv.x + spstr.x, y + slv.y + spstr.y, 0);
-            Ps2Menu.value_s(call(NEXT_AP, chr) - call(SAVE_NEXT_AP, chr), x + slv.x + 0x8b, y + slv.y - 13, 0x25);
-        } else {
-            Ps2Menu.plate_lr(0xcc, 0xcd, x, y, i16(NAMEPLT_W), u32(COL_NAMEPLT0), u32(COL_NAMEPLT1));
-            shape(0xe9, x + hptex.x, y + hptex.y);
-            shape(0xea, x + mptex.x, y + mptex.y);
-            Ps2Menu.shape_wh(0xe7, 0, y, 512, 0, GREY, GREY);
-            shape(0x107, x + slv.x + 0x68, y + slv.y);
-        }
-    }
+    private static void party_row(int x, int y, int chr) => Ps2Menu.party_plate(x, y, chr);
 
     /// <summary>
     /// PS2 0x0022a9a8 (the PC's TkMn2MainStatusPlayerStatus): the stats in two columns of four from

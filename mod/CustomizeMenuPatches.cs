@@ -102,15 +102,7 @@ internal static unsafe class CustomizeMenuPatches {
 
     // ---- shared pieces (private copies: ItemMenuPatches has the same plate and party plate) -----
 
-    /// <summary>A list row's plate by kind (PS2 TOAdpShapeByKind 0x001f4c60, as ItemMenuPatches.plate).</summary>
-    private static void plate(int x, int y, int kind) {
-        uint at = COL_BSOPLT0 - 8 * (uint)((kind >> 3) & 3);
-        uint c0 = Ps2Menu.u32(at), c1 = Ps2Menu.u32(at - 4);
-        Ps2Menu.shape_wh(0xda, x, y, 0, 0, c0, c0);
-        Ps2Menu.shape_wh(0xdb, x + 16, y, 209, 0, c0, c1);
-        int extra = (kind & 3) switch { 1 => 0xd7, 2 => 0x10b, 3 => 0x10a, _ => 0 };
-        if (extra != 0) Ps2Menu.shape_c2(extra, x + 97, y, Ps2Menu.SHADOW, Ps2Menu.SHADOW);
-    }
+    private static void plate(int x, int y, int kind) => Ps2Menu.kind_plate(x, y, kind);
 
     /// <summary>A row: the plate (PS2 0x00226d90) and shape 0xd7 at pos_pmshape + (0x58, 0) (0x00226e18).</summary>
     private static void row_plate(int x, int y, int kind, (int x, int y) pm) {
@@ -118,31 +110,9 @@ internal static unsafe class CustomizeMenuPatches {
         parts(0xd7, x + pm.x + 0x58, y + pm.y);
     }
 
-    /// <summary>
-    /// A meswin shape in grey part by part (PS2 0x001fe178 draws a GS sprite per part, point
-    /// sampled), each part as a quad with its texels inset by half a texel (TOMkpShapeXYWHUVC2 on the
-    /// 256 x 256 ps2win): with the cells' own edges the PC's bilinear filter blends in the opaque
-    /// column left of the 0xd7 cell (u 95), which put a light tick at every 8-pixel piece of the
-    /// row lines. Layout: FFX.exe's copy of the PS2 table (0x00c5b460, ids 200.. at id - 200),
-    /// entries { u32 n, n x { u8 u, v, i8 dx, dy, u16 w, h, .. } }.
-    /// </summary>
-    private static void parts(int id, int x, int y) {
-        uint e = MESWIN_LAYOUT + Ps2Menu.u32(MESWIN_LAYOUT + 4 + 4 * (uint)(id >= 200 ? id - 200 : id));
-        int n = (int)Ps2Menu.u32(e);
-        var uv = fn<Ps2Menu.ShapeUV>(Ps2Menu.SHAPE_UV);
-        for (int k = 0; k < n; k++) {
-            byte* p = Native.ptr(e + 4 + 12 * (uint)k);
-            int u = p[0], v = p[1], w = *(ushort*)(p + 4), h = *(ushort*)(p + 6);
-            uv(0, x + (sbyte)p[2], y + (sbyte)p[3], w, h,
-                (u + 0.5f) / 256f, (v + 0.5f) / 256f, (u + w - 0.5f) / 256f, (v + h - 0.5f) / 256f, GREY, GREY);
-        }
-    }
+    private static void parts(int id, int x, int y) => Ps2Menu.shape(id, x, y);
 
-    /// <summary>A label (PS2 0x00226218 -> 0x00201a70): a black plate 0xda/0xdb 213 wide, strtex cell k at (+21, +5).</summary>
-    private static void label(int x, int y, int k) {
-        Ps2Menu.plate_rl(0xda, 0xdb, x, y, 0xd5, Ps2Menu.SHADOW, Ps2Menu.SHADOW);
-        fn<Cell>(SHEET_CELL)(k, x + 21, y + 5, 170, 14);
-    }
+    private static void label(int x, int y, int k) => Ps2Menu.label_plate(x, y, k);
 
     /// <summary>A name with its record's icon (PS2 0x001f5100 / 0x001f5388): icon at (+12, +1), name at (+29, +1).</summary>
     private static void icon_name(uint data, int id, int icon_at, int x, int y, int colour) {
@@ -169,11 +139,7 @@ internal static unsafe class CustomizeMenuPatches {
     }
 
     private static void scroll_bar((int x, int y, int w, int h) r, int top, int shown, int count) {
-        if (shown >= count) return;
-        Ps2Menu.box_rgba(r.x, r.y, r.w, r.h, 0x11, 0x11, 0x11, 0x80);
-        float t = top == 0 ? r.y : r.y + (float)r.h * top / count;
-        float b = top + shown >= count ? r.y + r.h : r.y + (float)r.h * (top + shown) / count;
-        Ps2Menu.box_rgba(r.x + 1, (int)t, r.w - 2, (int)b - (int)t, 0xf0, 0xf0, 0xf0, 0x80);
+        if (shown < count) Ps2Menu.scroll_bar(r.x, r.y, r.w, r.h, top, shown, count);
     }
 
     /// <summary>
@@ -243,43 +209,7 @@ internal static unsafe class CustomizeMenuPatches {
         }
     }
 
-    /// <summary>
-    /// PS2 0x00225f38 -> 0x00200c60(chr, x, y): the front-line band, then the party plate (as
-    /// ItemMenuPatches.party_plate, with shape 0xe7 across the screen), or the empty plate for no member.
-    /// </summary>
-    private static void member(int x, int y, int chr) {
-        if (chr >= 0 && chr < 32 && (Ps2Menu.u32(PARTY_MASK) & (1u << chr)) != 0)
-            Ps2Menu.box(x + Ps2Menu.i16(POS_NOACTIVE), y + Ps2Menu.i16(POS_NOACTIVE + 2), 512, Ps2Menu.i16(NOACTIVE_H),
-                Ps2Menu.u32(COL_NOACTIVE0), Ps2Menu.u32(COL_NOACTIVE1));
-        var hptex = Ps2Menu.point(POS_HPTEX);
-        var mptex = Ps2Menu.point(POS_MPTEX);
-        var slv = Ps2Menu.point(POS_SLVSHAPE);
-        int w = Ps2Menu.i16(NAMEPLT_W);
-        uint c0 = Ps2Menu.u32(COL_NAMEPLT0), c1 = Ps2Menu.u32(COL_NAMEPLT1);
-        if ((uint)chr >= 8) {
-            Ps2Menu.plate_lr(0xcc, 0xcd, x, y, w, c0, c1);
-            Ps2Menu.shape(0xe9, x + hptex.x, y + hptex.y);
-            Ps2Menu.shape(0xea, x + mptex.x, y + mptex.y);
-            Ps2Menu.shape_wh(0xe7, 0, y, 512, 0, GREY, GREY);
-            parts(0x107, x + slv.x + 0x68, y + slv.y);
-            return;
-        }
-        Ps2Menu.plate_lr(4, 5, x, y, w, c0, c1);
-        var namestr = Ps2Menu.point(POS_NAMESTR);
-        Ps2Menu.font(fn<Ps2Menu.PtrOfInt>(CHR_NAME)(chr), x + namestr.x, y + namestr.y, fn<Ps2Menu.IntOfInt>(DAMAGE_CLASS)(chr));
-        var hpstr = Ps2Menu.point(POS_HPSTR);
-        var mpstr = Ps2Menu.point(POS_MPSTR);
-        var v = fn<Ps2Menu.IntOfInt>;
-        Ps2Menu.shape(0x21, x + hptex.x, y + hptex.y);
-        Ps2Menu.font_s($"{v(HP)(chr),5}/{v(MAX_HP)(chr),5}", x + hpstr.x, y + hpstr.y, 0x25);
-        Ps2Menu.shape(0x22, x + mptex.x, y + mptex.y);
-        Ps2Menu.font_s($"{v(MP)(chr),4}/{v(MAX_MP)(chr),4}", x + mpstr.x, y + mpstr.y, 0x25);
-        Ps2Menu.shape_wh(0xe7, 0, y, 512, 0, GREY, GREY);
-        var spstr = Ps2Menu.point(POS_SPSTR);
-        parts(0x107, x + slv.x + 0x68, y + slv.y);
-        Ps2Menu.value_m(v(SPHERE_LV)(chr), x + slv.x + spstr.x, y + slv.y + spstr.y, 0);
-        Ps2Menu.value_s(v(NEXT_AP)(chr) - v(SAVE_NEXT_AP)(chr), x + slv.x + 139, y + slv.y - 13, 0x25);
-    }
+    private static void member(int x, int y, int chr) => Ps2Menu.party_plate(x, y, chr);
 
     // ---- the abilities to add: SLPM_675.13 0x00232730 --------------------------------------------
 

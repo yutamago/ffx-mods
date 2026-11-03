@@ -80,15 +80,7 @@ internal static unsafe class EquipMenuPatches {
 
     // ---- shared pieces ----------------------------------------------------------------------------
 
-    /// <summary>A row plate by kind (PS2 TOAdpShapeByKind 0x001f4c60), as ItemMenuPatches.plate.</summary>
-    private static void plate(int x, int y, int kind) {
-        uint at = COL_BSOPLT0 - 8 * (uint)((kind >> 3) & 3);
-        uint c0 = Ps2Menu.u32(at), c1 = Ps2Menu.u32(at - 4);
-        Ps2Menu.shape_wh(0xda, x, y, 0, 0, c0, c0);
-        Ps2Menu.shape_wh(0xdb, x + 16, y, 209, 0, c0, c1);
-        int extra = (kind & 3) switch { 1 => 0xd7, 2 => 0x10b, 3 => 0x10a, _ => 0 };
-        if (extra != 0) Ps2Menu.shape_c2(extra, x + 97, y, Ps2Menu.SHADOW, Ps2Menu.SHADOW);
-    }
+    private static void plate(int x, int y, int kind) => Ps2Menu.kind_plate(x, y, kind);
 
     /// <summary>PS2 0x001f5298(id, x, y, 0): the gear's icon (+12, +1) and name (+29, +1), icon 0x31 (the mark) when its wearer is its owner.</summary>
     private static void weapon_name(int id, int x, int y) {
@@ -129,11 +121,7 @@ internal static unsafe class EquipMenuPatches {
         });
     }
 
-    /// <summary>PS2 0x00226218(x, y, k) -&gt; 0x00201a70: a black plate (0xda, 0xdb over 213), strtex label k at (+21, +5).</summary>
-    private static void label_plate(int x, int y, int k) {
-        Ps2Menu.plate_rl(0xda, 0xdb, x, y, 213, Ps2Menu.SHADOW, Ps2Menu.SHADOW);
-        Ps2Menu.fn<SheetCell>(SHEET_CELL)(k, x + 21, y + 5, 170, 14);
-    }
+    private static void label_plate(int x, int y, int k) => Ps2Menu.label_plate(x, y, k);
 
     /// <summary>PS2 0x0022baa8: per slot of the picked gear a purple plate (kind 0x10) and the dotted line, then the abilities' icons and names.</summary>
     private static void abilities() {
@@ -201,13 +189,7 @@ internal static unsafe class EquipMenuPatches {
         if (id != 0) weapon_name(id, x, y);
     }
 
-    /// <summary>PS2 0x00225e90 -&gt; 0x00200878: a dark track, a light thumb over rows top .. top + shown of count.</summary>
-    private static void scroll_bar(int x, int y, int w, int h, int top, int shown, int count) {
-        Ps2Menu.box_rgba(x, y, w, h, 0x11, 0x11, 0x11, 0x80);
-        float t = top == 0 ? y : y + (float)h * top / count;
-        float b = top + shown >= count ? y + h : y + (float)h * (top + shown) / count;
-        Ps2Menu.box_rgba(x + 1, (int)t, w - 2, (int)b - (int)t, 0xf0, 0xf0, 0xf0, 0x80);
-    }
+    private static void scroll_bar(int x, int y, int w, int h, int top, int shown, int count) => Ps2Menu.scroll_bar(x, y, w, h, top, shown, count);
 
     // ---- install ------------------------------------------------------------------------------------
 
