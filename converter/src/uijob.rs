@@ -424,6 +424,49 @@ const PS2_MESWIN_ID: &str = "ps2win.dds";
 pub const PS2_BATTLE: &str = "ps2btl";
 const PS2_BATTLE_ID: &str = "ps2btl.dds";
 
+/// The PS2's small menu fonts M and S (`xfont1208.fmt` = `subfont.fmt`,
+/// sheet `0x3d80`: 128 x 256, 4 bit, two 2-bit pages in bits 0-1 and 2-3),
+/// rendered in their CLUT colours as `menu*/d3d11/ps2fnt` (1024 x 1024).
+/// The PS2 draws each glyph twice (SLPM_675.13 `0x001f6110` font M,
+/// `0x001f66f0` font S): the shadow with `menu.clp` CLUT 7 (block `0x2ebc`)
+/// row `2 (colour >> 4) + page`, then the face with CLUT 6 (`0x2eb8`) row
+/// `2 (colour & 15) + page`. The PC's copy of that sheet names a file the
+/// archive lacks, so its value draws show nothing; the mod draws the glyphs
+/// as meswin shapes with explicit UVs from this texture instead
+/// (`mod/Ps2Menu.cs`). Tile `k` (256 x 256 at `(k % 4, k / 4)`): faces
+/// 0..7, then shadows 0..7. In a tile glyph `i` (`c - 0x20`, 0..95) of
+/// font M sits in the 16 x 16 cell `(i % 16, i / 16)`, of font S in
+/// `(i % 16, 6 + i / 16)`, at (1, 1) in the cell: the empty border keeps
+/// the filter from pulling in the neighbouring glyphs.
+pub const PS2_FONT: &str = "ps2fnt";
+const PS2_FONT_ID: &str = "ps2fnt.dds";
+
+/// The [`PS2_FONT`] texture from `xfont1208.fmt` and `menu.clp`.
+fn ps2_font(raw: &[u8], clp: &[u8]) -> Rgba {
+    let idx = nibbles(raw);
+    let mut img = Rgba::new(1024, 1024);
+    for k in 0..16u32 {
+        let (clut, colour) = if k < 8 { (6, k) } else { (7, k - 8) };
+        let (tx, ty) = (256 * (k % 4), 256 * (k / 4));
+        let rows = [0, 1].map(|page| clut_row(clp, clut, (2 * colour + page) as usize));
+        for (font, (w, h, per_row, v0)) in [(10u32, 12u32, 24u32, 144u32), (8, 10, 32, 192)].into_iter().enumerate() {
+            for i in 0..96u32 {
+                let page = i & 1;
+                let (sx, sy) = ((i % per_row) / 2 * w, v0 + i / per_row * h);
+                let (cx, cy) = (tx + 16 * (i % 16) + 1, ty + 16 * (6 * font as u32 + i / 16) + 1);
+                for y in 0..h {
+                    for x in 0..w {
+                        let n = idx.get(((sy + y) * 128 + sx + x) as usize).copied().unwrap_or(0);
+                        // the page's 2-bit coverage is what the CLUT row maps
+                        img.put(cx + x, cy + y, rows[page as usize][usize::from(n)]);
+                    }
+                }
+            }
+        }
+    }
+    img
+}
+
 /// Pastes [`WINDOW_PIECES`] into a `meswin` (HD or converted) where the
 /// HD has nothing. False if the sizes do not fit or the HD drew there.
 fn paste_window_pieces(a: &Atlas, idx: &[u8], clp: &[u8], hd: &Rgba, img: &mut Rgba) -> bool {
@@ -971,6 +1014,24 @@ pub fn convert(disc: &mut Disc, pc: &ffx_vbf::Archive, parts: Parts) -> Result<(
                     path,
                 });
             }
+            // the PS2 fonts M and S (no text of their own: every folder)
+            let font_hd = format!("{PS3}/{folder}/d3d11/meswin.dds.phyre");
+            // (`uspc/menu` has no `xfont1208.fmt`: the first source's, with its `menu.clp`)
+            let fdir = sources[0].0;
+            let font = match disc.read(&format!("{fdir}/xfont1208.fmt"))? {
+                Some(raw) => disc.read(&format!("{fdir}/menu.clp"))?.map(|c| (raw, c)),
+                None => None,
+            };
+            if let (Some((raw, fclp)), Some((template, hd))) = (font, load_hd(pc, &font_hd)?) {
+                let img = ps2_font(&raw, &fclp);
+                let path = format!("{PS3}/{folder}/d3d11/{PS2_FONT}.dds.phyre");
+                done.push(Done {
+                    file: phyretex::argb8_as(&template, &img, Some(("meswin.dds", PS2_FONT_ID)))?,
+                    preview: side_by_side(&hd, &img),
+                    note: format!("{path}: the PS2 fonts M and S in their colours ({fdir})"),
+                    path,
+                });
+            }
             // the item icons and battle words
             let path = format!("{PS3}/{folder}/d3d11/icon.dds.phyre");
             if let (Some(raw), Some((template, hd))) = (disc.read(&format!("{dir}/icon.fmt"))?, load_hd(pc, &path)?) {
@@ -1207,9 +1268,10 @@ impl UiJob {
 impl Job for UiJob {
     /// 2: textures with mip chains (phyretex::mip_chain). 3: the PS2 meswin
     /// as its own texture (`ps2win`, ui.menus). 4: `ps2btl`, the PS2 item
-    /// icons and battle words (`icon`), `strtex`.
+    /// icons and battle words (`icon`), `strtex`. 5: `ps2fnt`, the PS2 fonts
+    /// M and S.
     fn version(&self) -> u32 {
-        4
+        5
     }
     fn name(&self) -> &'static str {
         self.name

@@ -255,9 +255,8 @@ internal static unsafe class ItemMenuPatches {
         _font!(name, x + 29, y + 1, colour);
     }
 
-    /// <summary>PS2 0x001f5f58 / 0x001f6408: "%d" right-aligned ending at x + 2 (the PC's battle digits stand in).</summary>
-    private static void value(int v, int x, int y, int grey) =>
-        _digits!(v, x + 2, y, grey, BattlePatches.SX, BattlePatches.SY);
+    /// <summary>PS2 0x00226c80 -> 0x001f5f58: "%d" in font M right-aligned ending at x + 2, colour 0 or 1 (grey).</summary>
+    private static void value(int v, int x, int y, int grey) => Ps2Menu.value_m(v, x, y, grey);
 
     // ---- the list window: SLPM_675.13 0x0024f0e8 ----------------------------------------------
 
@@ -394,9 +393,10 @@ internal static unsafe class ItemMenuPatches {
             _plate_lr!(0xe5, 0xe6, px, y, w3, u32(COL_INMPLT0), u32(COL_INMPLT1));
             _shape!(mp ? 0x22 : 0x21, px + tex.x, y + tex.y);
             int now = mp ? _mp!(chr) : _hp!(chr), max = mp ? _max_mp!(chr) : _max_hp!(chr);
-            value(now, px + hp1.x, y + hp1.y, 0);
-            value(max, px + hp2.x, y + hp2.y, 0);
-            text("/", s => _str!(s, px + hp2.x - 60, y + hp2.y, 0x25, 1f, 0f));
+            // PS2 0x001f63c0 (font S values) and 0x001f6500 ("/" at hp2 - 60), colour 0x25
+            Ps2Menu.value_s(now, px + hp1.x, y + hp1.y, 0x25);
+            Ps2Menu.value_s(max, px + hp2.x, y + hp2.y, 0x25);
+            Ps2Menu.font_s("/", px + hp2.x - 60, y + hp2.y, 0x25);
             int colour = (mask & (1u << i)) != 0 ? _damage!(chr) : 1;
             _font!(_chr_name!(chr), px + nm.x, y + nm.y, colour);
             if (wi16(w, 0x52) == 0x1000 && (single ? i == cur : ((timer / 2 + i) & 1) == 0))
@@ -494,17 +494,17 @@ internal static unsafe class ItemMenuPatches {
         var hptex = point(POS_HPTEX);
         var hpstr = point(POS_HPSTR);
         _shape!(0x21, x + hptex.x, y + hptex.y);
-        text($"{_hp!(chr),5}/{_max_hp!(chr),5}", t => _str!(t, x + hpstr.x, y + hpstr.y, 0x25, 1f, 0f));
+        Ps2Menu.font_s($"{_hp!(chr),5}/{_max_hp!(chr),5}", x + hpstr.x, y + hpstr.y, 0x25);
         var mptex = point(POS_MPTEX);
         var mpstr = point(POS_MPSTR);
         _shape!(0x22, x + mptex.x, y + mptex.y);
-        text($"{_mp!(chr),4}/{_max_mp!(chr),4}", t => _str!(t, x + mpstr.x, y + mpstr.y, 0x25, 1f, 0f));
+        Ps2Menu.font_s($"{_mp!(chr),4}/{_max_mp!(chr),4}", x + mpstr.x, y + mpstr.y, 0x25);
         _box_rgba!(0, y + 33, 512, 3, 0, 0, 0, 0x80);
         var slv = point(POS_SLVSHAPE);
         var spstr = point(POS_SPSTR);
         _shape!(0x107, x + slv.x + 0x68, y + slv.y);
-        value(_sphere!(chr), x + slv.x + spstr.x, y + slv.y + spstr.y, 0);
-        value(_next_ap!(chr) - _save_next_ap!(chr), x + slv.x + 139, y + slv.y - 13, 0);
+        Ps2Menu.value_m(_sphere!(chr), x + slv.x + spstr.x, y + slv.y + spstr.y, 0);
+        Ps2Menu.value_s(_next_ap!(chr) - _save_next_ap!(chr), x + slv.x + 139, y + slv.y - 13, 0x25);
     }
 
     // ---- install ------------------------------------------------------------------------------------

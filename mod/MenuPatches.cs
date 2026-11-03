@@ -92,6 +92,11 @@ internal static class MenuPatches {
             & BattlePatches.windows(m)
             & MainMenuPatches.install(m)
             & BattleSeqPatches.install(m)
-            & ItemMenuPatches.install(m);
+            & ItemMenuPatches.install(m)
+            & EquipMenuPatches.install(m)
+            & StatusMenuPatches.install(m)
+            & ConfigMenuPatches.install(m)
+            & OverdriveMenuPatches.install(m)
+            & CustomizeMenuPatches.install(m);
     }
 }

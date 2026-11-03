@@ -132,8 +132,9 @@ internal static unsafe class MainMenuPatches {
     private static readonly List<Delegate> _keep = [];
     private static int _scope;        // > 0 while a ported draw runs: meswin is the PS2 atlas
     private static int _btl_scope;    // > 0 while a ported battle draw runs: the battle atlas is the PS2 one
+    private static int _fnt_scope;    // > 0 while the PS2 fonts M / S draw: meswin is ps2fnt (Ps2Menu)
     private static bool _in_draw_all; // TkMenuDrawAll is running (its background is the PS2 one)
-    private static readonly Dictionary<nint, nint> _ps2_names = [];
+    private static readonly Dictionary<(nint, string), nint> _ps2_names = [];
 
     private static ShapeName? _shape_name_next;
     private static BG? _bg_next;
@@ -217,7 +218,7 @@ internal static unsafe class MainMenuPatches {
     /// </summary>
     private static nint ps2_name(nint hd, string from, string to) {
         lock (_ps2_names) {
-            if (_ps2_names.TryGetValue(hd, out nint known)) return known;
+            if (_ps2_names.TryGetValue((hd, to), out nint known)) return known;
             string? name = Marshal.PtrToStringAnsi(hd);
             int at = name?.LastIndexOf(from, StringComparison.OrdinalIgnoreCase) ?? -1;
             nint ours = hd;
@@ -226,13 +227,15 @@ internal static unsafe class MainMenuPatches {
                 _load!(ours);
                 _log?.Info($"ui.menus: PS2 atlas {Marshal.PtrToStringAnsi(ours)} loading");
             }
-            _ps2_names[hd] = ours;
+            _ps2_names[(hd, to)] = ours;
             return ours;
         }
     }
 
     private static nint shape_name(int id) {
         nint name = _shape_name_next!(id);
+        // the PS2 fonts M and S (converter uijob::PS2_FONT), inside font_scoped draws
+        if (id == MESWIN && Volatile.Read(ref _fnt_scope) > 0) return ps2_name(name, "meswin.dds", "ps2fnt.dds");
         if (id == MESWIN && Volatile.Read(ref _scope) > 0) return ps2_name(name, "meswin.dds", "ps2win.dds");
         // the PS2 battle atlas (converter uijob::PS2_BATTLE), only inside battle_scoped draws
         if (id == BATTLE && Volatile.Read(ref _btl_scope) > 0) return ps2_name(name, "battle.dds", "ps2btl.dds");
@@ -244,6 +247,13 @@ internal static unsafe class MainMenuPatches {
         bind();
         Interlocked.Increment(ref _btl_scope);
         try { draw(); } finally { Interlocked.Decrement(ref _btl_scope); }
+    }
+
+    /// <summary>Runs a draw with sheet 0x3e00 answered by the PS2 fonts' texture, ps2fnt (Ps2Menu.font_m / font_s).</summary>
+    public static void font_scoped(Action draw) {
+        bind();
+        Interlocked.Increment(ref _fnt_scope);
+        try { draw(); } finally { Interlocked.Decrement(ref _fnt_scope); }
     }
 
     /// <summary>Runs a ported PS2 draw with meswin answered by the PS2 atlas (other files' ports).</summary>
@@ -344,12 +354,13 @@ internal static unsafe class MainMenuPatches {
             _shape_wh!(0x16, x + i16(NMBLKLINE_X), y + i16(NMBLKLINE_Y), i16(NMBLKLINE_W), 0, GREY, GREY);
             _font!(_chr_name!(chr), x + namestr.x, y + namestr.y, _damage!(chr));
             _shape!(0x21, x + hptex.x, y + hptex.y);
-            text($"{_hp!(chr),5}/{_max_hp!(chr),5}", t => _str!(t, x + hpstr.x, y + hpstr.y, 0x25, 1f, 0f));
+            // PS2 0x001f6500: "%5d/%5d", "%4d/%4d" in font S, colour 0x25 (black, light shadow)
+            Ps2Menu.font_s($"{_hp!(chr),5}/{_max_hp!(chr),5}", x + hpstr.x, y + hpstr.y, 0x25);
             _shape!(0x22, x + mptex.x, y + mptex.y);
-            text($"{_mp!(chr),4}/{_max_mp!(chr),4}", t => _str!(t, x + mpstr.x, y + mpstr.y, 0x25, 1f, 0f));
+            Ps2Menu.font_s($"{_mp!(chr),4}/{_max_mp!(chr),4}", x + mpstr.x, y + mpstr.y, 0x25);
             _shape!(0x3d, x + slv.x, y + slv.y);
-            // PS2 0x001f5e88: "%d" in 12-pixel cells ending at x + 2 (0x001f5f58)
-            _digits!(_sphere!(chr), x + spstr.x + slv.x + 2, y + slv.y + spstr.y, 0, BattlePatches.SX, BattlePatches.SY);
+            // PS2 0x001f5e88: "%d" in font M, colour 0, the last cell ending at x + 2 (0x001f5f58)
+            Ps2Menu.value_m(_sphere!(chr), x + spstr.x + slv.x, y + slv.y + spstr.y, 0);
             int cx = x + namestr.x, cy = y + namestr.y;
             if (choice == chr) cursor(cx, cy);
             if (from >= 0 && _player!(from) == chr) {
@@ -359,11 +370,12 @@ internal static unsafe class MainMenuPatches {
             if (to >= 0 && _player!(to) == chr) cursor(cx, cy);
         }
         // the footer
+        // PS2 0x001f63c0: gil in font S, colour 0x25; the time PS2 0x0024ad28 (font S, the colon blinks)
         var gilstr = seq_point("pos_gilstr");
-        _digits!(_gil!(), gilstr.x + 2, gilstr.y, 0, BattlePatches.SX, BattlePatches.SY);
+        Ps2Menu.value_s(_gil!(), gilstr.x, gilstr.y, 0x25);
         uint t = (uint)_play_time!();
         var timestr = seq_point("pos_timestr");
-        _timer!(t, timestr.x, timestr.y, 0x25, (t & 1) != 0 ? 0x25 : 1);
+        Ps2Menu.play_time(t, timestr.x, timestr.y, 0x25, (t & 1) != 0 ? 0x25 : 1);
         var gilshape = seq_point("pos_gilshape");
         var gilshape2 = seq_point("pos_gilshape2");
         _shape!(0xd5, gilshape.x, gilshape.y);
@@ -438,7 +450,7 @@ internal static unsafe class MainMenuPatches {
         _plate_lr!(0x45, 0x46, sx, sy, i16(HELPSUB_W), u32(COL_HELPSUB0), u32(COL_HELPSUB1));
         int hx = i16(HELP_X), hy = i16(HELP_Y);
         _plate_lr!(6, 7, hx, hy, i16(HELP_W), u32(COL_HELP0), u32(COL_HELP1));
-        _shape!(0x3e, sx + 0x50, sy);
+        help_label(sx + 0x50, sy);
         nint mes = (nint)u32(HELP_MES);
         if (mes != 0) {
             var at = point(POS_HELPSTR);
@@ -448,6 +460,21 @@ internal static unsafe class MainMenuPatches {
         first(8, "ui.menus: menu help bar drawn the PS2 way");
         return _sync!();
     });
+
+    private const uint MESWIN_LAYOUT = 0x00c5b460; // FFX.exe's meswin layout table (= SLPM_675.13 0x00321328)
+
+    /// <summary>
+    /// Shape 0x3e as the PS2 draws it (TOMkpShapeXY, 0x001fe1f0): all 17 parts, a black brush strip
+    /// of 16 pieces (uv (0, 104) 8 x 16 at dx -80..40, the last 88 wide) and the "HELP" text (uv
+    /// (168, 240) 88 x 8 at -67, 7). The PC's TOAdpEasyShapeXYWHC2 (0x008ed380) skips every part of
+    /// 0x3e but the last, so its label floats on the gradient; here each part goes through
+    /// TOMkpShapePartIndexXYWHC2 with w = h = 0 (the part's own size and offset).
+    /// </summary>
+    public static void help_label(int x, int y) {
+        byte* table = Native.ptr(MESWIN_LAYOUT);
+        int n = *(int*)(table + *(uint*)(table + 4 + 4 * 0x3e));
+        for (int k = 0; k < n; k++) _part!(0x3e, k, x, y, 0, 0, GREY, GREY);
+    }
 
     // ---- install ------------------------------------------------------------------------------------
 
