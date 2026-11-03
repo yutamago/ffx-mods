@@ -33,6 +33,8 @@ writes `<out>/efl/x/<HD path>` and a preview per file
 | Items and Abilities screens (`mod/ItemMenuPatches.cs`, below) | 0 | checked through injected game calls (`tools/replays/ui-items.txt`, `ui-abilities.txt`); hooks seen installing in Fahrenheit |
 | The PS2 menu fonts M and S (`ps2fnt` + `mod/Ps2Menu.cs`, below) | 8 (`ps2fnt`) | checked through injected game calls (`ui-mainmenu.txt`, `ui-items.txt`, `ui-abilities.txt`) |
 | Status, Equip, Overdrive, Customize, Config screens (`mod/*MenuPatches.cs`, below) | 0 | checked through injected game calls (`ui-status-ps2.txt`, `ui-equip.txt`, `ui-overdrive.txt`, `ui-customize.txt`, `ui-config.txt`); not run in Fahrenheit |
+| The 16x12 font at the PS2's size, the menu sequence scenes (`mod/Ps2Menu.cs`, below) | 0 | compared with the PS2 in PCSX2 (`docs/compare.md`) through injected game calls |
+| The PAL menu layout (`jppc/menu/menu_script.bin`, below, "The menu layout data") | 1 | compared with the PS2 (Config) |
 
 68 files in all; 20 HD textures have no PS2 counterpart (listed by
 `demaster ui`). Previews and screenshots: `~/ffx-work/demaster/research/ui/`
@@ -423,11 +425,12 @@ cursor: `btl-1-hd.png`, `btl-2-ps2.png`, `btl-3-ps2-43.png`,
 the "3" of Phoenix Down is whole.)
 
 **Uncertain.** Not compared with PS2 screenshots: the look follows the PS2
-code and the run-time colours. The names use the PC's battle typeface size
-(0.78), not the PS2's 1612 font draw (`0x00207f68` / `0x001f3810`, not
-ported), so letter sizes and the column width derived from them differ
-slightly from the PS2's; with `ui.font` the glyphs and widths are the
-PS2's. The scroll bar is the PC's `DrawCrossMenuScrollParts` (grey track,
+code and the run-time colours. The names are the 16x12 font at the PS2's
+size since 2026-11-03 (`TOMkpBaseMesFont` inside `Ps2Menu.ps2_sized`, the
+PS2's 1612 draw `0x001f3810`; below, "The 16x12 font's size"), and the
+column width follows from their PS2 widths; before, they were the PC's
+battle typeface (`ToMakeBtlEasyEdgeFont`, 0.78), about half the PS2's size.
+The item counts are still the PC's battle digits at 0.78. The scroll bar is the PC's `DrawCrossMenuScrollParts` (grey track,
 pink thumb) at the PS2's place, not the PS2's own bar. The cursor is the PS2
 one since 2026-11-03 (below, "The PS2 cursor"). Icons are the HD `icon` art at a
 12 x 12 PS2 size.
@@ -612,6 +615,103 @@ take the sheet `0x3e00` and UVs 0..1 as given) while
 level, gil, time, the HELP strip), `items-3-ps2-43.png` (counts, grey for
 unusable items), `abil-3-ps2-43.png` (the plate, "11 AP").
 
+## The 16x12 font's size (`ui.menus`: code)
+
+Names, options, help lines, list entries and labels in the ported screens
+(and the battle command names) are the 16x12 font, drawn with the PC's
+`TOMkpBaseMesFont` (`0x00901cb0`, PS2 `0x001f3810`). Compared with the PS2
+(`docs/compare.md`) they came out half as wide and about 0.7 as high, from
+the right start point, at 16:9 and at 4:3 alike (help line "Ausrüstung
+wechseln.": PS2 166 x 16; PC 84 x 11.6 PS2 units at 1280x720 and in the
+4:3 view). The cause is the PC's size rules, not the 4:3 squeeze:
+
+- The PS2 (`0x001f43c8`; glyphs `0x001f0ec8` face, `0x001f11e8` shadow)
+  draws each glyph 1:1: a sprite of `w` x 18 at the pen (`w` the width
+  table's, y offset 0), the shadow at (+2, +2), the pen moving `w` + 2.
+- The PC (`TOAddPktBaseMesFontLClutTypeRGBA` `0x008e92a0` ->
+  `TOMakePktFont1612Font` `0x008fcad0` / `...Shadow` `0x008fcca0`) scales
+  the glyph by 0.78 (x1 = x + 0.78 `w` `[0x00c5d778]`, y from y + 0.78 to
+  y + 0.78 (18 + 1) `[0x00c5d77c]` for the European languages), and
+  `graphicFontDraw` (`0x00640660`) maps the start by 1920 / 512 but the
+  extent by 1080 / 416 (square screen pixels): a glyph is 0.54 `w` PS2
+  columns wide. The pen moves by `TOAddFontWidthSpace` (`0x008e8ed0`):
+  round(`w` 0.78 x 1080 / 416) / 3.75 + the letter space 0.8. The shadow
+  is 2 screen pixels off (`graphicFontDraw`'s third and fourth arguments)
+  plus `0x018716e0` / `0x018716e4` (0).
+
+**The fix** (`Ps2Menu.ps2_sized`, used by `Ps2Menu.font`, `font_a` and
+`text_width`; every ported screen and `BattlePatches` draw through them):
+around each call the mod sets the words those rules read, and restores
+them after (the shape draws read `0x00c5d778` / `0x00c5d77c` too):
+
+| Word | PC | During a PS2 text |
+|---|---|---|
+| `0x00c5d778` glyph x factor | 1.0 | 3.75 / 2.596 / 0.78 = 1.852: `w` PS2 columns |
+| `0x00c5d77c` glyph y factor | 1.0 | (18 + 0.78 yoff) / (0.78 (18 + yoff)): 18 lines |
+| `0x018716a8`, `0x018716ac` (width units) | 3.75, 2.596 | 1, 1 / 0.78: `TOGetFontWidthInPiexl` answers `w` |
+| `0x018716b4`, `0x018716b8` (letter space, cached) | 0.8 | 2 |
+| `0x018716e0`, `0x018716e4` (shadow) | 0 | 2 - 2 / 3.75, 2 - 2 / 2.596: (+2, +2) PS2 units |
+
+`yoff` is the languages' y offset (1 for languages 1..8, -1 for 10, else
+0, from `TOGetFFXLang`); the glyph's top stays 0.78 lines below the PS2's
+(the integer y cannot take it back). `TkMn2StringWidth` (`0x008c2cb0`)
+inside the same words gives the PS2 width (sum of `w` + 2), so everything
+sized from the text follows: the Items sub-command bar (now 496 wide with
+the PS2's spacing, the PS2's bar), the Config choices' centring, the
+Overdrive title, Customize's cost, the battle command window's column.
+Line feeds inside a string still advance the PC's 16 lines, not 20.
+`tools/calllist` does the same with store records around each
+`TOMkpBaseMesFont` call (`menu::expand_shapes`, `btl::ps2btl`) and
+`Ctx::text_width`.
+
+## The menu sequence scenes (`ui.menus`: code)
+
+The PS2's sub-screens start menu sequence (1) scenes when they open and
+stop them when they close (`TkMn2SeqStartScene` / `StopScene`, PS2
+`0x00227488` / `0x00227498`, from the records' open / close functions):
+the dark blue bands that slide in and stay (the main menu's vertical band
+left of the options, the bands under the help bar or party plate, the
+column between two lists, Config's right-edge band). Read in PCSX2 (PS2
+table `0x0068f540`: 8 slots of 0x20, +0 state, +8 name):
+
+| Screen | Scenes |
+|---|---|
+| Main menu | scene26 |
+| Items (and key items) | scene0, scene9 |
+| Abilities | scene0, scene10 |
+| Overdrive | scene0, scene14 |
+| Status | scene0, scene11 |
+| Config | scene4, scene17 |
+| Equip | scene0, scene11, scene20 |
+| Customize | scene0, scene21; its ability list also scene23 |
+
+The PC starts Equip's only (`0x008cf830`); its sequence data has the
+others and draws them the PS2 way once started. **The restoration**:
+each ported screen's draw asks for its scenes (`Ps2Menu.scenes`); a scene
+that is not running (`g_TOSeqSlots` `0x01865f20`, state 1..3) starts
+there (`TOSeqStartScene(1, name)` `0x008af0d0`), with its slide-in. Once a
+frame, at the start of `TkMenuDrawAll`, `Ps2Menu.scenes_frame` stops
+(`TOSeqStopScene` `0x008af4f0`) the scenes the mod started and no draw
+asked for since: leaving a screen stops them as the PS2's close does.
+Scenes the PC started itself are left alone. The calllist replays start
+them with `@scenes` (and `@stopscenes`) after the injection and wait 40
+frames for the slide.
+
+## The menu layout data (`ui.menus`: data)
+
+The layout words of `TOSeqInitParam` / `TkMn2SeqGet*` and the scenes come
+from `menu_script.bin`. The PC reads `ffx_ps2/ffx/master/jppc/menu/menu_script.bin`
+for every language: the Japanese International's file. The PAL game reads
+its own disc's `jppc/menu/menu_script.bin` (18,768 bytes; the PC's is
+18,736), whose words differ in places. Config's rows were the visible case:
+`r_cnameplt_nonhdd` y 65 and `num_cnameplt_nonhdd` 47 (rows 42 apart) on
+the PS2 (read in PCSX2 at `0x00693f78` / `0x00693fbc`), 55 and 45 (40
+apart) on the PC; both read the `_nonhdd` names (PS2 `0x002d92d0` = u32
+`0x005661ec` and the PC's `GetU32_023cbeb0` are 0). The Overdrive mode
+name's place on Status and Equip (`pos_ltstr`) moved to the PS2's with it.
+The `ui.menus` job writes the disc's file over the PC's path (when they
+differ). It holds no text.
+
 ## The PS2 cursor (`ui.menus`: code)
 
 The PS2 cursor (`TOMakePktShapeCursor`, SLPM_675.13 `0x001fe800`, kind 0)
@@ -751,7 +851,7 @@ the PS2's calls (SLPM_675.13 -> FFX.exe):
   119), scissor (0, 93)-(511, 415) or (0, 114)-(511, 402); rows `-1 ..
   +0x3a` at rest, two passes in `TkMn2DrawMenuWindowScissor` while scrolling.
   A row's plate by kind (PS2 `TOAdpShapeByKind` `0x001f4c60`): meswin
-  shape 0xda at x, 0xdb from x + 16, 209 wide, `c0 -> c1`, plus 0xd7 / 0x10b
+  shape 0xda at x, 0xdb from x + 16 to x + 209 (`0x001f4820`: 0xd1 - w(0xda) wide; drawn 209 wide from x + 16 before 2026-11-03, 16 pixels too long), `c0 -> c1`, plus 0xd7 / 0x10b
   (a line and the black count disc) / 0x10a at x + 97 in black alpha 0x80,
   the pair from `col_bsoplt`, `col_bitemplt` (items: kind 0xa, gold),
   `col_babplt` (commands: 0x12, purple), `col_lmtplt`. (The PC's copy of the
@@ -808,8 +908,8 @@ were not driven in the harness (the C# draws them; the Rust copy covers the
 list at rest, the first bar and the ability plate). The PS2 also starts menu
 sequence scenes on these screens ("scene0", "scene9", "scene31" for items,
 "scene10" for abilities, in `menu_script.bin`) that the PC never starts;
-what they draw (title plates or backdrops, probably) was not decoded, so
-they are missing.
+the mod starts them now (below, "The menu sequence scenes": the dark blue
+band under the bar and the column between the lists).
 
 ## The Status screen (`ui.menus`: code)
 
@@ -865,7 +965,7 @@ The PC's `TkMn2GetStatusPos` (`0x008d4920`) reads the same names as the PS2's `0
 
 **Checked.** `tools/replays/ui-equip.txt` (save 5, Equip, Tidus; then the weapon list) through `tools/calllist` (`@ps2screen equip`, the same calls in `tools/calllist/src/equip.rs`). Values read in the game: `r_somojiplt` (28, 212), `r_somojiplt2` (277, 212), `pos_sobiplt` (30, 237), `pos_soabplt` (279, 237), `pos_pmshape` (9, 0), `rect_wpnlplt` record (183, 131), `pos_wpnmoji` (11, 1), `r_soscrol` (256, 221, 10, 191). Shots: `equip-1-hd`, `-2-ps2`, `-3-ps2-43`, `-4-list-hd`, `-5-list-ps2`, `-6-list-ps2-43`.
 
-**Uncertain.** Not compared with PS2 screenshots. Scrolling, the armour row and the blink were not driven. The navy band, the column between the lists and two grey lines visible over the PS2 gradient come from the sequence scenes the PC starts here (scene0, scene11, scene20), not from this draw. The HD background normally covers them; the PS2 probably showed them (not checked).
+**Uncertain.** Not compared with PS2 screenshots. Scrolling, the armour row and the blink were not driven. The navy band, the column between the lists and two grey lines visible over the PS2 gradient come from the sequence scenes the PC starts here (scene0, scene11, scene20), not from this draw; the PS2 runs the same three (read in PCSX2) and shows the same band and column (`docs/compare.md`).
 
 ## The Overdrive screen (`ui.menus`: code)
 
@@ -899,7 +999,7 @@ main menu's own draw). PS2 record `0x00325a78` (control `0x00230aa0` = `TkMenuCt
   0xda / 0xdb 213 wide in `0x80000000`, strtex label 0 ("Overdrive Modes") 170 x 14 at
   (+21, +5) (`TOMkpShape2ECCCell_008f8d50`). Rows: columns `pos_2llplt` / `pos_2lrplt` (30 and
   279, y 182), 9 rows from y - 32 under `TkMn2DrawMenuWindowScissor(y, 224, ...)` (two passes
-  while paging), each a kind-0x10 plate (0xda, 0xdb from x + 16 209 wide, `col_babplt`, purple)
+  while paging), each a kind-0x10 plate (0xda, 0xdb from x + 16 to x + 209, `col_babplt`, purple)
   and meswin 0xd7 at x + `pos_pmshape` + 0x58; usable entries by kind: 1 icon and command name
   (+12 / +29), 2 a name (+12), 3 `TkMenuMenu1Mes(id + 0x1033)` (+0x1d; the modes). The scroll
   bar (`0x00225e90` -> `0x00200878`, as the item list's) at `rect_lscroll` over
@@ -1035,7 +1135,7 @@ The rows are the PC's. `g_TkMenuConfigRows` is 8; the PC replaced Sound with the
 - `config-3-ps2-43.png`: the same after the 4:3 write.
 - `config-4-moved-ps2.png`: cursor on Names and its value moved to OFF; the brush follows and the help text changes.
 
-**Uncertain.** Not compared with PS2 screenshots. The harness draws the brushes at rest. Thin bilinear edge lines show under the brushes and at the window's left edge (the same as in Items). The help bar stays HD in the test. The PS2's open starts the menu scenes "scene4" and "scene17" and its close stops them (`0x00227488`/`0x00227498`); the PC never starts them. Started by hand on the PC, they draw a dark blue vertical band that slides up at the right edge (PS2 x about 476..492). That band is missing here.
+**Uncertain.** Not compared with PS2 screenshots. The harness draws the brushes at rest. Thin bilinear edge lines show under the brushes and at the window's left edge (the same as in Items). The help bar stays HD in the test. The PS2's open starts the menu scenes "scene4" and "scene17" and its close stops them (`0x00227488`/`0x00227498`); the PC never starts them. Started on the PC, they draw a dark blue vertical band that slides up at the right edge (PS2 x about 476..492) and the band under the help bar; the mod starts them since 2026-11-03 ("The menu sequence scenes"). The rows' places were the PC's `menu_script.bin` (55 + 40 r); with the disc's (`ui.menus` writes it, "The menu layout data") they are the PS2's 65 + 42 r.
 
 The screenshots of these five screens (2026-11-03) are kept in
 `~/ffx-work/demaster/research/ui/submenus/<replay>/`.
@@ -1058,18 +1158,15 @@ The screenshots of these five screens (2026-11-03) are kept in
 - On every party plate the MP string's last cell ends at x 296 (`pos_mpstr`
   (206, 18), 9 cells of 10), where the S.LV label of shape 0x3d / 0x107
   starts (`pos_slvshape` (296, 33), read in the game); the label is drawn
-  after the string, as on the PS2. The values come from `menu_script.bin`,
-  which the PC's `uspc` copy and the PAL disc's `uspc` share byte for byte.
+  after the string, as on the PS2. The values come from `menu_script.bin`: the PC reads the Japanese International's `jppc` copy, the `ui.menus` job writes the PAL disc's over it ("The menu layout data"); the party plates sit at the same places with either (compare runs before and after).
 - The calllist replays draw the main menu's help bar the PS2 way too
   (`@ps2help`), as the mod does on every screen.
 
 ## Not done
 
 - The sphere grid entry and the aeon status pages (same draw as Status, not
-  driven). The menu sequence scenes the PS2 starts on the sub-screens
-  ("scene4"/"scene17" on Config, "scene0"/"scene11"/"scene20" on Equip, ...)
-  are not started by the PC; what they draw (bands that slide in) is not
-  ported.
+  driven). The sphere grid's and the aeon pages' sequence scenes are not
+  asked for (the other screens' are, "The menu sequence scenes").
 - The HD cursor of the HD screens (`TkMn2DrawCrossCursor` `0x008c0670`,
   kinds 0/4/5): left as it is; its anchor differs from the PS2 cursor's, so
   replacing it needs each caller's PS2 position.

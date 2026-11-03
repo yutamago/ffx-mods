@@ -96,6 +96,10 @@ wording differs from the PAL disc's in places (`Items`/`Item`,
   so a state taken in the save list reports no card (states.txt goes
   through the title state instead); the field takes no menu input for a
   few seconds after a load (states wait 500 frames).
+- PS2 state worth reading in a screen: the running menu sequence scenes
+  (`read 0x0068f540 0x100`: 8 slots of 0x20, +0 state, +8 name) and the
+  layout words (Config's `r_cnameplt` record at `0x00693f78`); the
+  per-screen scene list in `docs/ui.md` came from such reads.
 - PS2 `g_SaveData` is `0x003194d0` (PC `0x0112ca90`): `+0` the map, used by
   `waitfor` in states.txt. The battle's field, group and formation are at
   `0x00318c76` (PC `0x0112c256`, `docs/ffx-rust-findings.md`).
@@ -140,43 +144,57 @@ quick to show the PC's; `ui.loading` makes the PC's black too
 ## Results (2026-11-03)
 
 Numbers: mean absolute difference (0-255) of the exact view, whole frame.
-"Text" below is always the PS2 menu font (font M) as the Demaster draws it.
+"Text" is the 16x12 font (names, options, help lines, list entries).
 
-**Common to every menu screen.**
+**First run, and what it found** (common to every menu screen):
 
-- **Text is drawn at half size.** Every string of the PS2 font M (help
-  bar, names, options, list entries, labels) is about half as wide and half
-  as tall as the PS2's, from the same start point: the help line
-  "Ausrüstung wechseln." spans x 34..199, 16 lines high, on the PS2 and x
-  34..114, 7 lines, on the Demaster (exact view). The numbers (HP, MP,
-  S.LV, counts, AP) and the shape-drawn labels match in size. Most of the
-  difference numbers come from this. Seen through `tools/calllist`, which
-  makes the mod's calls; to check in Fahrenheit.
-- **The menu sequence bands are missing**: the dark blue bands the PS2's
-  sub-screens slide in and leave standing (main menu: a vertical band at
-  x 366..376 left of the options; Items, Abilities, Overdrive, Status,
-  Customize: a horizontal band under the bar or party plate; Config: one
-  under the help bar and one at the right edge). Known (`docs/ui.md`, "Not
-  done": the PS2 starts menu scenes the PC never starts).
+- **Text at half size.** Every 16x12 string was about half as wide and
+  0.7 as high as the PS2's, from the same start point (help line
+  "Ausrüstung wechseln.": PS2 x 34..199, 16 lines; Demaster x 34..114),
+  at 16:9 and at 4:3 alike: the PC draws the font 0.78 times as big with
+  square-pixel extents (`docs/ui.md`, "The 16x12 font's size"). Fixed in
+  `Ps2Menu.ps2_sized`; now x 34..199, lines 13..27 (PS2 12..27).
+- **The menu sequence bands were missing**: scenes the PS2's sub-screens
+  start and the PC does not. Read in PCSX2 per screen and started by the
+  mod (`docs/ui.md`, "The menu sequence scenes").
+- **Config's rows** (PS2 from y 65, 42 apart; Demaster 55, 40): the PC
+  reads the Japanese International's `menu_script.bin`, the PAL game its
+  own disc's (`docs/ui.md`, "The menu layout data"). The `ui.menus` job
+  writes the disc's.
+- **List plates 16 pixels too long** (Equip, Customize, Status, Overdrive,
+  Items): 0xdb was drawn 209 wide from x + 16; the PS2 ends it at x + 209
+  (`0x001f4820`).
 - Plates, plate shadows, circles, scroll bars, portraits, the gradient
   background and the help bar's shape sit within 1-2 pixels of the PS2's.
-- List plates (Equip lists, Customize) end about 16 pixels further right
-  than the PS2's.
 
-**Per screen.**
+**Before and after** (exact view, whole frame; the PC side regenerated with
+`demaster ui`, the replays starting the scenes as the mod does):
 
-| Screen | Exact | Matches | Differs | Intended |
+| Screen | Before | After | Still different | Intended |
 |---|---|---|---|---|
-| Main menu | 10.4 | party plates, HP/MP, S.LV, option plates, footer box, Gil | text half size; the vertical band; location name small | play time a second on (the PS2 ran on after the load); `Items`/`Abilitys` (PC wording) |
-| Items | 15.7 | the list (rows, icons, counts, circles, scroll bar) to 2 pixels | the sub-command bar: PS2 spans nearly the full width with wide gaps, the Demaster's is about 480 of 640 wide with its entries closer (it sizes to the half-size text); the band under the bar | |
-| Abilities | 10.4 | party plate, list row | text; band under the party plate | |
-| Overdrive | 11.2 | party plate, Prüfen/Wählen bar, mode plates, list rows | text; band | |
-| Status | 14.2 | face, Overdrive/Type plates, weapon/armour rows, the 8 stat rows, values | text; band; the `!` prompt's button | PS2 pad ✕ vs the PC's key glyph (the harness plays with the keyboard; the PC's glyph) |
-| Config | 55.4 | the choice windows' x, the brushes, the cursor | **row layout**: PS2 rows from y 70 every 42 lines, the Demaster's from y 60 every 40 (the PC's layout words, `0x008cc050`); text; the bands | first row: Sound (Stereo/Mono) on the PS2, the PC's soundtrack row (Remaster/Original) in its place |
-| Equip | 6.7 (list 10.5) | best match: everything but the text, to 1-2 pixels | text; list plates longer; the left brush stub of the Weapon/Armour rows | |
-| Customize | 11.3 / 13.8 | lists, item cost box (46 -> 42), shield and ability plates | text; list plates longer; band | |
-| Title | 51.0 | the menu, logo and bar pictures (the PS2 layers) | the Demaster places the picture higher and stretches it: the logo's top about 60 lines higher, the bottom bar about 25 (the PS2's 512x448 picture is mapped differently); the PC's own water band where the PS2 shows the PlayOnline banner and the water; the PC's small cursor | the water band (`docs/ui.md`) |
-| Battle | 27.3 | the same battle (monsters, party); the command window's colours | the HUD stays HD: help bar, CTB list, party list (smaller, other places; `docs/ui.md` "Not done"); the command window smaller with half-size text, without the PS2's "EKSTASE!!" tab and "BEFEHL" label; the 3D camera frames the scene a little wider | |
+| Main menu | 10.4 | 5.1 | text 1 line lower (the PC's y offset 0.78) and its glyph edges; option plates about 2 pixels right | play time a second on (the PS2 ran on after the load); `Items`/`Abilitys` (PC wording) |
+| Items | 15.7 | 5.6 | the bar's entries a few pixels apart from the PS2's | |
+| Abilities | 10.4 | 3.1 | glyph edges | |
+| Overdrive | 11.2 | 4.1 | glyph edges | |
+| Status | 14.2 | 8.2 | the face (HD portrait source, 1 pixel); glyph edges | the `!` prompt: PS2 pad ✕ vs the PC's key glyph "C" (the harness plays with the keyboard), so its text starts elsewhere |
+| Config | 55.4 | 6.5 | glyph edges | first row: Sound (Stereo/Mono) on the PS2, the PC's soundtrack row (Hintergrundmusik: Remaster/Original) in its place, with its own help line |
+| Equip | 6.7 | 5.4 | glyph edges; the portrait (1 pixel) | |
+| Equip, weapon list | 10.5 | 7.6 | the rows about 1 line lower; the Weapon row's cursor (the PS2 hides it every other frame while the list is open) | |
+| Customize | 11.3 | 5.5 | glyph edges | |
+| Customize, ability list | 13.8 | 6.8 | glyph edges | |
+| Title | 51.0 | 51.0 | not touched: the Demaster places the picture higher and stretches it (the logo's top about 60 lines higher, the bottom bar about 25); the PC's own water band where the PS2 shows the PlayOnline banner and the water; the PC's small cursor | the water band (`docs/ui.md`) |
+| Battle | 27.3 | 26.9 | command window: text now PS2 size (command region 30.6 -> 26.4), but the "EKSTASE!!" tab and the "BEFEHL" label are missing; the HUD stays HD (help bar, CTB list, party list); the 3D camera frames the scene a little wider | |
+
+"Glyph edges": the PS2 font is drawn from the 4x filtered PS2 pages
+(`docs/font.md`), the PS2 sampled it 1:1; and the glyphs start 0.78 lines
+lower (the PC's y offset for the European languages; the draw takes an
+integer y). Each string leaves a thin outline in the difference.
+
+**Open**: the battle command window's "EKSTASE!!" tab and "BEFEHL" label
+and the rest of the battle HUD; the title picture's placement; the PC's 16-line
+line feed inside a 16x12 string (the PS2's is 20; no menu string seen
+with one). All of it was measured through `tools/calllist`, which makes the
+mod's calls in the harness; the mod itself was not run in Fahrenheit here.
 
 ## Not done
 
