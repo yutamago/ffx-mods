@@ -91,6 +91,7 @@ internal static class MenuPatches {
             & Native.fn<MenuPlate>(MENU_PLATE).hook(m, _plate_hook)
             & BattlePatches.windows(m)
             & MainMenuPatches.install(m)
-            & BattleSeqPatches.install(m);
+            & BattleSeqPatches.install(m)
+            & ItemMenuPatches.install(m);
     }
 }

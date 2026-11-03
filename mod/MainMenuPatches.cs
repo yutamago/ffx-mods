@@ -246,6 +246,9 @@ internal static unsafe class MainMenuPatches {
         try { draw(); } finally { Interlocked.Decrement(ref _btl_scope); }
     }
 
+    /// <summary>Runs a ported PS2 draw with meswin answered by the PS2 atlas (other files' ports).</summary>
+    public static int ps2_scoped(Func<int> draw) => scoped(draw);
+
     private static int scoped(Func<int> draw) {
         bind();
         Interlocked.Increment(ref _scope);
