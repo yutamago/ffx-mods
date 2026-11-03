@@ -61,7 +61,6 @@ internal static unsafe class EquipMenuPatches {
     private const uint POS_WPNMOJI = 0x0186a86c; // pos_wpnmoji (PS2 0x006938b8)
     private const uint COL_BSOPLT0 = 0x025d16a0; // plate pairs bso, bitem, bab, lmt (c0, c1 4 bytes apart)
     private const uint ITEM_LIST   = 0x01597770; // g_TkMenuItemList: { u16 id, u8, u8 }
-    private const uint MESWIN_LAYOUT = 0x00c5b460; // the PS2 meswin layout table (= SLPM_675.13 0x00321328)
 
     private const int ROW = 32;
 
@@ -89,24 +88,6 @@ internal static unsafe class EquipMenuPatches {
         Ps2Menu.shape_wh(0xdb, x + 16, y, 209, 0, c0, c1);
         int extra = (kind & 3) switch { 1 => 0xd7, 2 => 0x10b, 3 => 0x10a, _ => 0 };
         if (extra != 0) Ps2Menu.shape_c2(extra, x + 97, y, Ps2Menu.SHADOW, Ps2Menu.SHADOW);
-    }
-
-    /// <summary>
-    /// A meswin shape (ids 200..398) part by part (PS2 0x00226e18 -&gt; 0x001fe178: grey, own size)
-    /// as TOMkpShapeXYWHUVC2 quads with the UVs half a texel inside each cell. Shape 0xd7 is 25
-    /// tiles of one 8 x 16 cell; drawn whole, or by TOMkpShapePartIndexXYWHC2 with the sizes given,
-    /// every tile picks up a light line of the white cell left of it.
-    /// </summary>
-    private static void tiled(int id, int x, int y) {
-        uint e = MESWIN_LAYOUT + Ps2Menu.u32(MESWIN_LAYOUT + 4 + 4 * (uint)(id - 200));
-        uint n = Ps2Menu.u32(e);
-        var uv = Ps2Menu.fn<Ps2Menu.ShapeUV>(Ps2Menu.SHAPE_UV);
-        for (uint k = 0; k < n; k++) {
-            byte* p = Native.ptr(e + 4 + 12 * k);
-            float u = p[0], v = p[1], w = *(ushort*)(p + 4), h = *(ushort*)(p + 6);
-            uv(0, x + (sbyte)p[2], y + (sbyte)p[3], w, h, (u + 0.5f) / 256f, (v + 0.5f) / 256f,
-                (u + w - 0.5f) / 256f, (v + h - 0.5f) / 256f, Ps2Menu.GREY, Ps2Menu.GREY);
-        }
     }
 
     /// <summary>PS2 0x001f5298(id, x, y, 0): the gear's icon (+12, +1) and name (+29, +1), icon 0x31 (the mark) when its wearer is its owner.</summary>
@@ -164,7 +145,7 @@ internal static unsafe class EquipMenuPatches {
         for (int i = 0; i < r[0xb]; i++) {
             int y = y0 + ROW * i;
             plate(x, y, 0x10);
-            tiled(0xd7, x + pm.x + 0x58, y + pm.y);
+            Ps2Menu.shape(0xd7, x + pm.x + 0x58, y + pm.y);
         }
         for (int k = 0; k < 4; k++) {
             int id = *(ushort*)(r + 0xe + 2 * k);
@@ -215,7 +196,7 @@ internal static unsafe class EquipMenuPatches {
         if (idx < 0 || idx >= wu16(w, 0x30)) return;
         plate(x, y, 0);
         var pm = xy(POS_PMSHAPE);
-        tiled(0xd7, x + pm.x + 0x58, y + pm.y);
+        Ps2Menu.shape(0xd7, x + pm.x + 0x58, y + pm.y);
         int id = *(ushort*)Native.ptr(ITEM_LIST + 4 * (uint)idx);
         if (id != 0) weapon_name(id, x, y);
     }
