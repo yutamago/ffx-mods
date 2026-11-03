@@ -31,6 +31,7 @@ writes `<out>/efl/x/<HD path>` and a preview per file
 | Item icons, battle words, labels (`icon`, `strtex`; below, "Item icons, battle words, labels") | 8 `icon`, 2 `strtex` | checked through injected game calls (`tools/replays/ui-items.txt`, `ui-battle-overdrive.txt`) |
 | The battle Overdrive tab (`ps2btl` + `mod/BattleSeqPatches.cs`, below) | 8 (`ps2btl`) | checked through injected game calls (`tools/replays/ui-battle-overdrive.txt`) |
 | Items and Abilities screens (`mod/ItemMenuPatches.cs`, below) | 0 | checked through injected game calls (`tools/replays/ui-items.txt`, `ui-abilities.txt`); hooks seen installing in Fahrenheit |
+| The PS2 menu fonts M and S (`ps2fnt` + `mod/Ps2Menu.cs`, below) | 8 (`ps2fnt`) | checked through injected game calls (`ui-mainmenu.txt`, `ui-items.txt`, `ui-abilities.txt`) |
 
 68 files in all; 20 HD textures have no PS2 counterpart (listed by
 `demaster ui`). Previews and screenshots: `~/ffx-work/demaster/research/ui/`
@@ -512,11 +513,8 @@ same calls the PS2 made where the PC kept them): `TODrawBoxXYWHC2`,
 `TOMakePktBoxXYWHRGBA`, `0x008f5e90`/`0x008f5e20`, `TOMkpShapeXY`,
 `TOMkpShapeXYWHC2`, `TOMkpShapePartIndexXYWHC2`, the 16x12 font
 `TOMkpBaseMesFont` `0x00901cb0` (and `0x00901ce0` with alpha, the PS2's
-`0x001f3810`/`0x001f3858`), `TOMkpCrossEasyStrFontSClut` (the HP/MP strings,
-size 1.0 as the PC's PS2-era `TOMenuDrawChrLayoutPlate` draws them),
-`ToMakeBtlEasyDigitRight` (the PC's battle digits for the PS2's 12-pixel
-`"%d"`; `TOMkpValueFontMClutRight` and `TOAdpCrossNumber_009019f0` drew
-nothing visible), `TOMenuDrawTimer`. A hook on `TODrawMenuBGC2` draws the
+`0x001f3810`/`0x001f3858`), and the PS2 fonts M and S for the numbers (HP/MP strings, sphere level, gil,
+play time; below, "The PS2 menu fonts"). A hook on `TODrawMenuBGC2` draws the
 PS2 gradient with the colours it is given, and `TODrawMenuBG` draws nothing
 while `TkMenuDrawAll` runs (hooked to know). Menu logic, the option list
 (PC-only entries included) and the input stay the PC's.
@@ -539,30 +537,80 @@ PS2 message, battle command windows and main menu`) and the file loader
 indexed the `ps2win` files (copied in by hand for that run); the menu was not
 opened there (no input).
 
-**Uncertain.** Compared with memory of the PS2 menu, not with PS2
-screenshots. The 16x12 names and options are the PC's port of the PS2 font
-code; the gil and sphere-level digits are the PC's battle digits (0.78 x 1.0)
-in the PS2's places, not the PS2's 12-pixel font M; the time is the PC's
-`TOMenuDrawTimer` (HD sizes). The help label at `rect_helpsubplt.y` = -6 is
-half above the screen, as the data says (not resolved: the PS2's display
-offset is not known here, and no PS2 screenshot was at hand). Items and
-Abilities are ported (below); equip, status, config, overdrive and
-customize keep their HD draws over the PS2 gradient.
+**The help bar's label.** `rect_helpsubplt` is (0, -6, 468): the gold
+stroke (shapes 0x45/0x46, dy 2) runs from y -4 and shape 0x3e sits at
+(0x50, -6). Shape 0x3e has 17 parts: 16 pieces of a black brush strip
+(meswin (0, 104) 8 x 16, at dx -80 .. 40, the last 88 wide: x 0 .. 208,
+y -6 .. 10) and the "HELP" text ((168, 240) 88 x 8 at -67, 7: x 13, y 1).
+The PC's `TOAdpEasyShapeXYWHC2` (`0x008ed380`) skips every part of 0x3e
+but the last (`param_2 != 0x3e || n - 1 <= k`), so on the PC the label
+floats on the gradient over the gold stroke. The port draws all 17 parts
+(`MainMenuPatches.help_label`, each part through
+`TOMkpShapePartIndexXYWHC2` with w = h = 0): the label now sits on the
+black strip that joins the help bar, as on the PS2. Its place is the
+PS2's: the PS2 frame buffer is 512 x 416 (`0x001182e0`: `0x200` x `0x1a0`)
+and the menu's vertices are `(x + 0x700, y + 0x730) << 4` (`0x001fbbb8`),
+`0x730` = 2048 - 416 / 2, so menu y 0 is the frame's first line and the
+PS2 showed nothing above it either. The strip's top 6 lines and the gold
+stroke's top 4 are cut off on both.
 
-The gil and sphere-level digits and the play time stay the PC's: the PS2
-draws them with font M (`0x001f5e88` = the PC's
-`TOMkpValueFontMClutRight` `0x009042e0`), the `0x3d80` small font
-(`0x001f63c0` = `0x00904310`, 10-pixel cells) and font S strings
-(`0x0024ad28`: `"%02d"` minutes at x - 18, `":"` at x - 28, `"%3d"` hours at
-x - 58). On the PC the `0x3d80` sheet is named
-`menu/subfont/D3D11/{font,shadow}_0_{0,1}.dds.phyre`, which the archive does
-not have. Tried (2026-11-03): the converter wrote those four pages from
-`xfont1208.fmt` (= `subfont.fmt`), the harness served and loaded them
-(`PhyreScene_loadMenuTexture`), and the two value functions still drew
-nothing, so they need more than the texture (their `graphicFontDraw` path
-was not followed). The play time in font S with the PS2's offsets put the
-hours far left of the colon (the PC's font S is proportional, the
-`"%3d"` padding narrow). Both were taken out again.
+**Uncertain.** Compared with the PS2 code and data, not with PS2
+screenshots. The 16x12 names and options are the PC's port of the PS2 font
+code. Items and Abilities are ported (below); equip, status, config,
+overdrive and customize keep their HD draws over the PS2 gradient.
+
+## The PS2 menu fonts M and S (`ui.menus`: texture and code)
+
+**What the PS2 drew.** Besides the 16x12 font, the PS2 menus draw numbers
+and short strings in two small monospace fonts from `xfont1208.fmt`
+(= `subfont.fmt`, sheet `0x3d80`: 128 x 256, 4 bit, two 2-bit pages in
+bits 0-1 and 2-3). Glyph `i = c - 0x20` is on page `i & 1`:
+
+| Font | Draw (SLPM_675.13) | Cells | Grid | Advance |
+|---|---|---|---|---|
+| M | text `0x001f5ff8` -> glyph `0x001f6110`; `"%d"` right `0x001f5e88` / `0x001f5f58` | 10 x 12 from v 144 | `((i % 24) / 2 * 10, 144 + i / 24 * 12)` | 12 |
+| S | text `0x001f6500` / `0x001f6560` -> `0x001f6630` -> glyph `0x001f66f0`; `"%d"` right `0x001f63c0` / `0x001f6408` | 8 x 10 from v 192 | `((i % 32) / 2 * 8, 192 + i / 32 * 10)` | 10 |
+
+A right-aligned value ends its last cell at x + 2. Each glyph is two
+sprites: the shadow at (x + 1, y + 1) with `menu.clp` CLUT 7 (CBP `0x2ebc`)
+row `2 (colour >> 4) + page`, then the face at (x, y) with CLUT 6
+(`0x2eb8`) row `2 (colour & 15) + page` (a PSMT8 `TEX0` loads the CLUT, a
+PSMT4 one picks the row with CSA, as for the item icons). Faces 0..7:
+white ramp, grey, yellow, red, light ramp, black, pink, cyan; shadows 0..7:
+black, dark grey, light grey, green, blue, purple, violet, teal. The
+colours used: HP/MP strings (`"%5d/%5d"`, `"%4d/%4d"`), gil, AP, the target
+window's HP in font S `0x25` (black, light grey shadow); the sphere level
+and the item counts / MP costs in font M `0` (white, black shadow) or `1`
+(grey, unusable). The play time (`0x0024ad28`, t in seconds): `"%02d"`
+minutes at x - 18, `":"` at x - 28 (colour `0x25`, 1 on odd seconds),
+`"%3d"` hours (at most 999) at x - 58.
+
+**Why the PC draws nothing with them.** The PC's copies
+(`TOMkpValueFontMClutRight` `0x009042e0`, `0x00904310`) name the sheet
+`menu/subfont/D3D11/{font,shadow}_0_{0,1}.dds.phyre`, which the archive
+does not have; the PC's own menus use the HD font instead. Serving those
+pages was tried (2026-11-03) and the functions still drew nothing.
+
+**The restoration.** The converter renders both fonts in every colour into
+`menu*/d3d11/ps2fnt.dds.phyre` (`uijob::PS2_FONT`, 1024 x 1024, from the
+first disc source's `xfont1208.fmt` and `menu.clp`: no text, every folder):
+tile `k` (256 x 256 at `(k % 4, k / 4)`) holds face colour `k` (0..7) or
+shadow colour `k - 8`; in a tile glyph `i` of font M sits at (1, 1) in the
+16 x 16 cell `(i % 16, i / 16)`, font S in `(i % 16, 6 + i / 16)`. The empty
+border keeps the bilinear filter from pulling in the neighbouring glyphs
+(with the glyphs packed as on the PS2 sheet, the colon of the time showed
+lines from its neighbours). `mod/Ps2Menu.cs` (`font_m`, `font_s`,
+`value_m`, `value_s`, `play_time`) draws each glyph as two meswin shape-0
+quads with explicit UVs (`TOMkpShapeXYWHUVC2` `0x00903ee0`: ids below 199
+take the sheet `0x3e00` and UVs 0..1 as given) while
+`TOGetShapTextureName(0x3e00)` answers `ps2fnt`
+(`MainMenuPatches.font_scoped`; the first answer loads the texture).
+
+**Checked.** `tools/replays/ui-mainmenu.txt`, `ui-items.txt`,
+`ui-abilities.txt` (calllist: `menu::font_m` ... make the same calls):
+`~/ffx-work/demaster/research/ui/fonts/main-2-ps2.png` (HP/MP, sphere
+level, gil, time, the HELP strip), `items-3-ps2-43.png` (counts, grey for
+unusable items), `abil-3-ps2-43.png` (the plate, "11 AP").
 
 ## The PS2 cursor (`ui.menus`: code)
 
@@ -737,8 +785,8 @@ the PS2's calls (SLPM_675.13 -> FFX.exe):
   4/5, name, HP/MP), a black line, meswin 0x107 (the "Next ... AP" piece),
   the sphere level and `MsGetNextAP - MsGetSaveNextAP`.
 
-Numbers in font M / S are drawn with the PC's battle digits (above: the PC
-has no working `0x3d80` font); icons are the PS2 cells drawn 15 x 18.
+Numbers are in the PS2 fonts M and S (above); icons are the PS2 cells
+drawn 15 x 18.
 
 **Checked.** `tools/calllist` with `@ps2items` (the same calls in Rust,
 `tools/calllist/src/items.rs`) and the main menu's help bar:
@@ -789,8 +837,6 @@ they are missing.
   replacing it needs each caller's PS2 position.
 - The `?`/`!` icons and the other `meswin` cells outside the ported draws.
 - The battle help bar (`TOBtlDrawHelpWin`): HD.
-- The gil, sphere-level and time digits in the PS2 fonts (above, "The main
-  menu": the `0x3d80` font draws nothing on the PC even with its pages).
 - The battle words' place and the `strtex` labels in play (not reached).
 - `worldmap` (airship map): 512x416 PS2 against a 1920x1080 HD layout.
 - Sphere grid (`menu/abmap/dat00/tex`): named after VRAM pages
