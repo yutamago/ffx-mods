@@ -44,6 +44,7 @@ internal static unsafe class MainMenuPatches {
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] public delegate nint PtrOfInt2(int a, int b);
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] public delegate int SeqPoint(int scene, nint name, int* x, int* y);
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] public delegate int LoadTexture(nint path);
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)] public delegate int CursorFn(int kind, int x, int y);
 
     // hooked
     private const uint SHAPE_NAME   = 0x008ac8c0; // TOGetShapTextureName(id) -> name
@@ -53,6 +54,7 @@ internal static unsafe class MainMenuPatches {
     private const uint DRAW_MAIN    = 0x008e0ba0; // TkMenuDrawMain
     private const uint DRAW_OPTIONS = 0x008e20f0; // MenuMain_DrawCmdWindow
     private const uint DRAW_HELP    = 0x008a9350; // the main menu's help bar (window +0x10, installed at 0x008a8e8e)
+    private const uint SHAPE_CURSOR = 0x008feb00; // TOMakePktShapeCursor(kind, x, y)
 
     // drawn with
     private const uint BOX_C2      = 0x008f3db0; // TODrawBoxXYWHC2: untextured, c0 left -> c1 right
@@ -242,14 +244,32 @@ internal static unsafe class MainMenuPatches {
 
     /// <summary>
     /// The PS2 cursor (SLPM_675.13 0x001fe800, kind 0): meswin shape 45's parts at (x, y): the white
-    /// ball (part 0, (80, 144) at -42, -11) tinted with dum75, the silver hand (part 1, (0, 168) at
-    /// -34, -3) in grey.
+    /// ball (part 0, (80, 144) 40 x 40 at -42, -11) tinted with dum75, the silver hand (part 1,
+    /// (0, 168) 40 x 24 at -34, -3) in grey. The sizes are given so that TOMkpShapePartIndexXYWHC2
+    /// keeps the UVs one texel inside the cells, as the PS2 sprite (u + w - 1) does; with 0 it samples
+    /// the edge texels of the neighbouring cells (dark lines along the hand).
     /// </summary>
     public static void cursor(int x, int y) {
         uint ball = u32(DUM75);
-        _part!(45, 0, x, y, 0, 0, ball, ball);
-        _part!(45, 1, x, y, 0, 0, GREY, GREY);
+        _part!(45, 0, x - 42, y - 11, 40, 40, ball, ball);
+        _part!(45, 1, x - 34, y - 3, 40, 24, GREY, GREY);
     }
+
+    /// <summary>
+    /// TOMakePktShapeCursor(kind, x, y): kind 0 is the PS2 cursor (the PC draws the HD hand from the
+    /// battle atlas there); the other kinds stay the PC's. Callers: the battle windows
+    /// (TODrawBtlWindow, from TOBtlSetCurPos), the save choice, the menus' PS2-era code.
+    /// </summary>
+    private static int shape_cursor(int kind, int x, int y) {
+        if (kind == 0) {
+            first(16, "ui.menus: cursor drawn as the PS2 hand and ball");
+            return scoped(() => { cursor(x, y); return 0; });
+        }
+        _cursor_next ??= Native.fn<CursorFn>(SHAPE_CURSOR).chain_from(_cursor_hook!).fnptr!;
+        return _cursor_next(kind, x, y);
+    }
+
+    private static CursorFn? _cursor_hook, _cursor_next;
 
     // ---- the background ---------------------------------------------------------------------------
 
@@ -434,12 +454,14 @@ internal static unsafe class MainMenuPatches {
         };
         _bg_hook = bg;
         _all_hook = draw_all;
+        _cursor_hook = shape_cursor;
         return ok
             & hook(m, MENU_BG, _bg_hook)
             & hook<BGC2>(m, MENU_BG_C2, bg_c2)
             & hook(m, DRAW_ALL, _all_hook)
             & hook<Draw>(m, DRAW_MAIN, draw_main)
             & hook<WinDraw>(m, DRAW_OPTIONS, draw_options)
-            & hook<WinDraw>(m, DRAW_HELP, draw_help);
+            & hook<WinDraw>(m, DRAW_HELP, draw_help)
+            & hook(m, SHAPE_CURSOR, _cursor_hook);
     }
 }
