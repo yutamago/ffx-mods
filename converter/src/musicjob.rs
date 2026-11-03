@@ -408,6 +408,10 @@ impl Job for MusicJob {
     fn enabled(&self, config: &Config) -> bool {
         config.audio.music_engine.ps2()
     }
+    /// 2: long samples in pieces play through (music143, music149).
+    fn version(&self) -> u32 {
+        2
+    }
     fn run(&self, ctx: &Ctx, out: &Output) -> Result<String> {
         build_bank(ctx, out)
     }
