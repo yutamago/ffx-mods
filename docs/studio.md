@@ -56,8 +56,9 @@ the same from track to track and from one start to the next. Track edits
 **Track list** (left): every `musicNNN.bgm` on the disc (112 on the German
 disc). The 89 that the PC's "Original" soundtrack bank uses carry the bank's
 names ("Battle Theme (1-09)", disc and track number of the soundtrack)
-from `musicjob::TRACKS`, sorted alphabetically; the unnamed ones follow as
-`musicNNN`, by number. The filter matches names and ids. A click loads the
+from `musicjob::TRACKS`; the other 23 carry a name marked "(proposed)"
+(`library::PROPOSED`, evidence in `docs/music.md`, "Track notes"); all
+sorted alphabetically. The filter matches names and ids. A click loads the
 track and plays it.
 
 **Transport** (top): the track's name, *Undo* / *Redo* (also Ctrl+Z,
@@ -308,8 +309,8 @@ tempo; "2 channels" in the rack are channel 0 and the one note):
 | music179 | 1 | 39.6 s at 21 kHz |
 | music180 | 1 | 34.4 s mono at 44.1 kHz |
 | music173 | 2 | two recordings at 12 kHz: a 30.0 s intro (C4) and a 115.8 s body (D4), looped from the second |
-| music149 | 1 | a 0.6 s looping sample held for 40 s (a drone) |
-| Good Night one-shot (1-26), music143 | 1 | a 0.36 s looping stereo sample held 5.7 s |
+| music149 | 1 | the Hum of the Fayth, a 39 s mono recording at 22 kHz in 0x2000-byte pieces ("long samples in pieces", `docs/music.md`), looped by the song |
+| Good Night one-shot (1-26), music143 | 1 | a 5.7 s stereo recording at 40 kHz, in pieces like music149 |
 | music182, music183 | 8 | scales of 0.5 s notes (A and B major) on music180's recording, played at 74-83 kHz |
 | Zanarkand (1-02), Game Over (1-11), Twilight (2-18) | 406, 126, 138 | real note sequences on two channels: solo piano (one multi-sampled piano, 1.2-2.4 s looped samples) |
 
@@ -339,7 +340,9 @@ paste through the clipboard text, snapping, the wheel's modifiers and the
 zoom around the pointer (rows and keys), MIDI messages (note on/off,
 velocity 0, sustain, bend, all off) through the keyboard state (pedal,
 re-strike, channel change while a key is down), the window settings file
-(round trip, bad values), the alphabetical track order.
+(round trip, bad values), the alphabetical track order, the proposed
+names, a long sample in 0x2000-byte pieces playing through (WD flag
+`0x10`).
 
 With the disc (`FFX_STUDIO_CONFIG=<demaster.toml>`): every sequence encodes
 to its own bytes and keeps its notes when normalized; five tracks render
@@ -354,8 +357,10 @@ demaster music` (battle theme, through its loop jump; game over); without
 ## Limits
 
 - Ten sequences (`music052`, `190`, `191`, `193`..`199`) name banks that
-  `wave_wd.sec` does not list. They open with an empty bank: the notes are
-  there, the sound only with instruments from other banks.
+  `wave_wd.sec` does not list and that are nowhere on the disc (`docs/
+  music.md`, "Track notes", 2; the game never plays them). They open with
+  an empty bank: the notes are there, the sound only with instruments from
+  other banks.
 - The three tracks whose guitar and vocals were streamed from the disc
   (Otherworld, Confrontation, Jecht's theme) play without them, as in the
   converter (`docs/music.md`).
