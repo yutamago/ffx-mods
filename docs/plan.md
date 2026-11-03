@@ -13,7 +13,7 @@ Numbers refer to the rows of [`differences.md`](differences.md). Status:
 | Field map textures | 5 | done | 13,701 textures + swap frames; `docs/maps.md`. Close palette calls listed in maps.tsv |
 | Battle map textures | 8 | done | 2,129 textures |
 | Effect textures | 9 | done | 7,357 converted (`docs/effects.md`); brightness moved into alpha where HD does, so bright draws burn out white like the PS2 (Energy Blast confirmed by user). Field-map particles not seen in game |
-| PS2-drawn menu textures, portraits, icons, windows | 12, 22 | wip | done: title, portraits, battle atlas, pad glyphs, loading, message/choice windows, battle command windows (`docs/ui.md`). Todo: main menu + sub-menus (needs atlas cells + port from PS2 ELF), cursor glow, run-time coloured icons, Miss/Immune/Overkill |
+| PS2-drawn menu textures, portraits, icons, windows | 12, 22 | wip | done: title, portraits, battle atlas, pad glyphs, loading, message/choice windows, battle command windows, PS2 cursor, item icons, battle words, Overdrive tab, main menu and its Items, Abilities, Status, Equip, Overdrive, Customize, Config screens, PS2 fonts M/S (`docs/ui.md`; checked through injected calls, not in Fahrenheit). Todo: sphere grid, the PS2 menu sequence scenes, battle help bar, worldmap |
 | Config file + converter `build` command | all | done | `docs/config.md` |
 | Fahrenheit mod package | | wip | mod `yuta.demaster` (F8 status window), `demaster.exe`, package script, CI. Open: F8 window not seen on screen; CI needs secret `FFX_RUST_TOKEN` |
 

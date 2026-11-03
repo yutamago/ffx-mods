@@ -32,6 +32,7 @@ writes `<out>/efl/x/<HD path>` and a preview per file
 | The battle Overdrive tab (`ps2btl` + `mod/BattleSeqPatches.cs`, below) | 8 (`ps2btl`) | checked through injected game calls (`tools/replays/ui-battle-overdrive.txt`) |
 | Items and Abilities screens (`mod/ItemMenuPatches.cs`, below) | 0 | checked through injected game calls (`tools/replays/ui-items.txt`, `ui-abilities.txt`); hooks seen installing in Fahrenheit |
 | The PS2 menu fonts M and S (`ps2fnt` + `mod/Ps2Menu.cs`, below) | 8 (`ps2fnt`) | checked through injected game calls (`ui-mainmenu.txt`, `ui-items.txt`, `ui-abilities.txt`) |
+| Status, Equip, Overdrive, Customize, Config screens (`mod/*MenuPatches.cs`, below) | 0 | checked through injected game calls (`ui-status-ps2.txt`, `ui-equip.txt`, `ui-overdrive.txt`, `ui-customize.txt`, `ui-config.txt`); not run in Fahrenheit |
 
 68 files in all; 20 HD textures have no PS2 counterpart (listed by
 `demaster ui`). Previews and screenshots: `~/ffx-work/demaster/research/ui/`
@@ -556,8 +557,7 @@ stroke's top 4 are cut off on both.
 
 **Uncertain.** Compared with the PS2 code and data, not with PS2
 screenshots. The 16x12 names and options are the PC's port of the PS2 font
-code. Items and Abilities are ported (below); equip, status, config,
-overdrive and customize keep their HD draws over the PS2 gradient.
+code. Every main-menu screen but the sphere grid is ported (below).
 
 ## The PS2 menu fonts M and S (`ui.menus`: texture and code)
 
@@ -811,27 +811,265 @@ sequence scenes on these screens ("scene0", "scene9", "scene31" for items,
 what they draw (title plates or backdrops, probably) was not decoded, so
 they are missing.
 
+## The Status screen (`ui.menus`: code)
+
+`mod/StatusMenuPatches.cs` hooks two PC draws and makes the PS2's calls (SLPM_675.13 -> FFX.exe):
+
+| PC draw | PS2 draw | What |
+|---|---|---|
+| `MenuStatus_DrawMainWindow` `0x008d2710` (main window `+0x10`, pointer `0x0186a838`) | `0x0022ad00` (record `0x00325850`, window from `0x0022adb8`) | page 0 (`0x0022a770`), stats (`0x0022a9a8`), status background (`0x002297a8`) |
+| `MenuStatus_WindowDraw_008d2790` (windows `0x0186a820[0..5]`) | `0x0022b5a0` | an ability page; the aeon status pages use the same draw (`+0x64` set) |
+
+The PC's `TkMn2GetStatusPos` (`0x008d4920`) reads the same names as the PS2's `0x00228c48`. PS2 `0x006938xx`/`0x003258xx` map to PC `0x0186a83c..0x0186a9f8` / `0x023cc3e0..0x023cc420`. `TkMn2SeqGetPos`/`Rect` store x, y (w, h) in order, not mirrored. The common plates (`rect_lgplt` .. `rect_wpnbline` and their second rows) are 24-byte records `{x, y, w, h, c0 +8, c1 +0xc, A +0x10, B +0x14}`, 0x18 apart, the same order on both platforms.
+
+- **Page 0**, slid by s = ease(t) 0x155 / 4096:
+  - Face (`0x002299b0`): scissor (`pos_face`, `num_face1` x `num_face2`), the 91 x 98 face sprite (`0x00200048`), the next face at x + num_face1 t / 4096 under the font shade. Drawn with `MenuPlayer_DrawFaceSlide` at the PS2 place and size.
+  - Gear (`0x00229fa0`): common window (shapes 0xc8..0xcb) `rect_wpnbplt`, plate L `rect_wpnlplt` (0xda/0xdb), box `rect_wpnrplt`, the same for the second row, plate R `rect_wpnbline` x2, shape 0xd7 at rplt.x + 0x58; "Weapon"/"Armor" (status text 5/6) at `pos_wpnmoji`; gear icon and name (`0x001f5298`: icon owner 2 + 1 + armour, the 0x31 mark when +4 == +6) at `pos_wpnicon`, or status text 0x17 at `pos_wpnnm` without armour.
+  - Overdrive (`0x00229d60`): boxes `rect_ltbplt`, `rect_ltplt`, plate L `rect_lgplt`, shape 0x109 ("Mode") at `pos_typshape`, shape 0x108 (brush and "OVERDRIVE") at `pos_lgshape` + 16, the mode name (`TkMenuMenu1Mes(TkMn2GetOverDriveId + 0x1033)`) at `pos_ltstr`.
+  - Gauge (`0x00229828`): box at `rect_lg`, width w r / 4096, `col_lmtg0` -> the blend of `col_lmtg0`/`col_lmtg1` at r, full in `col_lmtgf0`.
+  - Party plate (`0x00225f38` -> `0x00200c60`) at `rect_3nameplt`: as the Abilities plate, but the line under it is shape 0xe7 across 512 (grey).
+- **Stats** (`0x0022a9a8`): table `0x00325808` = PC `0x00c5a790` ((status text, `MsGetSavePlayerPtr` byte), 7/0x2f .. 0xe/0x36). Left column from `pos_lpmplt`, right from `pos_rpmplt` (the fifth on), `num_pmplt` apart, slid by `MenuHelp_Ratio(ease 0xd0 / 4096, i % 4)`. Each: plate kind 0x10 (purple), shape 0x10a (black line and disc) at `pos_pmshape` + 0x58, name at +29, +1, the value in font M (`0x00226c80`) ending at +0xd3 + 2, y + 6. Then for party members: common window `rect_stsmw`, shape 0xf3 at `pos_extex`, status text 0x1a at `pos_exmssg`.
+- **Status background** (`0x002297a8(bg, 0)`): the box `col_menubg0` -> `col_menubg1` with alpha bg >> 5, from `pos_face.y` to the bottom. It covers the page while an ability page is open.
+- **Ability page** (`0x0022b5a0`):
+  - List: `TkMenuGetDispCommand(+0x60, +0x58, +0x5c, chr)`.
+  - Slide: ease of (+0x52, +0x54); down by e 0xd0 / 4096, or apart by e / 16 row / 32.
+  - Title (`0x00226298` -> `0x00201ae8`): plate L 0xda/0xdb 213 wide in black at alpha +0x52 >> 5, the strtex cell +0x68 at +21, +5 (`0x00201768` = `TOMkpShape2ECCCell_008f8d50`) at `rect_smojiplt`.
+  - Rows: `num_staplt` apart from `pos_rstaplt.y`, left `pos_lstaplt.x`, right `pos_rstaplt.x`; aeons +11 and one pixel less. Each: plate kind 0x10, shape 0xd7 at `pos_pmshape` + 0x58, then icon and name (+12/+29, +1) from `MsGetRomAbility` (icon +0x68) for kind 0, `MsGetComData` (icon +0x14) otherwise, a member name for sub 1.
+
+**The restoration.** Every call above is drawn with FFX.exe primitives inside one packet, with `ps2win` for meswin. The common plates and windows are rebuilt from shapes with the widths from the meswin layout table (`0x00c5b460`). Logic, input and the window records stay the PC's. The PC's dividers (`0x008e71d0(4)`) and its own background are dropped. Equip's top half is the same page (`MenuStatus_DrawPage`).
+
+**Checked.** `tools/replays/ui-status-ps2.txt` through `tools/calllist` (`@ps2screen status`, `tools/calllist/src/status.rs`): Tidus's page, 4:3, the Auto-Abilities page over the status background, Rikku's page (full gauge), her Special page (Steal, Use). Layout values read in the game: face (20, 96) 91 x 98 scissor, stats from (25, 240) step 32, `rect_stsmw` (131, 379, 381, 32), ability rows from y 119 step 27, title at (150, 94).
+
+**Uncertain.** Not compared with PS2 screenshots. The face slide, the page fades, the aeon pages and the `sub == 1` list were not driven. The equipped mark 0x31 uses the HD icon cell.
+
+## The Equip screen (`ui.menus`: code)
+
+**What the PS2 drew** (SLPM_675.13, Equip record `0x003258d8`: control `0x0022c438`, `+4` draw `0x0022cc28`; the PC's record is `0x00c5a744`, `+4` `MenuEquip_Draw_008cf670`):
+
+- The status page `0x0022a770(0, 0, chr, 0, &0x003258c8.., fade)`. Status `0x0022ad00` draws the same page with the same arguments; on the PC both call `MenuStatus_DrawPage` (`0x008d4ee0`).
+- Two label plates `0x00226218(x, y, k)` -> `0x00201a70`: meswin 0xda/0xdb over 213 in `0x80000000` (`0x001ff028`, the `0x001ff1e0` shape), then strtex label k at (+21, +5), 170 x 14 (`0x00201768`). k 6 ("Equipment") at `r_somojiplt`, k 7 ("Abilities") at `r_somojiplt2`. The PC draws the same cells with `TODrawSheetCell_008f8bb0`.
+- The cursor (`0x0022bbd0`, once the fade reaches 0x1000): at `0x00228b98` (= `MenuStatus_GetPos` `0x008d4e30`), which is `rect_wpnlplt`'s plate record (the armour row's at +0x48) + `pos_wpnmoji`. It blinks (`timer & 2`) while the list is open.
+- Abilities (`0x0022baa8`, while `g_TkMenuEquipItem` != 0xff): `MsGetSaveWeapon(item)`. For each slot (`+0xb`) from `pos_soabplt`, 32 apart: a kind-0x10 plate (`TOAdpShapeByKind`, `col_babplt`, purple) and shape 0xd7 at + `pos_pmshape` + (0x58, 0). For each of the 4 ability words at `+0xe` (not 0 or 0xff), `0x001f5388`: the `MsGetRomAbility` record's icon (`+0x68`) at (+12, +1) and name at (+29, +1).
+- The weapon list window (`+0x10` = `0x0022bdc0`; the PC's `MenuWeapon_DrawList_008cf9f0`, window at `0x0186a61c`):
+  - `TkMn2DrawMenuWindowScissor(pos_sobiplt.y, 160, part, +0x46)`, with parts 1/2 while `+0x32 != +0x34`.
+  - Rows first - 1 .. first + 5 from `pos_sobiplt` - (0, 32) (`0x0022bd20`). The second pass is shifted by -160 * `+0x46` / 4096.
+  - Each row (`0x0022bc20`; at rest y -= `+0x46` / 128): a kind-0 plate (`col_bsoplt`, grey), shape 0xd7, and for an id in `g_TkMenuItemList`, `0x001f5298`: icon `rec[4] * 2 + rec[5] + 1`, the name `MsGetSaveWeaponName`, and icon 0x31 when `rec[4] == rec[6]`.
+  - The scissor reset `(0, 0, 511, 415)`.
+  - The cursor at `pos_sobiplt` + (12, 1 + 32 (`+0x48` - `+0x32`)).
+  - The scroll bar `0x00225e90` -> `0x00200878` (the item list's draw) over `r_soscrol`.
+
+**The restoration** (`mod/EquipMenuPatches.cs`): hooks on `MenuEquip_Draw_008cf670` and `MenuWeapon_DrawList_008cf9f0` make the calls above with FFX.exe's primitives.
+- `TODrawMenuBG` and `MenuDrawDividerShapes(4)` are dropped.
+- The page goes through `MenuStatus_DrawPage`, as the PC calls it (the Status port hooks it).
+- Logic and input stay the PC's.
+
+**Checked.** `tools/replays/ui-equip.txt` (save 5, Equip, Tidus; then the weapon list) through `tools/calllist` (`@ps2screen equip`, the same calls in `tools/calllist/src/equip.rs`). Values read in the game: `r_somojiplt` (28, 212), `r_somojiplt2` (277, 212), `pos_sobiplt` (30, 237), `pos_soabplt` (279, 237), `pos_pmshape` (9, 0), `rect_wpnlplt` record (183, 131), `pos_wpnmoji` (11, 1), `r_soscrol` (256, 221, 10, 191). Shots: `equip-1-hd`, `-2-ps2`, `-3-ps2-43`, `-4-list-hd`, `-5-list-ps2`, `-6-list-ps2-43`.
+
+**Uncertain.** Not compared with PS2 screenshots. Scrolling, the armour row and the blink were not driven. The navy band, the column between the lists and two grey lines visible over the PS2 gradient come from the sequence scenes the PC starts here (scene0, scene11, scene20), not from this draw. The HD background normally covers them; the PS2 probably showed them (not checked).
+
+## The Overdrive screen (`ui.menus`: code)
+
+The main menu's Overdrive entry, then a member on the main menu's party rows (that pick is the
+main menu's own draw). PS2 record `0x00325a78` (control `0x00230aa0` = `TkMenuCtrlLimit`
+`0x008d0460`, init `0x0022fb38` = PC `0x008d0cd0`); PC record `0x00c5a768`.
+
+| PC draw | PS2 draw | What |
+|---|---|---|
+| `0x008d09b0` (record +4) | `0x002312d0` | the member's party plate and the Overdrive plate |
+| `MenuLimit_WindowDraw_008d16f0` | `0x00230708` (list `0x002305c0`, rows `0x00230488`/`0x00230328`, cursor `0x00230568`) | the View (`+0x5c` 1) and Set Mode (0) windows |
+
+- **Party plate** (`0x00225f38`, `0x00200c60`) at `pos_4nameplt` (0, 64): the front-line band
+  (`pos_noactive`, `col_noactive0/1`, 512 wide), then the ability screen's plate (4/5, name,
+  HP/MP in font S, meswin 0xe7 stretched to 512 at y, 0x107, sphere level, next AP).
+- **Overdrive plate** (`0x00229d60`, the Status screen's too) at `rect_2lgplt` (161, 112): every
+  piece at its layout place moved by `rect_2lgplt - rect_lgplt`: box `rect_ltbplt` in
+  `col_ltbplt` (black), box `rect_ltplt` in `col_ltplt0/1`, `rect_lgplt` as a common plate
+  (0xd8 / 0xd9 in `col_lgplt0/1`), shape 0x109 ("Mode") at `rect_ltplt + pos_typshape`, 0x108
+  ("OVERDRIVE") at `rect_lgplt + pos_lgshape + (16, 0)`, the gauge (`0x00229828`: width
+  `rect_lg.w * g / max`, `col_lmtg0` left, `col_lmtg0..col_lmtg1` mixed by the fill on the
+  right, all `col_lmtgf0` when full, nothing at 0; g / max = `TkMenuGetLimit` /
+  `TkMenuGetLimitMax`), the mode's name `TkMenuMenu1Mes(TkMn2GetOverDriveId + 0x1033)` at
+  `rect_ltbplt + pos_ltstr`. The Status screen calls `0x00229d60` with `rect_lgplt` itself
+  (`0x0022a8f8`), so there the mode box `rect_ltbplt` (268, 96, 244 x 27) ends at x 512; the
+  Overdrive screen passes `rect_2lgplt`, the move is (44, 16) and the box runs 312..556, cut
+  by the 512-wide screen on the PS2 as by the screen edge here.
+- **Windows**: View: box `rect_lwplt` (0, 112, 159 x 27, `col_lwplt0/1`) and the member's
+  Overdrive command (`MsMenuStatusNum` / `TkMenuGetCommandOffset(list, 5, chr, 0x48)` /
+  `TkMn2GetCommandName`) centred, y + 4. Set Mode: `0x00201a70` at `rect_lmojiplt`: meswin
+  0xda / 0xdb 213 wide in `0x80000000`, strtex label 0 ("Overdrive Modes") 170 x 14 at
+  (+21, +5) (`TOMkpShape2ECCCell_008f8d50`). Rows: columns `pos_2llplt` / `pos_2lrplt` (30 and
+  279, y 182), 9 rows from y - 32 under `TkMn2DrawMenuWindowScissor(y, 224, ...)` (two passes
+  while paging), each a kind-0x10 plate (0xda, 0xdb from x + 16 209 wide, `col_babplt`, purple)
+  and meswin 0xd7 at x + `pos_pmshape` + 0x58; usable entries by kind: 1 icon and command name
+  (+12 / +29), 2 a name (+12), 3 `TkMenuMenu1Mes(id + 0x1033)` (+0x1d; the modes). The scroll
+  bar (`0x00225e90` -> `0x00200878`, as the item list's) at `rect_lscroll` over
+  (count + 1) / 2 rows; the PS2 cursor at 12 + column x, `pos_2lrplt.y` + 1 + 32 (cursor / 2 - top).
+- No counts or progress numbers in the mode rows. The PC's divider lines
+  (`MenuDrawDividerShapes(5)`) are not on the PS2.
+
+**The restoration** (`mod/OverdriveMenuPatches.cs`): hooks on both PC draws make the calls above
+with FFX.exe's primitives; layout words by name through `TkMn2SeqGetPos` / `TkMn2SeqGetRect` /
+`TkMn2SeqGetColor` (scene 1), several of them being the Status init's (`0x00228c48` / PC
+`0x008d4920`). The sub-command bar (View / Set Mode) is `ItemMenuPatches`', the help bar
+`MainMenuPatches`'.
+
+**Checked.** `tools/replays/ui-overdrive.txt` (`@ps2screen overdrive`: the record's `+4`, the
+window's `+0x10`, the bar and the help bar through thunks; `tools/calllist/src/overdrive.rs`):
+`od-1-hd.png`, `od-2-ps2.png` (Tidus, "Swordplay", the OVERDRIVE plate, Mode "Stoic", Spiral Cut
+and Slice & Dice on purple plates), `od-3-ps2-43.png`, `od-4-mode-hdlist.png`, `od-5-mode-ps2.png`
+(the "Overdrive Modes" label plate and the Stoic row).
+
+**Uncertain.** Not compared with PS2 screenshots. The gauge was empty in the save (fill and full
+colours not seen); paging and the scroll bar were not driven (2 entries). The 0xd7 underline shows
+faint seams between its 8-texel tiles (`TOMkpShapeXY` with w = h = 0 samples the neighbouring
+texels, as with the cursor). The "OVERDRIVE" label's O is cut on the left: column 0 of the cell
+(0, 224) 136 x 16 in the disc's own `uspc/menu/meswin.fmt` holds only part of the O, and the
+converter copies it unchanged, so this is the PS2 English art (the German "EKSTASE" in the same
+cell is whole). The front-line mask is read at `0x01841c2c`, as the ability screen port does, for
+the PS2's `0x00242908`. The aeon branch of `0x00200c60` (plates 0xcc / 0xcd) is not ported (no
+aeon reaches this screen).
+
+## The Customize screen (`ui.menus`: code)
+
+The PS2 record `0x00325aa0` (control `0x00232a60`, init `0x002323a0`) opens two windows; the PC
+kept both (`MenuKaizou_OpenWindow` `0x008d6d60`, `MenuKaizou_OpenListWindow` `0x008d6ce0`).
+The layout comes from the menu sequence (PS2 init `0x002315f0`; PC `0x008d6be0`): `pos_kzonmplt`
+`0x00693d68` (PC `0x0186aa40`), `r_kmojiplt1`/`2` `0x00693d70`/`78` (`0x0186aa44`/`4c`),
+`pos_kabplt` `0x00693d80` (`0x0186aa54`), `pos_ksobiplt` `0x00693d88` (`0x0186aa58`), `r_kscrol`
+`0x00693d90` (`0x0186aa5c`), `pos_ksobiplt2` `0x00693d98` (`0x0186aa64`), `r_kbackplt`
+`0x00325ad0` (`0x023cc3a0`), `r_kmojiplt3` `0x00325b00` (`0x023cc370`); the cost window's
+`r_shohiplt` `0x00325a40` (`0x023cc440`), `pos_shiplt`/`shshape`/`lshohi`/`rshohi`
+`0x00325a58`..`70` (`0x023cc430`/`42c`/`428`/`424`), `pos_pmshape` `0x00325878` (`0x023cc420`).
+The mod reads them by name (`TOSeqGetPoint`, `TOSeqGetRect`, `TkMn2SeqGetColor`); in the game:
+`pos_ksobiplt` (30, 119), `r_kscrol` (256, 103, 10, 309), `r_kmojiplt1` (28, 94), `r_kmojiplt2`
+(277, 254), `pos_kzonmplt` (0, 49), `pos_kabplt` (279, 279), `r_kbackplt` (279, 119),
+`r_shohiplt` 209 x 65, `pos_shshape` (40, 23), `pos_lshohi` (33, 19), `pos_rshohi` (125, 19),
+`pos_pmshape` (9, 0).
+
+**What the PS2 drew.**
+
+- Equipment list (`0x00232188`, window `0x00693d58` = PC `0x0186aa30`; PC draw
+  `MenuKaizou_Draw_008d6860`): rows -1..9 from `pos_ksobiplt`, 32 apart (`0x00231f90`), in the
+  window scissor `0x002274a8(y, 0x120, part, +0x46)` (two passes while scrolling, the second
+  `-0x120 * +0x46 / 4096` higher). A row (`0x00231e70`): plate kind 0 (`TOAdpShapeByKind`,
+  `col_bsoplt`, grey), shape `0xd7` at `pos_pmshape + (0x58, 0)`; when the weapon record is in use
+  (+2) and not flag 2 (+3): icon `2 * owner + kind + 1` at (+12, +1), the name (16x12 font,
+  grey unless `0x002317c8` = `MenuEquip_IsSelectable(id, 0)`), icon `0x31` over it when +4 ==
+  +6 (`0x001f5298`). Then the cursor at (`pos_ksobiplt` + (12, 1 + 32 row)), the scroll bar
+  (`0x00225e90` -> `0x00200878`, dark track, light thumb), the labels (`0x00226218` ->
+  `0x00201a70`: black plate `0xda`/`0xdb` 213 wide, strtex cell at (+21, +5)): cell 7 at
+  `r_kmojiplt2`, 6 at `r_kmojiplt1`; a band `col_menubg0 -> col_menubg1` from `pos_kzonmplt.y`
+  down with alpha `TkMn2GetStatusBG / 32` (`0x00231e18`); the picked weapon's slots
+  (`0x00232030`: kind-0x10 plates with `0xd7` per slot (+0xb), its four abilities (+0xe)
+  with icon (+0x68) and name); the owner's plate (`0x00225f38`: the front-line band, then
+  `0x00200c60(chr, pos_kzonmplt)`: plate 4/5, name, HP/MP, shape `0xe7` across the screen,
+  `0x107`, sphere level, next AP; for no owner the empty plate `0xcc`/`0xcd`, `0xe9`, `0xea`).
+- Abilities to add (`0x00232730`, window `0x00693d5c` = PC `0x0186aa34`; PC draw
+  `DrawGearCustomizationMenu` `0x008d5f60`): for the row's kaizou record (item list entry +3,
+  8-byte records from `TkMn2GetKaizou`, item +4, count +6) the cost window `0x00227800` at
+  `r_kbackplt` (window frame `0x001fa328` in `col_shohiplt0/1`, a kind-8 gold row with the
+  item's icon and name, shape `0xff` (two discs and the arrow), the count held in font M at
+  `pos_lshohi`, at `pos_rshohi` what is left or `TkMenuMainMes(0x15)` right-aligned in grey when
+  too few) and label cell `0x10` at `r_kmojiplt3`; label 7 at `r_kmojiplt1`; rows as above with
+  kind-0x10 plates and the ability's icon and name (grey unless the entry's kind is `0xb`);
+  cursor; scroll bar; the equipment row's weapon on a kind-0 plate at `pos_ksobiplt2`
+  (`0x002324d8`). This window draws over the equipment list in the same places.
+
+**The restoration** (`mod/CustomizeMenuPatches.cs`): hooks on `MenuKaizou_Draw_008d6860` and
+`DrawGearCustomizationMenu` make those calls with `Ps2Menu`'s primitives,
+`TkMn2DrawMenuWindowScissor` `0x008c0f70` (PS2-unit twin of `0x002274a8`),
+`TOMkpWindowFrame_008f9b60` (twin of `0x001fa328`), `TODrawSheetCell_008f8bb0` for the strtex
+labels (the converter's PS2 strtex), `MsGetRomAbility`/`MsGetRomItem` for the icons and names.
+The long shapes (`0xd7`, `0x107`, `0xff`) are drawn part by part from FFX.exe's copy of the PS2
+layout table (`0x00c5b460`, ids 200.. at id - 200), each quad with its texels inset by half a
+texel: with `TOMkpShapeXY` the bilinear filter blended in the opaque column left of the `0xd7`
+cell and put a light tick on every 8-pixel piece. The PC's `TODrawMenuBG`, divider shapes and HD
+plates are dropped; logic and input stay the PC's.
+
+**Checked.** `tools/replays/ui-customize.txt` through `tools/calllist` (`@ps2screen customize`,
+the same calls in `tools/calllist/src/customize.rs`), save 5 (`kami0100`, Customize is the 9th
+main-menu entry): `cust-1-hd.png`, `cust-2-ps2.png`, `cust-3-ps2-43.png` (equipment list, cursor
+on Yellow Shield), `cust-4-add-hd.png`, `cust-5-add-ps2.png`, `cust-6-add-ps2-43.png` (Yellow
+Shield's abilities, cursor on Lightning Ward, cost Electro Marble 46 -> 42).
+
+**Uncertain.** Not compared with PS2 screenshots. Not driven: the scrolling passes, the "too few
+items" message, the empty party plate, the fade band while visible (it was 0x1000 with the
+abilities list open; its colours equal the background, so it only hides the list below). The
+strtex labels go through `graphicDrawUIElement`, outside the packet; their order looked right in
+the harness. The help bar stays HD. The cost row plate (225 wide) runs past the 209-wide
+`r_shohiplt` window, as the data says.
+
+## The Config screen (`ui.menus`: code)
+
+**What the PS2 drew** (SLPM_675.13, record `0x00326008`: control `0x002353f8`, draw `0x00235a68`, page select `0x00235ab0`, open `0x00235b50`, close `0x00235c10`). The draw runs `0x002492f8` twice, then the packet setup, then the page `0x00235a00`. The page calls `0x00235720(0, 0, row)` for each row, with a kick (`0x00225b28`) between rows. The rows are option records. Both games use the same layout: count `+4`, value `+8`, enabled `+0xc`, get/set `+0x10`/`+0x14`, title id u16 `+0x18`, choice ids u16 every 4 bytes from `+0x1c`. The PS2 records are 0x30 bytes apart from `0x00325d60`. The PS2 has four lists (`0x00325f70`/`f98`/`fb8`/`fe0`, with 9/8/10/9 rows), chosen by `0x0020b858` and `0x002d92d0`. A row draws:
+
+- The plate `r_cnameplt` through `0x00226f30`: meswin 0xcc stretched `c_cnameplt0` -> `1`, then 0xcd. Rows are `num_cnameplt` - 5 apart.
+- The title at `pos_cname` with `0x00226358` (the 16x12 font).
+- The cursor (`0x00227100` -> `0x001fe580` kind 0) on row `0x00693f68`.
+- The choice window `0x00226fe8` -> `0x001fa328`: meswin 200 at (x, y) in c0; 201 at (x + cw, y), w - cw wide, c0 -> c1; 202 at (x, y + ch), h - ch high, in c0; 203 at (x + cw, y + ch), (w - cw) x (h - ch), c0 -> c1. cw x ch is the size of shape 200 (16 x 24). The window sits at `pos_cchoplt`, has the size of `rect_cchoplt`, and runs `col_helpplt0` -> `1`.
+- Each choice centred at x + (i + 1) w / (n + 1), y + `pos_cchoplt.y`, grey when the row is disabled.
+- The brush under the value (`0x00225bf0`: slot = row in `0x006672d8`). It restarts when its place changes, takes w / 14 + 2 frames, and draws (p / steps)^2 of the width: 0xe2 at x - 5, 0xe3 from x + 11, 0xe4 at the end.
+- The help of the cursor row's value (`0x002496b0` -> `0x002437e0`).
+
+`rect_cbline`, `pos_cbline`, `c_cbline0/1` and `rect_cscroll` are read but never drawn. Values read in the game:
+
+- `r_cnameplt` (0, 55) w 182, `c_cnameplt0/1` `34 31 46 80` -> `28 1e 32 80`, `num_cnameplt` 45.
+- `pos_cname` (42, 7), `pos_cchoplt` (184, 5), `rect_cchoplt` 289 x 30, `col_helpplt` `09 09 09 80`.
+
+The window's left edge is the corner cell's brushed alpha edge (the same pieces as the plain message window). Over the light menu gradient its gaps show the background.
+
+**The restoration** (`mod/ConfigMenuPatches.cs`). The hook on `MenuConfig_Draw` (`0x008cb320`) calls `TkMenuDrawKick` twice, then draws the PS2 rows in one packet:
+
+- Plate: `0x008f5e90` (= `TkMn2DrawCommonPlateR`'s `0x008f09f0`).
+- Title and choices: `TOMkpBaseMesFont`; widths from `TkMn2StringWidth`.
+- Cursor: the PS2 cursor.
+- Window: `TOMkpShapeXYWHC2` 200..203, corner size from `TOGetWindowLayout(200)` (the shapes of `0x008f1e40`).
+- Brush: 0xe2/0xe3/0xe4, with the PS2's sweep.
+
+The rows are the PC's. `g_TkMenuConfigRows` is 8; the PC replaced Sound with the soundtrack row (`0x00c5a528`, `g_TkMenuConfigLocRow`), whose title, choices and help come from `SaveDataGetLoc` 0x1cd / 0x1d0 - 2k / 0x1d1 - 2k, as in the PC's draw. The help is set from the draw (`TkMenuConfigHelp` or `g_TkMenuConfigHelpText`, then `TkMenuSetHelpMessage`). The PC's layout words come from `0x008cc050` (the twin of the PS2 init `0x00234a38`, read by the same names).
+
+**Checked.** `tools/replays/ui-config.txt` through `tools/calllist` (`tools/calllist/src/config.rs`: the same calls; it points the config menu record's `+4`, `0x00c5a5e8`, at the thunk). Screenshots in `/mnt/c/shots/dm-pm5/ui-config/`:
+
+- `config-1-hd.png`: the HD screen.
+- `config-2-ps2.png`: the PS2 version: plates, titles, the cursor on Music, black choice windows, brushes under the values.
+- `config-3-ps2-43.png`: the same after the 4:3 write.
+- `config-4-moved-ps2.png`: cursor on Names and its value moved to OFF; the brush follows and the help text changes.
+
+**Uncertain.** Not compared with PS2 screenshots. The harness draws the brushes at rest. Thin bilinear edge lines show under the brushes and at the window's left edge (the same as in Items). The help bar stays HD in the test. The PS2's open starts the menu scenes "scene4" and "scene17" and its close stops them (`0x00227488`/`0x00227498`); the PC never starts them. Started by hand on the PC, they draw a dark blue vertical band that slides up at the right edge (PS2 x about 476..492). That band is missing here.
+
+The screenshots of these five screens (2026-11-03) are kept in
+`~/ffx-work/demaster/research/ui/submenus/<replay>/`.
+
+## Shared pieces of the ported menus (`mod/Ps2Menu.cs`)
+
+- `shape` / `shape_c2`: a meswin shape at its own size, every layout part as a
+  `TOMkpShapeXYWHUVC2` quad with the UVs half a texel inside the part's cell.
+  The PS2 drew these 1:1 and sampled texel centres; the PC's
+  `TOAdpEasyShapeXYWHC2` (`0x008ed380`) samples to the cell edges, so at the
+  PC's scale the filter pulls in the neighbouring texels, and shapes tiled
+  from one 8-texel cell (0xd7's line, 0x10a, 0x107, 0x3e's strip) showed a
+  light tick at every tile. It also skips every part of 0x3e but the last.
+  calllist turns `TOMkpShapeXY(C2)` calls into the same quads
+  (`menu::expand_shapes`).
+- `kind_plate` (`TOAdpShapeByKind`), `scroll_bar` (`0x00200a60`),
+  `label_plate` (`0x00226218`: black brush and a strtex label), `party_plate`
+  (`0x00225f38` -> `0x00200c60`: the party plate of Status, Equip, Overdrive
+  and Customize), the PS2 fonts, `packet`, `seq_point`.
+- On every party plate the MP string's last cell ends at x 296 (`pos_mpstr`
+  (206, 18), 9 cells of 10), where the S.LV label of shape 0x3d / 0x107
+  starts (`pos_slvshape` (296, 33), read in the game); the label is drawn
+  after the string, as on the PS2. The values come from `menu_script.bin`,
+  which the PC's `uspc` copy and the PAL disc's `uspc` share byte for byte.
+- The calllist replays draw the main menu's help bar the PS2 way too
+  (`@ps2help`), as the mod does on every screen.
+
 ## Not done
 
-- Sub-menus other than Items and Abilities (equip, status, overdrive,
-  customize, config, sphere grid entry): their HD draws stay (over the PS2
-  background). Found (static, 2026-11-03; PS2 record (control) -> PS2 draws
-  -> PC hook): Status `0x00325850` (`0x00229300`) -> `0x0022ad00`, sub-window
-  `0x0022b5a0`, gauge `0x00229d60` -> `0x008d2790` / `MenuStatus_DrawPage`
-  `0x008d4ee0`; Equip `0x003258d8` (`0x0022c438`) -> `0x0022cc28`, list
-  `0x0022bdc0` (5 rows x 32, row `0x0022bc20`: plate kind 0x10, 0xd7 at x +
-  0x58) -> `MenuEquip_Draw` `0x008cf670`, `MenuWeapon_DrawList` `0x008cf9f0`;
-  Overdrive `0x00325a78` (`0x00230aa0`) -> `0x002312d0`, window `0x00230708`
-  (7 lines x 32) -> `0x008d16f0` / `MenuSelList_DrawList` `0x008d1400`;
-  Customize `0x00325aa0` (`0x00232a60`) -> list `0x00232188` (9 x 32) ->
-  `DrawGearCustomizationMenu` `0x008d5f60` / `MenuKaizou_Draw` `0x008d6860`;
-  Config `0x00326008` (`0x002353f8`) -> `0x00235a68` (page `0x00235a00`, row
-  `0x00235718`) -> `MenuConfig_Draw` `0x008cb320`. They use more PS2 wrappers
-  (`0x00226e18` shape, `0x00226e98`/`0x00226f30` common plates = PC
-  `0x008bf9b0`/`0x008bf9f0`, `0x00226fe8` common window = `0x008bfa30`,
-  `0x00225e90` scroll bar, probably `TkMn2DrawVertBar` `0x008c1830`) whose
-  layout words (PS2 `0x006938xx`..`0x00693fxx`) are not mapped to PC
-  addresses yet. Coarser than the Items notes (a sub-agent's).
+- The sphere grid entry and the aeon status pages (same draw as Status, not
+  driven). The menu sequence scenes the PS2 starts on the sub-screens
+  ("scene4"/"scene17" on Config, "scene0"/"scene11"/"scene20" on Equip, ...)
+  are not started by the PC; what they draw (bands that slide in) is not
+  ported.
 - The HD cursor of the HD screens (`TkMn2DrawCrossCursor` `0x008c0670`,
   kinds 0/4/5): left as it is; its anchor differs from the PS2 cursor's, so
   replacing it needs each caller's PS2 position.
