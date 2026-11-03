@@ -148,45 +148,8 @@ internal static unsafe class StatusMenuPatches {
         return (Ps2Menu.u16(e + 8), Ps2Menu.u16(e + 10));
     }
 
-    /// <summary>
-    /// TOMkpShapeXY (the PS2's 0x001fe1f0, grey), part by part with TOMkpShapePartIndexXYWHC2. A run of
-    /// one cell tiled side by side (the 8 x 16 line tiles of 0xd7, 0x10a, 0x107; those cells are the
-    /// same in every column) is one quad over the cell's inner texels (u + 2 .. u + w - 2, v + 0.5 .. v + h - 0.5,
-    /// TOMkpShapeXYWHUVC2): tiled, the PC's filtering leaves a seam at every tile, and stretched
-    /// over the whole cell it smears the neighbouring cell's edge into the first tile.
-    /// </summary>
-    private static void shape(int id, int x, int y) {
-        int i = id >= 200 ? id - 200 : id;
-        uint e = MESWIN_LAYOUT + u32(MESWIN_LAYOUT + 4 + 4 * (uint)i);
-        int n = i32(e);
-        var parts = new ((uint uv, uint wh, uint flips, int dy) key, int dx, int dy, int w, int h)[n];
-        for (int k = 0; k < n; k++) {
-            uint q = e + 4 + 12 * (uint)k;
-            // the same cell (u, v, w, h, flips) on the same row (dy)
-            var key = (u32(q) & 0xffff, u32(q + 4), u32(q + 8), (int)Native.i8(q + 3));
-            parts[k] = (key, Native.i8(q + 2), Native.i8(q + 3), Ps2Menu.u16(q + 4), Ps2Menu.u16(q + 6));
-        }
-        var used = new bool[n];
-        for (int k = 0; k < n; k++) {
-            if (used[k]) continue;
-            var p = parts[k];
-            int lo = p.dx, hi = p.dx + p.w;
-            for (bool grew = true; grew;) {
-                grew = false;
-                for (int j = k + 1; j < n; j++) {
-                    if (used[j] || parts[j].key != p.key) continue;
-                    if (parts[j].dx == hi) { hi += p.w; used[j] = grew = true; }
-                    else if (parts[j].dx + p.w == lo) { lo -= p.w; used[j] = grew = true; }
-                }
-            }
-            if (hi - lo == p.w) Ps2Menu.part(id, k, x + lo, y + p.dy, p.w, p.h, GREY, GREY);
-            else {
-                float u = p.key.uv & 0xff, v = p.key.uv >> 8;
-                Ps2Menu.fn<Ps2Menu.ShapeUV>(Ps2Menu.SHAPE_UV)(0, x + lo, y + p.dy, hi - lo, p.h,
-                    (u + 2) / 256f, (v + 0.5f) / 256f, (u + p.w - 2) / 256f, (v + p.h - 0.5f) / 256f, GREY, GREY);
-            }
-        }
-    }
+    /// <summary>TOMkpShapeXY (the PS2's 0x001fe1f0, grey): Ps2Menu.shape, part by part inside the cells.</summary>
+    private static void shape(int id, int x, int y) => Ps2Menu.shape(id, x, y);
 
     // ---- the PS2's common plate records (0x00226e98, 0x00226f30, 0x00226fe8, 0x00226fc8) ----------
 
@@ -255,7 +218,7 @@ internal static unsafe class StatusMenuPatches {
     });
 
     /// <summary>PS2 0x0022a770, page 0 (the PC's MenuStatus_DrawPage): face, equipment, gauge, party plate.</summary>
-    private static void page0(int x, int y, int chr, int t) {
+    internal static void page0(int x, int y, int chr, int t) {
         int s = q12(call(EASE, t, 1) * 0x155);
         // the face (PS2 0x002299b0): scissored to num_face1 x num_face2
         call(TRANS_FACE, 0);

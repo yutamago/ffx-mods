@@ -110,9 +110,9 @@ internal static unsafe class EquipMenuPatches {
         Ps2Menu.fn<Ps2Menu.IntFn>(INIT_PKT)();
         int chr = Ps2Menu.fn<Ps2Menu.IntFn>(CURRENT)();
         int fade = Ps2Menu.i32(FADE);
-        Ps2Menu.fn<Page>(STATUS_PAGE)(0, 0, chr, 0, (nint)Native.reloc(CUR_A), (nint)Native.reloc(CUR_B),
-            (nint)Native.reloc(CUR_C), (nint)Native.reloc(CUR_D), fade);
         return Ps2Menu.packet(() => {
+            // the status page (PS2 0x0022a770 with Status's arguments): the Status port's page 0
+            StatusMenuPatches.page0(0, 0, chr, fade);
             var r1 = xy(R_SOMOJIPLT);
             var r2 = xy(R_SOMOJIPLT2);
             label_plate(r1.x, r1.y, 6);
