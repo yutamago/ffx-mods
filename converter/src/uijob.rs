@@ -405,6 +405,18 @@ const ALL_MENU_FOLDERS: [&str; 8] =
 /// (`mod/MenuPatches.cs`, docs/ui.md). No text: every folder gets them.
 const WINDOW_PIECES: [u32; 4] = [160, 56, 24, 32];
 
+/// The whole PS2 `meswin` as a texture of its own, `menu*/d3d11/ps2win`
+/// (PS2 size, 256x256): the HD atlas reuses the cells of the PS2 menus'
+/// brush plates, cursor and labels for other art, so the restored PS2
+/// menu draws (`mod/MainMenuPatches.cs`) read their meswin shapes from
+/// this texture instead (the mod answers `TOGetShapTextureName(0x3e00)`
+/// with this name while they draw; FFX.exe's meswin layout table equals
+/// the PS2's, so the shapes' UVs fit). One per menu folder, the text cells
+/// in that folder's language where the disc has it. The name and its
+/// texture id have the length of `meswin` so the mod can derive the name.
+pub const PS2_MESWIN: &str = "ps2win";
+const PS2_MESWIN_ID: &str = "ps2win.dds";
+
 /// Pastes [`WINDOW_PIECES`] into a `meswin` (HD or converted) where the
 /// HD has nothing. False if the sizes do not fit or the HD drew there.
 fn paste_window_pieces(a: &Atlas, idx: &[u8], clp: &[u8], hd: &Rgba, img: &mut Rgba) -> bool {
@@ -786,6 +798,28 @@ pub fn convert(disc: &mut Disc, pc: &ffx_vbf::Archive, parts: Parts) -> Result<(
         }
     }
 
+    if parts.menus {
+        let sources = menu_sources(&region);
+        for folder in ALL_MENU_FOLDERS {
+            let dir = sources.iter().find(|(_, f)| *f == folder).map_or(sources[0].0, |(d, _)| *d);
+            let (Some(clp), Some(idx)) = (disc.read(&format!("{dir}/menu.clp"))?, disc.read(&format!("{dir}/meswin.fmt"))?)
+            else {
+                continue;
+            };
+            let hd_path = format!("{PS3}/{folder}/d3d11/meswin.dds.phyre");
+            let Some((template, hd)) = load_hd(pc, &hd_path)? else { continue };
+            let a = &ATLASES[0];
+            let img = indexed(a.w, a.h, &idx, &clp_palette(&clp, a.palette));
+            let path = format!("{PS3}/{folder}/d3d11/{PS2_MESWIN}.dds.phyre");
+            done.push(Done {
+                file: phyretex::argb8_as(&template, &img, Some(("meswin.dds", PS2_MESWIN_ID)))?,
+                preview: side_by_side(&hd, &resize(&img, hd.width, hd.height)),
+                note: format!("{path}: the whole PS2 meswin, PS2 size ({dir})"),
+                path,
+            });
+        }
+    }
+
     if parts.portraits {
         // Faces are not text: the disc's own sheets go to every folder.
         let (dir, _) = menu_sources(&region)[0];
@@ -986,9 +1020,10 @@ impl UiJob {
 }
 
 impl Job for UiJob {
-    /// 2: textures with mip chains (phyretex::mip_chain).
+    /// 2: textures with mip chains (phyretex::mip_chain). 3: the PS2 meswin
+    /// as its own texture (`ps2win`, ui.menus).
     fn version(&self) -> u32 {
-        2
+        3
     }
     fn name(&self) -> &'static str {
         self.name

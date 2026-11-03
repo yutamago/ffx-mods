@@ -76,7 +76,7 @@ internal static unsafe class BattlePatches {
     private const uint HIDDEN  = 0x0133d6e0; // 1: the PC's own draws return at once (main, sub)
     private const uint SG_FRAME = 0x023cbbf0;
 
-    private const float SX = 0.78f, SY = 1.0f; // the battle font size every PC battle window uses
+    internal const float SX = 0.78f, SY = 1.0f; // the battle font size every PC battle window uses
     private const int ROW = 20;                // PS2 row pitch
 
     private static FhLogger? _log;

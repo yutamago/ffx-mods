@@ -26,8 +26,10 @@ writes `<out>/efl/x/<HD path>` and a preview per file
 | Button glyphs (`menu/d3d11/pad_icon`) | 1 | not checked (the harness pad shows no prompt in these replays) |
 | Message window atlas `meswin`: the PS2 window pieces (below, "The PS2 windows") | 8 (every language folder) | checked (`tools/replays/ui-dialogue.txt`, `ui-dialogue-field.txt`): PS2 message windows |
 | Battle command windows (code only: `mod/BattlePatches.cs`, below, "The battle command windows") | 0 | checked through injected game calls (`tools/replays/ui-battle-main.txt`, `ui-battle-item.txt`): PS2 gradient box and layout; hooks seen installing in Fahrenheit |
+| Main menu screen: background, party rows, options, help bar, footer (`ps2win` texture + `mod/MainMenuPatches.cs`, below, "The main menu") | 8 (`ps2win`, every menu folder) | checked through injected game calls (`tools/replays/ui-mainmenu.txt`); hooks seen installing in Fahrenheit |
+| The PS2 cursor (code: `TOMakePktShapeCursor` kind 0, below) | 0 | checked through injected game calls (battle windows) |
 
-60 files in all; 20 HD textures have no PS2 counterpart (listed by
+68 files in all; 20 HD textures have no PS2 counterpart (listed by
 `demaster ui`). Previews and screenshots: `~/ffx-work/demaster/research/ui/`
 (`preview/`, `ingame-*.png`).
 
@@ -41,9 +43,9 @@ menu, its plates and backgrounds come from HD-only sheets (`menu_new`,
 UVs such as `1879, 542` that exist only in those sheets). The PS2's blue
 gradient windows were drawn from vertex colours (`NoTexture` quads on the
 PC too), with the PC's colours. So **the PS2 menu look is code, not
-textures**: the main menu (`ingame-mainmenu.png`) stays the HD design with
-this mod. Restoring it needs the PS2 window colours and layout in the draw
-code (milestone 3; ffx-rust `menu.md` has the callers). The texture swap
+textures**: the main menu (`ingame-mainmenu.png`) needs the PS2 draws
+ported into the mod, with the PS2 `meswin` as a texture of its own (done for
+the main menu screen, below, "The main menu"; the sub-menus stay HD). The texture swap
 restores the pieces that are still PS2 art at PS2 places: faces, CTB list,
 title, markers.
 
@@ -375,7 +377,18 @@ window. The PS2 main draw has no Overdrive tab either (its `+0x78` is a
 bare `jr ra`); on the PS2 the battle sequence scene (`TOSeqDraw(2, ...)`,
 "bnormalll"/"blimitlay" layouts) may draw it, which the PC still runs but
 which was not checked. If the tab is missing in the game, that is where to
-look.
+look. Looked at again (2026-11-03): the PS2 `meswin` holds the label
+("EKSTASE" on the German disc, (0, 224) 136 x 16: layout entry 59, and entry
+64 = a dark bar (120, 88) 136 x 24 at (-16, 5) with the label at (28, 3)).
+No SLPM_675.13 code passes 59, 64, 259 or 264 to a shape draw as an
+immediate, and `battle_script.bin` (the battle sequence data, scenes
+`blimitlay`, `bnormallay`, ...) holds the u16 `0x0103` (259) once, at
+`0x6a8c`, in records not decoded here. So the tab is most likely a sequence
+primitive (`TOSeqDraw(2, ...)` -> `TOMakePktSeqPrimLayout` `0x008fe0b0`,
+which draws meswin shapes through `TOCopyWindowLayout`), still run by the
+PC; with the HD `meswin` it would draw HD art from those cells. Not
+restored: the scene record and the state that shows it were not found, and
+no battle with a full Overdrive gauge was reached in the harness.
 
 **Checked.** The harness can't run C# hooks. `tools/calllist` (a shotrun
 with three extra commands: the image's load delta, `VirtualAlloc` through
@@ -397,9 +410,12 @@ and `dum92`, so the NoTexture menu shader reproduces the PS2 arithmetic.
 In the Fahrenheit install (2026-11-02) the nine `ui.menus` hooks installed
 (log `ui.menus = ps2: PS2 message and battle command windows`); no battle
 was reached there (no input), so the hooks' own first-draw log lines were
-not seen. (The item shots were taken with the counts' right edge at the
+not seen. (The first item shots were taken with the counts' right edge at the
 cell's edge, where the scissor clipped the last digit's outline; the mod
-and `btl.rs` now end them 2 pixels earlier; not re-shot.)
+and `btl.rs` end them 2 pixels earlier. Re-shot 2026-11-03 with the PS2
+cursor: `btl-1-hd.png`, `btl-2-ps2.png`, `btl-3-ps2-43.png`,
+`item-1-hd.png`, `item-2-ps2.png`, `item-3-ps2-43.png` in the same folder:
+the "3" of Phoenix Down is whole.)
 
 **Uncertain.** Not compared with PS2 screenshots: the look follows the PS2
 code and the run-time colours. The names use the PC's battle typeface size
@@ -407,49 +423,189 @@ code and the run-time colours. The names use the PC's battle typeface size
 ported), so letter sizes and the column width derived from them differ
 slightly from the PS2's; with `ui.font` the glyphs and widths are the
 PS2's. The scroll bar is the PC's `DrawCrossMenuScrollParts` (grey track,
-pink thumb) at the PS2's place, not the PS2's own bar. The hand cursor is
-the PC's (drawn at the PS2 position). Icons are the HD `icon` art at a
+pink thumb) at the PS2's place, not the PS2's own bar. The cursor is the PS2
+one since 2026-11-03 (below, "The PS2 cursor"). Icons are the HD `icon` art at a
 12 x 12 PS2 size.
+
+## The main menu (`ui.menus`: texture and code)
+
+**The atlas problem and its answer.** The PS2 menus draw brush plates,
+labels, the S.LV badge and the cursor from `meswin` cells that the HD atlas
+reuses for other art (the feather sits on the party plate's cells, "gil" on
+the Overdrive label's). FFX.exe still holds the PS2 layout table of
+`meswin` (`0x00c5b460`, 85 entries) and it is byte for byte the PS2's
+(SLPM_675.13 `0x00321328`; `battle` `0x00322190` = `0x00c5c2c8` and `icon`
+`0x00323440` = `0x00c5d578` too; checked entry by entry), so the PS2 shapes
+only need the PS2 pixels under their UVs. The converter writes the whole PS2
+`meswin` (256x256, CLUT 0, PS2 size) as a texture of its own,
+`menu*/d3d11/ps2win.dds.phyre`, one per menu folder (the text cells in the
+folder's language where the disc has it, else the disc's own), made from the
+HD `meswin` as template with the texture id `ps2win.dds`. The mod hooks
+`TOGetShapTextureName` (`0x008ac8c0`): while a ported PS2 draw runs, sheet
+`0x3e00` answers `.../menu_xx/D3D11/ps2win.dds.phyre` instead of `meswin`,
+and the first such answer loads it (`PhyreScene_loadMenuTexture`
+`0x006651d0`, asynchronous: until it is in, the menu manager skips those
+draws). Every other draw keeps the HD `meswin`. Fahrenheit's file loader and
+the ffx-rust harness both serve a path the archive does not have.
+
+**What the PS2 drew** (SLPM_675.13, the main menu's slot record `0x00326d50`:
+`+4` draw `0x0024a4a8`; the PC's is `0x00c5b2b4` -> `TkMenuDrawMain`):
+
+- Background (`TkMenuDrawAll`, PS2 `0x00243f98`): one full-screen untextured
+  quad (`0x00245a88`: GIF PRIM `0x14c`, c0 left, c1 right) from
+  `col_menubg0` to `col_menubg1` (black in menu mode `0x0040xxxx`). Read in
+  the game: `6b aa cd 80` (light steel blue) to `ba c3 87 80` (khaki). The
+  PC passes the same two words to `TODrawMenuBGC2` (`0x008f5c60`), which
+  keeps only their alpha over the HD `ffx_bg`, and the screens then draw
+  `TODrawMenuBG` (`0x008f5c10`, `ffx_bg` again). The PS2 has no second
+  backdrop.
+- Party rows (`0x0024a4a8`), for each listed member whose slide
+  (`g_TkMenuMainRowSlide`) is not 0, at x = `rect_nameplt.x` - cos(slide) *
+  1024 / 0x3000, y = `rect_nameplt.y` + 44 i: for the front line (i <
+  `TkMenuGetPlayerPartyMask`) a box `TODrawBoxXYWHC2(x + pos_noactive, w h
+  of rect_noactive, col_noactive0/1)` (`TkMn2GetMainPos`; `dc e1 e0 80`,
+  345 x 42 at (0, -4): the light band behind the stats); the plate: shape 4
+  stretched over `rect_nameplt.w` - 40 in `col_nameplt0` -> `col_nameplt1`
+  and shape 5 (the brushed end) in `col_nameplt1` (`0x001ff2b8`, the PC's
+  `0x008f5e90`); shape 0x16 (a black line, `pos_nmblkline`,
+  `rect_nmblkline.w`); the name (16x12 font, colour
+  `MenuPlayer_DamageClass`); shapes 0x21/0x22 (HP, MP) and
+  `"%5d/%5d"`/`"%4d/%4d"` in colour 0x25 (black digits, as the HD's); shape
+  0x3d (S.LV label, the round black badge); the sphere level right-aligned
+  in 12-pixel cells ending at `pos_slvshape + pos_spstr + 2`; the cursors
+  (`g_TkMenuMainChoice`, the swap pair `0x0187155c`/`0x01871560`, the
+  second blinking on `TkMenuGetTimer() / 2`).
+- Footer: gil right-aligned at `pos_gilstr` + 2, the play time at
+  `pos_timestr` (`TOMenuDrawTimer`), shapes 0xd5 (bar) and 0xd6 ("GIL") at
+  `pos_gilshape` (+ `pos_gilshape2`, which the sequence data does not have:
+  0, 0), the location plates 0xd2/0xd3 (`rect_placesubplt`, gold) and
+  0xd8/0xd9 (`rect_placeplt`, black: `0x001ff1e0` = the PC's `0x008f5e20`,
+  left piece fixed, right stretched), shape 0x27 ("Location") and the
+  location name.
+- Options (`0x0024b148`, the PC's `MenuMain_DrawCmdWindow` `0x008e20f0`;
+  nothing while `TkMenuMainGetMenuActiveMask() & 0x80800`): every option
+  but the cursor's, then the cursor's (`0x0024af70`): y = ((`rect_complt.y`
+  + 32 i) slide + 3 (0x1000 - slide)) / 4096, alpha slide / 32; a black box
+  at +4, +4; the box `col_complt0` -> `col_complt1` (purple, untextured,
+  `rect_complt` (378, 44 + 32 i, 134 x 23)); the name in the 16x12 font at
+  +15, +2, grey when disabled; the cursor there at slide 0x1000.
+- Help bar (`0x00243888`; the PC's is `0x008a9350`, a main-menu window's
+  `+0x10`, installed at `0x008a8e8e`): shapes 0x45/0x46 over
+  `rect_helpsubplt` (gold stroke), 6/7 over `rect_helpplt` (black brush),
+  shape 0x3e ("HELP") at `rect_helpsubplt` + (0x50, 0), the message
+  (`g_TkMenuHelpMessage`) at `rect_helpplt + pos_helpstr`. FFX.exe's
+  `yiWindowDrawBar` (`0x00907c10`) is the same draw for kind-10 windows; no
+  window uses it in the main menu.
+
+The layout words come from `TOSeqInitParam` (PS2 `0x00209bc8`, PC
+`0x008ae6f0`; the same 92 reads in the same order). The PC stores them
+mirrored: a point is (y, x) from its lower address, a rectangle (h, w, y, x);
+the mapping used (PS2 -> PC) is in `mod/MainMenuPatches.cs`.
+
+**The restoration** (`mod/MainMenuPatches.cs`, from `MenuPatches.menus`):
+hooks on `TkMenuDrawMain`, `MenuMain_DrawCmdWindow` and the help draw
+replace them with the PS2 draws above, made of FFX.exe's primitives (the
+same calls the PS2 made where the PC kept them): `TODrawBoxXYWHC2`,
+`TOMakePktBoxXYWHRGBA`, `0x008f5e90`/`0x008f5e20`, `TOMkpShapeXY`,
+`TOMkpShapeXYWHC2`, `TOMkpShapePartIndexXYWHC2`, the 16x12 font
+`TOMkpBaseMesFont` `0x00901cb0` (and `0x00901ce0` with alpha, the PS2's
+`0x001f3810`/`0x001f3858`), `TOMkpCrossEasyStrFontSClut` (the HP/MP strings,
+size 1.0 as the PC's PS2-era `TOMenuDrawChrLayoutPlate` draws them),
+`ToMakeBtlEasyDigitRight` (the PC's battle digits for the PS2's 12-pixel
+`"%d"`; `TOMkpValueFontMClutRight` and `TOAdpCrossNumber_009019f0` drew
+nothing visible), `TOMenuDrawTimer`. A hook on `TODrawMenuBGC2` draws the
+PS2 gradient with the colours it is given, and `TODrawMenuBG` draws nothing
+while `TkMenuDrawAll` runs (hooked to know). Menu logic, the option list
+(PC-only entries included) and the input stay the PC's.
+
+**Checked.** `tools/replays/ui-mainmenu.txt` through `tools/calllist` (the
+converter's `ui` output as the mod): it loads `ps2win`, points the main
+menu's slot draw, the option window's and the help window's `+0x10` at
+call-list thunks holding the calls `MainMenuPatches` makes (the same code in
+Rust: `tools/calllist/src/menu.rs`; the atlas swap is the thunk writing the
+`ps2win` name into the `TOGetShapTextureName` table slot around the draws),
+and patches `TODrawMenuBGC2` to jump to the gradient and `TODrawMenuBG` to
+return (`@protect`: `VirtualProtect` through `GetProcAddress`). Screenshots
+in `~/ffx-work/demaster/research/ui/mainmenu/`: `main-1-hd.png`,
+`main-2-ps2.png`, `main-3-ps2-43.png` (after `render.aspect`'s 4:3 write),
+`main-4-items.png` (Items opened: the HD list over the PS2 background; the
+thunks there are still the static main-menu lists, which the hooks would not
+draw), `ps2win-atlas-grid.png` (the PS2 atlas with a 16-texel grid). In the
+Fahrenheit install (2026-11-03) the hooks installed (log `ui.menus = ps2:
+PS2 message, battle command windows and main menu`) and the file loader
+indexed the `ps2win` files (copied in by hand for that run); the menu was not
+opened there (no input).
+
+**Uncertain.** Compared with memory of the PS2 menu, not with PS2
+screenshots. The 16x12 names and options are the PC's port of the PS2 font
+code; the gil and sphere-level digits are the PC's battle digits (0.78 x 1.0)
+in the PS2's places, not the PS2's 12-pixel font M; the time is the PC's
+`TOMenuDrawTimer` (HD sizes). The help label at `rect_helpsubplt.y` = -6 is
+half above the screen, as the data says. With `ui.menus` the sub-menus
+(items, abilities, equip, status, config) keep their HD draws over the PS2
+gradient.
+
+## The PS2 cursor (`ui.menus`: code)
+
+The PS2 cursor (`TOMakePktShapeCursor`, SLPM_675.13 `0x001fe800`, kind 0)
+is meswin shape 45: part 0, the white ball (80, 144) 40 x 40 at (-42, -11),
+drawn in `dum75` (`0x025d16ac`, `73 55 0b 80`: the orange glow); part 1, the
+silver hand (0, 168) 40 x 24 at (-34, -3), grey. Sprites from (u, v) to
+(u + w - 1, v + h - 1). FFX.exe's `TOMakePktShapeCursor` (`0x008feb00`) draws
+kind 0 as the HD bobbing hand from the battle atlas; kinds 4 and 5 are PS2
+layout cells. The mod hooks it: kind 0 draws shape 45's two parts with
+`TOMkpShapePartIndexXYWHC2` and the PS2 atlas, the sizes given so the UVs
+stay one texel inside the cells (with 0 the hand picks up a dark line from
+the cells below and right). Callers: `TODrawBtlWindow` (the battle cursors
+from `TOBtlSetCurPos`), the save choice, PS2-era menu code. The ported main
+menu draws the same cursor. HD screens that use their own cursor
+(`TkMn2DrawCrossCursor`, item lists, status) keep the HD one.
+
+Checked with `tools/replays/ui-battle-main.txt` and `ui-battle-item.txt`
+(`@ps2btl ... ps2cursor N`: the PS2 cursor in place of the `TOBtlSetCurPos`
+call, after the full-screen scissor `TODrawBtlWindow` sets before its
+cursors): `~/ffx-work/demaster/research/ui/battle/btl-2-ps2.png`,
+`item-2-ps2.png` (and `-3-ps2-43`).
 
 ## Not done
 
-- The rest of `meswin`: the cursor, the `?`/`!` icons, and the brush
-  plates (entries 4-7 and 16-28) that the PS2 menus tinted with the
-  `col_*plt` colours above. The HD cursor (a silver cone with a glow) is
-  close to the PS2 one (shape 208: a white ball, entry 8 at (80, 144),
-  under a silver triangle at (0, 168)), but the remaster draws it from its
-  own cells. Not changed: the battle windows place the PC's cursor at the
-  PS2 positions.
-- Main menu and sub-menus (items, abilities, equip, status, config, sphere
-  grid entry): not done. What a port needs, as far as found:
-  - The PS2 draws are in SLPM_675.13's menu module: the party rows and the
-    footer `0x0024a4a8` (uses `rect_nameplt` `0x00324204`, `col_nameplt`,
-    `rect_placeplt`; overrides `num_namepltspc` to 44 and `num_compltspc`
-    to 32 at its start), the option list `0x0024af70` (`rect_complt`
-    `0x00324230`, `col_complt`). Their PC counterparts `TkMenuDrawMain`
-    (`0x008e0ba0`) and `MenuMain_DrawCmdWindow` (`0x008e20f0`) are HD
-    rewrites. The help plate (`rect_helpplt` `0x0032425c`) is read by
-    `0x00209360`, `0x00216fe8`, `0x00218338`, `0x00223b08`, `0x00243888`.
-  - The PC still holds a PS2-era party plate,
-    `TOMenuDrawChrLayoutPlate_008f0a70` (meswin shapes 4/5 with explicit
-    UVs, tinted `col_nameplt`, name at `pos_namestr`, HP/MP labels 0x21/0x22,
-    `"%5d/%5d"`, sphere level, all placed by the `TOSeqInitParam` words), now
-    only called from status page 2 (`MenuStatus_DrawLayoutRow`).
-    `TOAdpShapeByKind` (the `col_bsoplt`.. pairs) is likewise still there.
-  - Blocker: the pieces these draw are the PS2 brush plates of `meswin`
-    (shapes 4/5 = the (0, 0) 48x40 region, layout entries 4-7 and 16-28,
-    0xcc/0xcd, 0xda/0xdb). In the HD `meswin` those places hold other HD art
-    (the feather pen sits at (0, 0)), so the converter can't paste them
-    where they were: it needs free cells in an atlas plus remapped UVs in
-    the drawing code, or a separate texture name. Then the draws: background
-    (`col_menubg*`), party rows, option plates, help/place/gil plates, the
-    sub-menus' lists, ported function by function from the MIPS (about 50
-    callees in `0x0024a4a8` alone).
+- Sub-menus (items, abilities, equip, status, config, sphere grid entry):
+  their HD draws stay (over the PS2 background). What a port needs: the PS2
+  draws are in SLPM_675.13's menu module (`0x00227218`..`0x0024ef3c`); the
+  plates there are tinted by `TOAdpShapeByKind` (PS2 `0x001f4c60`, PC
+  `0x008f1b50`, still present) with the `col_bsoplt`/`col_bitemplt`/
+  `col_babplt`/`col_lmtplt` pairs (its only caller `0x00226d90`); the PC's
+  PS2-era party plate `TOMenuDrawChrLayoutPlate_008f0a70` (status page 2)
+  mixes PS2 shapes 4/5 with HD UVs on sheet 0x107. With `ps2win` and the
+  `TOGetShapTextureName` scope of `MainMenuPatches` the PS2 shapes are
+  available to any port; each screen's draw has to be ported as the main
+  menu was (party rows, lists with scroll and counts, the item icons).
+- The HD cursor of the HD screens (`TkMn2DrawCrossCursor` `0x008c0670`,
+  kinds 0/4/5): left as it is; its anchor differs from the PS2 cursor's, so
+  replacing it needs each caller's PS2 position.
+- The `?`/`!` icons and the other `meswin` cells outside the ported draws.
+- The battle help bar (`TOBtlDrawHelpWin`): HD.
 - `icon` and `strtex` (item icons, "Miss/Immune/Overkill" graphics in
-  `icon`, menu labels): CLUTs made at run time. A table of the RGBA the
-  code passes per icon (`TOAddPktMenuIconRGBA` callers) would allow it.
-  Not looked for in this round (2026-11-03); the battle windows draw the HD
-  icons.
+  `icon`, menu labels). Found (2026-11-03): the item icons' colours are not
+  made at run time. The PS2 `TOAddPktMenuIconRGBA` (SLPM_675.13
+  `0x001f9798`) writes two `TEX0`s: the first (PSMT8, `CLD` 2) loads the
+  256-colour CLUT at block `0x2ec0 + 4 (id >> 4)`, the second draws the
+  PSMT4 `icon` (`0x3dc0`) with `CSA = id & 15`; cell `id` is at
+  ((id % 17) 15, (id / 17) 18), 15 x 18 texels. `menu.clp` sits at block
+  `0x2ea0` (meswin's CBP; battle's `0x2ea4` is CLUT 1), so the icon CLUTs
+  are `menu.clp` CLUTs 8, 9, 12, 13, 10, 11, 14, 15 for id >> 4 = 0..7
+  (the PSMCT32 block order), each icon its own 16-colour row (entries 16c ..
+  16c + 15 in 8-bit index order). Rendered so
+  (`research/ui/mainmenu/icon-ps2-palettes.png` against `icon-hd.png`) the
+  first 56 icons get the HD's colours (blue/green/purple potions, the eight
+  sphere colours, the weapon icons); entries 0 and 1 of every row are
+  transparent, but each icon's background index (7, 11, 4, ...) is opaque,
+  so every icon shows a coloured box. Either the PS2 icons had that box or a
+  detail is missing (alpha test is `TEST` `0xf`: alpha != 0 passes); not
+  resolved, so the converter does not write `icon` yet. The rows from id 64
+  (SELECT/START, the German "DANEBEN"/"VERNICHTEND" miss/overkill words)
+  come out wrong with these CLUTs: they are drawn by other code (the battle
+  damage draws, not looked at). `strtex` not looked at.
 - `worldmap` (airship map): 512x416 PS2 against a 1920x1080 HD layout.
 - Sphere grid (`menu/abmap/dat00/tex`): named after VRAM pages
   (`14080_19` ...), PS2 source `jppc/menu/abmap/dat00.dat` (700 KB); not
