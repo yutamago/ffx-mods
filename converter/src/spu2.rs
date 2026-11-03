@@ -547,6 +547,14 @@ impl Spu2 {
     pub fn set_lsa(&mut self, v: usize, a: u32) {
         self.voices[v].lsa = a & !15;
     }
+    /// The loop start address register (`LSAX`).
+    pub fn lsa(&self, v: usize) -> u32 {
+        self.voices[v].lsa
+    }
+    /// The address of the block the voice is playing (`NAX`).
+    pub fn nax(&self, v: usize) -> u32 {
+        self.voices[v].nax
+    }
     pub fn set_mix(&mut self, v: usize, dry_l: bool, dry_r: bool, wet_l: bool, wet_r: bool) {
         let x = &mut self.voices[v];
         x.dry_l = dry_l;

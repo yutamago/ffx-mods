@@ -1728,6 +1728,16 @@ impl Song {
                     v.envx = e;
                     if e <= 0 {
                         v.track = None;
+                    } else if self.wd.regions.get(v.region).is_some_and(|r| r.flags & 0x10 != 0) {
+                        // `FUN_001012d8`: a long sample cut into 0x2000-byte
+                        // pieces, each ending in loop end + repeat. Once the
+                        // voice is inside the piece the loop start points to,
+                        // the loop start moves on to the next piece, so the
+                        // sample plays through (banks 143 and 149).
+                        let (nax, lsa) = (spu.nax(i), spu.lsa(i));
+                        if lsa <= nax && nax < lsa + 0x2000 {
+                            spu.set_lsa(i, lsa + 0x2000);
+                        }
                     }
                 }
             } else {
