@@ -386,6 +386,194 @@ internal static unsafe class BattleHudPatches {
         else fn<BoxFW>(BOX_FW)(fx, fy, g, fh, 0x808af8ff, 0x801777e3, fw);
     }
 
+    // ---- the target info window: SLPM_675.13 / SCES_504.92 0x00218a80 ---------------------------
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)] public delegate void Info(int chr, int x, int y);
+
+    private const uint DRAW_INFO   = 0x00893a30; // TOBtlDrawInfoWin(chr, x, y) (PS2 0x00218a80)
+    private const uint INFO_SHOWN  = 0x0133c93e; // g_BtlInfoStatusShown, u8 (PS2 0x003249ac)
+    private const uint INFO_STATUS = 0x0133f5c0; // g_BtlInfoStatus: +2 timer, +4 shown entry, +6 count, +8 ids (PS2 0x00692508)
+    private const uint LAMP_FLAGS  = 0x00897650; // TOBtlElementLampFlags_00897650(chr, element): al (PS2 0x00219600)
+    private const uint CHR_HP      = 0x0079add0; // MsGetRamChrHP (PS2 0x001bb1f0)
+    private const uint FFX_LANG    = 0x006410e0; // TOGetFFXLang: 0 Japanese
+    public const int INFO_X = 0x14, INFO_Y = 0x46; // the PS2's call (TODrawBtlWindow 0x00214c34); the PC passes (0xb3, 0xf0)
+
+    /// <summary>
+    /// The row gradients of PS2 0x002198e0 (table 0x00570e48, 7 kinds of 4 colours, bytes R G B A):
+    /// kinds 0..3 the element rows (weak, absorb, immune, half), 5 the status row, 6 the line on top
+    /// of each row (kind 4 is unused).
+    /// </summary>
+    private static readonly uint[] INFO_ROW = [
+        0x00eaeaea, 0x6ad2ac23, 0x6a9f491f, 0x00eaeaea,
+        0x07ba3f96, 0x73aa72bd, 0x73491e40, 0x07834270,
+        0x077373b8, 0x736767ba, 0x731e1e51, 0x074d4d7b,
+        0x076d89b7, 0x734688b3, 0x73242d5e, 0x074e5580,
+        0x0d602b32, 0x66602b32, 0x66602b32, 0x0d602b32,
+        0x0d602b32, 0x66602b32, 0x66602b32, 0x0d602b32,
+        0x00631c4e, 0x80631c4e, 0x80631c4e, 0x00631c4e,
+    ];
+
+    /// <summary>
+    /// PS2 0x002198e0(x, y, w, h, kind): three gouraud quads, 40 pixels from colour 0 to 1, the
+    /// middle w - 80 from 1 to 2, 40 from 2 to 3 (each colour on both left or both right vertices).
+    /// </summary>
+    public static void info_row(int x, int y, int w, int h, int kind) {
+        var box = fn<Ps2Menu.BoxC2>(Ps2Menu.BOX_C2);
+        int k = 4 * kind;
+        box(x, y, 40, h, INFO_ROW[k], INFO_ROW[k + 1]);
+        box(x + 40, y, w - 80, h, INFO_ROW[k + 1], INFO_ROW[k + 2]);
+        box(x + w - 40, y, 40, h, INFO_ROW[k + 2], INFO_ROW[k + 3]);
+    }
+
+    /// <summary>
+    /// The PS2 target info window (0x00218a80(chr, 0x14, 0x46), drawn while the target's status line
+    /// is shown, g_BtlInfoStatusShown): the battle window frame (0x001fa7d8) 169 wide, high
+    /// 0x16 + 0x10 per element row (+ 0x18 with statuses; 0x12 in Japanese), battle shape 0x1aa at
+    /// (x + 0x24, y); from (x + 3, y + 3): meswin 0xe9 (HP) at +2, the HP and "/" max in font S
+    /// colour 0 (right edges x + 0x54, x + 0xa0, the slash at x + 0x5a); then a row 16 high for
+    /// each element kind the target has (0 weak, 1 absorb, 2 immune, 3 half: PS2 0x00219600), a
+    /// gradient 0x2198e0(x, y, 163, 16, kind) under a line (kind 6, 1 high) and the element lamp
+    /// (0x00219690: battle shape 431 + kind at x + 24, covers 473..476 for the clear bits 1, 4, 8, 2);
+    /// then, with statuses, 2 lower, the status row (kind 5, 22 high; 16 in Japanese) and the shown
+    /// status's name centred in 169 at y + 2 (0x002197a0, 20 frames each). The PC draws an HD
+    /// window that slides in from the right, with rings, at its own place.
+    /// </summary>
+    private static void info(int chr, int px, int py) {
+        if (u32(HIDDEN) == 1 || Native.u8(INFO_SHOWN) == 0) return;
+        chr &= 0xffff;
+        var flags = fn<Ps2Menu.IntOfInt2>(LAMP_FLAGS);
+        int[] f = new int[4];
+        for (int k = 0; k < 4; k++) f[k] = flags(chr, k) & 0xff;
+        bool european = fn<IntFn>(FFX_LANG)() != 0; // PS2 0x0020b858 / 0x001bd360: the European texts
+        byte* st = Native.ptr(INFO_STATUS);
+        short count = *(short*)(st + 6);
+        int h = 0x16;
+        for (int k = 0; k < 4; k++) if (f[k] != 0) h += 0x10;
+        if (count > 0) h += european ? 0x18 : 0x12;
+        int x = INFO_X, y = INFO_Y;
+        MainMenuPatches.ps2_scoped(() => {
+            MainMenuPatches.battle_scoped(() => {
+                fn<Scissor>(SCISSOR_XYWH)(0, 0, 0x200, 0x1a0);
+                frame(x, y, 0xa9, h);
+                bshape(0x1aa, x + 0x24, y);
+                x += 3;
+                y += 3;
+                Ps2Menu.shape(0xe9, x + 2, y + 2);
+                Ps2Menu.value_s(fn<IntOfInt>(CHR_HP)(chr), x + 0x54, y + 2, 0);
+                Ps2Menu.font_s("/", x + 0x5a, y + 2, 0);
+                Ps2Menu.value_s(fn<IntOfInt>(MAX_HP)(chr), x + 0xa0, y + 2, 0);
+                y += 0x10;
+                for (int k = 0; k < 4; k++) {
+                    if (f[k] == 0) continue;
+                    info_row(x, y, 0xa3, 0x10, k);
+                    info_row(x, y, 0xa3, 1, 6);
+                    bshape(0x1af + k, x + 24, y);
+                    if ((f[k] & 1) == 0) bshape(0x1d9, x + 24, y);
+                    if ((f[k] & 4) == 0) bshape(0x1da, x + 24, y);
+                    if ((f[k] & 8) == 0) bshape(0x1db, x + 24, y);
+                    if ((f[k] & 2) == 0) bshape(0x1dc, x + 24, y);
+                    y += 0x10;
+                }
+                if (count <= 0) return;
+                y += 2;
+                info_row(x, y, 0xa3, european ? 0x16 : 0x10, 5);
+                // 0x002197a0: the shown status, the next every 21 frames (the PC's draw ticked it too)
+                short t = (short)(*(short*)(st + 2) - 1);
+                *(short*)(st + 2) = t;
+                if (t == -1) {
+                    *(short*)(st + 2) = 0x14;
+                    short n = (short)(*(short*)(st + 4) + 1);
+                    *(short*)(st + 4) = n == count ? (short)0 : n;
+                }
+                int id = *(ushort*)(st + 8 + 2 * *(short*)(st + 4));
+                nint text = fn<Text>(MENU_TEXT)(1, id, 1);
+                Ps2Menu.font(text, x + (0xa9 - Ps2Menu.text_width(text)) / 2, y + 2, 0);
+            });
+            return 0;
+        });
+        first(8, "ui.menus: battle target info window drawn the PS2 way");
+    }
+
+    // ---- the target's info line in the help bar: SCES_504.92 0x00218e48 .. 0x002192a8 ------------
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)] public delegate void ChrFn(int chr);
+
+    private const uint SET_INFO_MES  = 0x00899f20; // TOBtlSetInfoWinMes(chr) (PS2 0x00219550)
+    private const uint CTRL_INFO_MES = 0x00891580; // TOBtlCtrlInfoWinMes() (PS2 0x00218f20)
+    private const uint DRAW_INFO_MES = 0x00895140; // TOBtlDrawInfoWinMes() (PS2 0x002192a8)
+    private const uint INFO_MES_SHOWN = 0x0133c93d; // g_BtlInfoWinShown, u8 (PS2 0x003249ad)
+    private const uint CHR_INFO      = 0x0078f7c0; // MsGetMenuChrInfo(chr, 1): the help line (PS2 0x001dc470)
+
+    /// <summary>A line of the PS2's info line state (PS2 0x00692560, 4 of 0x14): 0 free, 2 scrolling, 3 scrolling out, 8 still.</summary>
+    private struct InfoLine { public int state, x, y, w; public nint text; }
+    private static readonly InfoLine[] _lines = new InfoLine[4];
+    private static ChrFn? _set_hook, _set_next;
+    private static Void? _ctrl_hook, _ctrl_next;
+    private static (int x0, int y0, int x1, int y1) _infobox;
+
+    /// <summary>
+    /// PS2 0x00219550 (with the init 0x00218e48): the box from 80 pixels past the help text
+    /// (the help text's PS2 width, PS2 0x00692478, + 0x50) to x 430, y 12..36, inside the help
+    /// bar; the target's help line (MsGetMenuChrInfo(chr, 1)) at its left edge, still (8) when it
+    /// fits, else scrolling (2). The PC lays the line out under the help bar in HD units.
+    /// </summary>
+    private static void set_info_mes(int chr) {
+        _set_next ??= Native.fn<ChrFn>(SET_INFO_MES).chain_from(_set_hook!).fnptr!;
+        _set_next(chr);
+        int x0 = Ps2Menu.text_width((nint)Native.ptr(HELP_TEXT)) + 0x50;
+        _infobox = (x0, 12, 0x1ae, 0x24);
+        Array.Clear(_lines);
+        nint text = fn<PtrOfInt2>(CHR_INFO)(chr, 1);
+        int w = Ps2Menu.text_width(text);
+        _lines[0] = new InfoLine { state = w < 0x1ae - x0 ? 8 : 2, x = x0, y = 12, w = w, text = text };
+    }
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)] public delegate nint PtrOfInt2(int a, int b);
+
+    /// <summary>
+    /// PS2 0x00218f20 after the PC's own control (which keeps the shown flag and calls the set
+    /// above for a new target): unless line 0 is still, every line moves 2 pixels left; a
+    /// scrolling line whose end passes x1 - 20 starts the next copy at x1 and turns 3; a line in
+    /// state 3 whose end passes x0 ends; the lines in use are packed to the front. The PC moves its
+    /// lines 1.2 HD units a frame.
+    /// </summary>
+    private static void ctrl_info_mes() {
+        _ctrl_next ??= Native.fn<Void>(CTRL_INFO_MES).chain_from(_ctrl_hook!).fnptr!;
+        _ctrl_next();
+        if (_lines[0].state == 8) return;
+        for (int i = 0; i < 4; i++) if (_lines[i].state != 0) _lines[i].x -= 2;
+        for (int i = 0; i < 3; i++) {
+            ref InfoLine l = ref _lines[i];
+            if (l.state != 2 || l.x + l.w >= _infobox.x1 - 0x14) continue;
+            _lines[i + 1] = l with { x = _infobox.x1 };
+            l.state = 3;
+            i++;
+        }
+        for (int i = 0; i < 4; i++)
+            if (_lines[i].state == 3 && _lines[i].x + _lines[i].w < _infobox.x0) _lines[i].state = 0;
+        var used = _lines.Where(l => l.state != 0).ToArray();
+        Array.Clear(_lines);
+        used.CopyTo(_lines, 0);
+    }
+
+    /// <summary>
+    /// PS2 0x002192a8: while the line is shown and the help setting is on, the scissor at the box
+    /// and each line in the 16x12 font (0x001f37d0) at its place. The PC draws its lines with its
+    /// battle typeface under the help bar.
+    /// </summary>
+    private static void draw_info_mes() {
+        if (u32(HIDDEN) == 1 || Native.u8(INFO_MES_SHOWN) == 0) return;
+        if ((*(uint*)fn<PtrFn>(SAVE_MENU)() & 0x400) == 0) return;
+        MainMenuPatches.ps2_scoped(() => {
+            var scissor = fn<Scissor>(Ps2Menu.SCISSOR);
+            scissor(_infobox.x0, _infobox.y0, _infobox.x1, _infobox.y1);
+            foreach (var l in _lines) if (l.state != 0 && l.text != 0) Ps2Menu.font(l.text, l.x, l.y, 0);
+            scissor(0, 0, 0x1ff, 0x19f);
+            return 0;
+        });
+        first(16, "ui.menus: battle info line drawn the PS2 way");
+    }
+
     // ---- install -----------------------------------------------------------------------------
 
     private static bool hook<T>(DemasterModule m, uint va, T d) where T : Delegate {
@@ -395,8 +583,14 @@ internal static unsafe class BattleHudPatches {
 
     public static bool install(DemasterModule m) {
         _log = m.log;
+        _set_hook = set_info_mes;
+        _ctrl_hook = ctrl_info_mes;
         return hook<Void>(m, DRAW_HELP, help)
             & hook<Ctb>(m, DRAW_CTB, ctb)
-            & hook<Void>(m, DRAW_STATUS, status);
+            & hook<Void>(m, DRAW_STATUS, status)
+            & hook<Info>(m, DRAW_INFO, info)
+            & hook(m, SET_INFO_MES, _set_hook)
+            & hook(m, CTRL_INFO_MES, _ctrl_hook)
+            & hook<Void>(m, DRAW_INFO_MES, draw_info_mes);
     }
 }
