@@ -98,6 +98,7 @@ internal static class MenuPatches {
             & StatusMenuPatches.install(m)
             & ConfigMenuPatches.install(m)
             & OverdriveMenuPatches.install(m)
-            & CustomizeMenuPatches.install(m);
+            & CustomizeMenuPatches.install(m)
+            & WorldMapPatches.install(m);
     }
 }
