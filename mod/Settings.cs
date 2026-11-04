@@ -34,7 +34,7 @@ internal sealed class DemasterSettings {
         new("ui.menus",              AppliedBy.Both,      "ps2"),
         new("ui.portraits",          AppliedBy.Converter, "ps2"),
         new("ui.font",               AppliedBy.Converter, "ps2"),
-        new("ui.title",              AppliedBy.Converter, "ps2"),
+        new("ui.title",              AppliedBy.Both,      "ps2"),
         new("ui.loading",            AppliedBy.Mod,       "ps2"),
         new("ui.battle_subtitles",   AppliedBy.Mod,       "ps2"),
         new("ui.battle_menu_delay",  AppliedBy.Mod,       "ps2"),

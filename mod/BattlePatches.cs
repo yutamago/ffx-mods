@@ -30,7 +30,6 @@ internal static unsafe class BattlePatches {
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] public delegate int CommandMP(int chr, nint rec);
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] public delegate nint SaveWeapon(int id, nint name);
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] public delegate void IconXYWH(float x, float y, float w, float h, int icon, int r, int g, int b, int a);
-    [UnmanagedFunctionPointer(CallingConvention.Cdecl)] public delegate void DigitRight(int value, float x, float y, int grey, float sx, float sy);
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] public delegate void WeaponAbility(int weapon, float x, float y);
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] public delegate void SummonPrim(int chr, int x, int y);
 
@@ -57,7 +56,6 @@ internal static unsafe class BattlePatches {
     private const uint RAM_MP          = 0x0079ae50; // MsGetRamChrMP
     private const uint SAVE_WEAPON     = 0x007abbd0; // MsGetSaveWeapon
     private const uint ICON            = 0x008e6af0; // DrawCrossMenuIconXYWHRGBA
-    private const uint DIGIT_RIGHT     = 0x009055c0; // ToMakeBtlEasyDigitRight
     private const uint WEAPON_ABILITY  = 0x008f34c0; // TOBtlDrawWeaponAbilityWindow
     private const uint SUMMON_PRIM     = 0x008a0ba0; // TOBtlDrawSummonPrim
 
@@ -90,7 +88,6 @@ internal static unsafe class BattlePatches {
     private static CommandMP? _cmd_mp;
     private static SaveWeapon? _weapon;
     private static IconXYWH? _icon;
-    private static DigitRight? _digits;
     private static WeaponAbility? _weapon_ability;
     private static SummonPrim? _summon;
 
@@ -113,7 +110,6 @@ internal static unsafe class BattlePatches {
         _cmd_mp = Native.fn<CommandMP>(COMMAND_MP).fnptr!;
         _weapon = Native.fn<SaveWeapon>(SAVE_WEAPON).fnptr!;
         _icon = Native.fn<IconXYWH>(ICON).fnptr!;
-        _digits = Native.fn<DigitRight>(DIGIT_RIGHT).fnptr!;
         _weapon_ability = Native.fn<WeaponAbility>(WEAPON_ABILITY).fnptr!;
         _summon = Native.fn<SummonPrim>(SUMMON_PRIM).fnptr!;
         _box = Native.fn<BoxXYWHC2>(BOX_XYWHC2).fnptr!;
@@ -209,9 +205,21 @@ internal static unsafe class BattlePatches {
     private static int cell_y(in Layout l, int e) => l.ty0 + (e - l.first) / l.cols * ROW;
     private static bool shown(in Layout l, int e) => e >= l.first && e < l.first + l.rows * l.cols;
 
-    /// <summary>A number in PS2 cells of 12 pixels (PS2 0x001f3588), right-aligned.</summary>
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)] public delegate int IntToMes(int value, byte* out_, int digits, int mode);
+    private const uint INT_TO_MES = 0x008b8290; // TOIntToMes(value, out, digits, mode) (PS2 0x00207650, no mode)
+    private static readonly byte* _num = (byte*)Marshal.AllocHGlobal(32);
+
+    /// <summary>
+    /// A number as the PS2 draws item counts, MP costs, HP and MP in the command windows
+    /// (0x001f3588 -> 0x001f3f30): TOIntToMes's text of `digits` characters, left-padded with the
+    /// font's digit-wide blank, in the 16x12 font at x (the PS2's size, Ps2Menu.font), grey when
+    /// unusable. The PC drew its battle digits (ToMakeBtlEasyDigitRight) at 0.78.
+    /// </summary>
     private static void number(int value, int digits, float x, float y, int grey, bool show_zero) {
-        if (value > 0 || show_zero) _digits!(value, x + 12 * digits - 2, y, grey, SX, SY);
+        if (value <= 0 && !show_zero) return;
+        new Span<byte>(_num, 32).Clear();
+        Ps2Menu.fn<IntToMes>(INT_TO_MES)(value, _num, Math.Clamp(digits, 1, 16), 0);
+        Ps2Menu.font((nint)_num, (int)x, (int)y, grey);
     }
 
     /// <summary>The rows (SLPM_675.13 0x00211e88: the parts left to right; 0x00210a40: the name centred).</summary>

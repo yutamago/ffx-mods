@@ -229,8 +229,11 @@ internal static unsafe class Ps2Menu {
         }
     }
 
-    private static bool scene_on(string name) {
-        byte* s = Native.ptr(SEQ_SLOTS + 0x100);
+    private static bool scene_on(string name) => scene_on(1, name);
+
+    /// <summary>Whether sequence seq (1 menu, 2 battle) runs the scene now.</summary>
+    public static bool scene_on(int seq, string name) {
+        byte* s = Native.ptr(SEQ_SLOTS + 0x100 * (uint)seq);
         for (int k = 0; k < 8; k++, s += 0x20) {
             short state = *(short*)s; // 0 free, 1..3 running, 4 stopped (the name cleared)
             if (state >= 1 && state <= 3 && Marshal.PtrToStringAnsi((nint)(s + 8)) == name) return true;
