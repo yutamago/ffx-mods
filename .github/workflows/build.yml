@@ -1,73 +1,161 @@
 # SPDX-License-Identifier: MIT
-# Builds the converter (demaster.exe) and the mod on Windows, runs the tests,
-# and packages the release zip as a CI artifact (no release is published).
+# CI: builds and tests everything, and packages the release zip as an artifact.
+#   mod        the C# mod (Linux; needs no secret)
+#   linux      converter and FFX Music Studio tests (Linux)
+#   windows    demaster.exe and ffx-music-studio.exe (MSVC, static CRT), the
+#              release zip (tools/package.cs) with a check that it holds no
+#              game data
+# release.yml calls this workflow with the tag, so a release is built the same way.
 #
-# The converter depends on ffx-rust (private). The repository secret
-# FFX_RUST_TOKEN must hold a token that can read github.com/yutamago/ffx-rust.
+# The converter depends on ffx-rust (github.com/yutamago/ffx-rust, private):
+# the jobs that build Rust need the repository secret FFX_RUST_TOKEN, a
+# fine-grained personal access token with read access to the contents of
+# yutamago/ffx-rust (docs/ci.md). Without it they stop at "ffx-rust access"
+# with a message saying so.
 name: Build
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "**" ]
   pull_request:
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      tag:
+        description: Release tag (v1.2.3); sets the version of the converter and the mod
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
+  # The release tag (v1.2.3), empty outside a release: then the versions in
+  # Cargo.toml and the csproj stay.
+  TAG: ${{ inputs.tag }}
 
 jobs:
-  build:
-    runs-on: windows-latest
-    defaults:
-      run:
-        shell: pwsh
-
+  mod:
+    name: Mod (C#)
+    runs-on: ubuntu-latest
     steps:
-    - name: Checkout
-      uses: actions/checkout@v7
+    - uses: actions/checkout@v7
 
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v6
+    - uses: actions/setup-dotnet@v6
       with:
         dotnet-version: 10.0.x
 
-    - name: Access to ffx-rust
-      env:
-        TOKEN: ${{ secrets.FFX_RUST_TOKEN }}
+    - name: Build
       run: |
-        if (-not $env:TOKEN) { throw 'the FFX_RUST_TOKEN secret is not set; cargo cannot fetch ffx-rust' }
-        git config --global url."https://x-access-token:$env:TOKEN@github.com/yutamago/ffx-rust".insteadOf "https://github.com/yutamago/ffx-rust"
+        version="${TAG#v}"
+        dotnet build -c Release ${version:+-p:Version="$version"} ffx-demaster.slnx
 
-    - name: Test the converter
-      env:
-        CARGO_NET_GIT_FETCH_WITH_CLI: "true"
-      run: cargo test -p demaster
+    - uses: actions/upload-artifact@v7
+      with:
+        name: mod
+        path: mod/artifacts/deploy/rel/mods/yuta.demaster/
+        if-no-files-found: error
+        retention-days: 7
 
-    - name: Build demaster.exe
-      env:
-        CARGO_NET_GIT_FETCH_WITH_CLI: "true"
-      run: cargo build --release -p demaster --target x86_64-pc-windows-msvc
+  linux:
+    name: Converter and studio tests (Linux)
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v7
 
-    - name: Build the mod
-      run: dotnet build -c Release ffx-demaster.slnx
+    - name: ffx-rust access
+      uses: ./.github/actions/ffx-rust-access
+      with:
+        token: ${{ secrets.FFX_RUST_TOKEN }}
 
-    - name: Package
+    - uses: dtolnay/rust-toolchain@stable
+
+    - uses: Swatinem/rust-cache@v2
+
+    # The studio's window (eframe: winit, glutin) builds against these.
+    - name: System libraries
+      run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libwayland-dev libxkbcommon-dev
+
+    - name: Test
+      run: cargo test --locked -p demaster -p ffx-music-studio
+
+  windows:
+    name: Windows build and package
+    runs-on: windows-latest
+    needs: mod
+    defaults:
+      run:
+        shell: bash
+    steps:
+    - uses: actions/checkout@v7
+
+    - name: ffx-rust access
+      uses: ./.github/actions/ffx-rust-access
+      with:
+        token: ${{ secrets.FFX_RUST_TOKEN }}
+
+    - uses: dtolnay/rust-toolchain@stable
+      with:
+        targets: x86_64-pc-windows-msvc
+
+    - uses: Swatinem/rust-cache@v2
+
+    # --target applies .cargo/config.toml's +crt-static: no Visual C++ runtime needed.
+    # A release sets DEMASTER_VERSION, which the mod compares with its own version.
+    - name: Build demaster.exe and ffx-music-studio.exe
       run: |
-        $PSNativeCommandUseErrorActionPreference = $true
-        dotnet run tools/package.cs -- yuta.demaster-ci.zip
-        Add-Type -AssemblyName System.IO.Compression.FileSystem
-        $zip = [IO.Compression.ZipFile]::OpenRead("$PWD/yuta.demaster-ci.zip")
-        $names = $zip.Entries.FullName
-        $zip.Dispose()
-        foreach ($f in 'yuta.demaster.dll', 'yuta.demaster.manifest.json', 'demaster.exe', 'demaster.toml') {
-          if ($names -notcontains "mods/yuta.demaster/$f") { throw "the zip has no $f" }
-        }
-        if ($names | Where-Object { $_ -match '/efl/|\.phyre$|\.iso$' }) { throw 'the zip contains game data' }
+        version="${TAG#v}"
+        if [ -n "$version" ]; then export DEMASTER_VERSION="$version"; fi
+        cargo build --locked --release --target x86_64-pc-windows-msvc -p demaster -p ffx-music-studio
 
     - name: Check demaster.exe runs
       run: |
-        $PSNativeCommandUseErrorActionPreference = $true
-        target/x86_64-pc-windows-msvc/release/demaster.exe --version
-        target/x86_64-pc-windows-msvc/release/demaster.exe jobs
+        exe=target/x86_64-pc-windows-msvc/release/demaster.exe
+        "$exe" --version
+        "$exe" jobs
 
-    - name: Upload
-      uses: actions/upload-artifact@v5
+    - uses: actions/download-artifact@v8
       with:
-        name: yuta.demaster-ci
-        path: yuta.demaster-ci.zip
+        name: mod
+        path: mod/artifacts/deploy/rel/mods/yuta.demaster/
+
+    - uses: actions/setup-dotnet@v6
+      with:
+        dotnet-version: 10.0.x
+
+    - name: Package
+      run: |
+        zip="yuta.demaster-${TAG:-ci}.zip"
+        dotnet run tools/package.cs -- "$zip"
+        echo "ZIP=$zip" >> "$GITHUB_ENV"
+
+    - name: Check the zip
+      shell: pwsh
+      run: |
+        Add-Type -AssemblyName System.IO.Compression.FileSystem
+        $zip = [IO.Compression.ZipFile]::OpenRead("$PWD/$env:ZIP")
+        $names = $zip.Entries.FullName
+        $zip.Dispose()
+        $names
+        foreach ($f in 'yuta.demaster.dll', 'yuta.demaster.manifest.json', 'demaster.exe', 'demaster.toml', 'README.txt', 'LICENSES.txt') {
+          if ($names -notcontains "mods/yuta.demaster/$f") { throw "the zip has no $f" }
+        }
+        $bad = $names | Where-Object { $_ -notlike 'mods/yuta.demaster/*' -or $_ -match '/(efl|build|tools|preview)/|\.(phyre|iso|bin|img|png|dds|webm|fsb|wav|vbf)$' }
+        if ($bad) { throw "the zip contains files it must not: $bad" }
+
+    - uses: actions/upload-artifact@v7
+      with:
+        name: zip
+        path: ${{ env.ZIP }}
+        if-no-files-found: error
+
+    - uses: actions/upload-artifact@v7
+      with:
+        name: studio
+        path: target/x86_64-pc-windows-msvc/release/ffx-music-studio.exe
+        if-no-files-found: error
