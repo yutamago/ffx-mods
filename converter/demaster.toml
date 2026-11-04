@@ -108,7 +108,7 @@ music_engine = "ps2"
 run_speed = "ps2"
 
 [fixes]
-# NPC mouths that hang open in some cutscenes.
+# NPC mouths that stay open after they talk (the PC sets the mouth texture inverted).
 npc_mouths = true
 # The Farplane background video that never plays on PC.
 farplane_video = true

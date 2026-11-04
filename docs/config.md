@@ -104,7 +104,7 @@ a second) is not implemented; `timing.md` says what it would take.
 
 | Key | `true` | Applied by | Status |
 |---|---|---|---|
-| `fixes.npc_mouths` | NPC mouths no longer hang open in some cutscenes | mod | not implemented: cause not found (`docs/patches.md`) |
+| `fixes.npc_mouths` | NPC mouth textures close after a line, as on the PS2 (the PC leaves the open frame) | mod | done, behaviour checked in the harness and PCSX2; the patch itself not yet run in Fahrenheit (`docs/patches.md`) |
 | `fixes.farplane_video` | the Farplane background video plays | mod | done, not yet seen in the game (`docs/patches.md`) |
 | `fixes.lulu_fury` | Lulu's Fury spins register: a diagonal the PC's once-a-frame stick reading skipped is filled in | mod | done, not yet tested with a stick (`docs/patches.md`) |
 

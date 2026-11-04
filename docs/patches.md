@@ -252,28 +252,67 @@ harness has no analog input; a test needs the stick faked (e.g. hooking
 in a battle with Lulu's gauge full. Open: the PS2's own sampling rate for
 this window (and so how fast a spin it accepted) is not known.
 
-## `fixes.npc_mouths`: not patched
+## `fixes.npc_mouths`: the mouth texture's frame, as on the PS2
 
 **How mouths work.** Scripts switch talking with natives `0x5076`, `0x507e`,
 `0x7110`/`0x7122` (on) and `0x7111` (off): `chr+0x4d4`. `Ch_Mouth`
 (`0x008344f0`, from `Ch_CalcMiddle_Batch`) moves the jaw target `+0x4de`
 (random while talking, else 0), steps the angle `+0x4dc` towards it, rotates
 bone 13 from the rest pose at `*(chr+0x1c4)+0x44` by `+0x4dc/10`°, and for
-models with mouth textures (`chr+0x6fc`) sets the texture-animation frame to
-open when the angle is above `g_ChrMouthTh` (`0x00c49718`, 10 = 1°). Closing
-always ends with angle 0 and frame 0. Nothing PC-specific was found in this
-path.
+models with texture animation (`chr+0x6fc`) calls
+`TexAnim_PosSet(chr+0x700, 1, v)`. Once angle and target are both 0 it
+returns at the top and touches nothing more, so whatever it set last stays.
 
-**Source.** The only report is one uncited line in the Final Fantasy Wiki's
-"Final Fantasy X version differences" ("Several NPCs erroneously have their
-mouths open during certain cutscenes"); forum threads only discuss lip-sync
-timing (checked 2026-11-04).
+`TexAnim_PosSet(i, 1, v)` writes FRAME (record `+4`) of every slot of that
+character whose type byte is 1 (work `+0xd08 + k`, from the `.chr`). A
+type-1 slot shows its list's frame 0 while FRAME is not 0 and frame 1 while
+FRAME is 0 (`chr_texanim_main_sub_new`, modes 1 and 4), and starts with
+FRAME = 1 (`chr_texanim_set_new`). 208 PS2 models have such a slot, almost
+every `n0xx` NPC (`demaster texanim-debug`): two frames for state 21,
+closed lips then open (Aurochs n172-n176: `n172_anim_n2` closed, `_n3` open
+with the teeth showing). Party models have none (Wakka's mouth expressions
+are script-set states 17-20), the close-up models move the jaw only.
 
-**Why not patched.** No reproducible case is known (which NPC, which
-event); none of the bug reports found names one. Two candidates, both
-unproven: (1) remodelled HD NPCs whose jaw bone's rest pose differs from the
-PS2 rest the code writes, which would leave the HD jaw open after the first
-line; (2) the HD `_anim_` mouth material whose frame 0 is an open mouth. With
-`models.npc = "ps2"` the converted NPCs use the PS2 skeleton and textures,
-which would avoid (1). Next step: a case, then a trace of `chr+0x4d4`,
-`+0x4dc`, `+0x4de` and the texture-animation frame during it.
+**The bug.** The PS2 and the PC pass opposite values:
+
+| | jaw above `g_ChrMouthTh` (10 = 1°) | at or below it (and after the line) |
+|---|---|---|
+| PS2 `0x0010a030` (`0x00160780(chr+0x70c, 1, v)`, th `0x00303638`) | v = 0: frame 1, open | v = 1: frame 0, closed |
+| PC `0x0083470d` (`push (angle > th)`) | v = 1: frame 0, closed | v = 0: frame 1, **open** |
+
+The rest of the texture-animation code is the same on both (PS2 `0x00161368`
+picks the frame the same way, `0x00161968` writes FRAME the same way). So on
+the PC an NPC's mouth texture flaps out of step while he talks (hardly
+visible, the jaw moves too) and, from his first line on, shows the open
+mouth whenever he is quiet, until the map is loaded again. Which cutscene
+shows it depends only on an NPC with a type-1 mouth talking and staying in
+view: the Wiki's "several NPCs erroneously have their mouths open during
+certain cutscenes".
+
+**Measured** (2026-11-04), the Thunder Plains agency clerk (n058, save 5;
+chr record 7, texture animation 7, mouth slot 3), made to talk for 30
+updates by writing the talk byte, FRAME of slot 3 before / while talking /
+after:
+
+| | before | talking (angle 53) | after |
+|---|---|---|---|
+| PC, HD model (harness, original code and the Rust port) | 1 (closed) | 1 (closed) | **0 (open)** |
+| PC, converted PS2 model (`models.npc = "ps2"`) | 1 | 1 | **0** |
+| PS2 (PCSX2 2.8.2, `field-kami0100`, PINE, talk byte `+0x4e0`) | 1 | 0 (open) | 1 (closed) |
+
+The converted models rebuild the `.ags` from the PS2 entries in the same
+order (`G3 Animation21: ids [2, 3]`), so they show the same open frame. The
+agency is a 2D room and the clerk's face is a few pixels wide, so the
+evidence is the slot state, not a picture.
+
+**The patch.** The `jle` at `0x00834714` (`7e 04`) that picks `push 0`
+becomes `jg` (`7f 04`): open gets 0, closed gets 1, as on the PS2
+(`mod/GamePatches.cs`). The jaw bone is untouched (it was never wrong).
+Not yet run in Fahrenheit: the harness cannot write code (the page is
+read-only; the write crashed the game), so the patched code is checked by
+its bytes and by the PS2's behaviour above, which it reproduces.
+
+**Candidates ruled out.** The HD jaw rest pose (the bone is rotated from the
+rest pose only while the angle is not 0, then left alone) and the HD
+`_anim_` frame order (the HD records list the frames in the PS2's order,
+`ids [2, 3]`).

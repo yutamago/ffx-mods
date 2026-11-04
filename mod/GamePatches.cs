@@ -61,6 +61,16 @@ internal static class GamePatches {
     public static bool farplane_video(DemasterModule m, string value) =>
         Native.patch_code(0x0076ebb4, [0x74, 0x28], [0x90, 0x90], m.log);
 
+    // ---- fixes.npc_mouths --------------------------------------------------------------------
+    // Ch_Mouth (0x008344f0) sets the mouth texture animation (the type-1 slots of 208 NPC models,
+    // two frames: closed, open) with TexAnim_PosSet(i, 1, v). The slot shows its list's frame 0
+    // when v != 0 and frame 1 when v == 0, and starts with v = 1 (closed). The PS2
+    // (SLPM_675.13 0x0010a030) passes v = 0 while the jaw angle is above g_ChrMouthTh and 1
+    // otherwise; the PC (0x0083470d) passes the opposite, so after a line the NPC keeps the open
+    // frame until the map reloads. The jle that picks push 0 becomes jg. docs/patches.md.
+    public static bool npc_mouths(DemasterModule m, string value) =>
+        Native.patch_code(0x00834714, [0x7e, 0x04], [0x7f, 0x04], m.log);
+
     // ---- timing.run_speed --------------------------------------------------------------------
     // Sg_PlayerInitDefault (0x0082d8d0, run at every event jump) sets the player's walk, run and
     // swim speeds: Sg_PlayerSetSpeed(2, f32 [0x00b59830] = 38.0). The PS2 disc's has 34.0
