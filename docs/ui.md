@@ -17,7 +17,7 @@ writes `<out>/efl/x/<HD path>` and a preview per file
 
 | Part | Files | In the game |
 |---|---|---|
-| Title screen (`map/titl/titl00/2d`): PS2 logo, menu, bar | 12 layers (EN x2, DE, FR, IT, ES, 6 "Install" labels) | checked (`boot.txt`, English) |
+| Title screen (`map/titl/titl00/2d`): PS2 logo, menu, bar at the PS2 place; the menu cursor moved with it (`mod/TitlePatches.cs`) | 12 layers (EN x2, DE, FR, IT, ES, 6 "Install" labels) | checked (`boot.txt`, English); compared with the PS2 (`compare-title`) |
 | "FINAL FANTASY X PROJECT" logo (`titl02`), "Fine" screen pieces (`titl01`) | 4 (the HD kept the PS2 pictures) | logo checked |
 | "HD Remaster" under the opening's logo (`magic_0662/logo_hdremaster`) | 1, transparent | not reached by a replay |
 | Loading screen (`menu/loading`: `ld00..24`, `loadingbg`) | 26, transparent | not seen: the harness loads hide it |
@@ -35,6 +35,7 @@ writes `<out>/efl/x/<HD path>` and a preview per file
 | Status, Equip, Overdrive, Customize, Config screens (`mod/*MenuPatches.cs`, below) | 0 | checked through injected game calls (`ui-status-ps2.txt`, `ui-equip.txt`, `ui-overdrive.txt`, `ui-customize.txt`, `ui-config.txt`); not run in Fahrenheit |
 | The 16x12 font at the PS2's size, the menu sequence scenes (`mod/Ps2Menu.cs`, below) | 0 | compared with the PS2 in PCSX2 (`docs/compare.md`) through injected game calls |
 | The PAL menu layout (`jppc/menu/menu_script.bin`, below, "The menu layout data") | 1 | compared with the PS2 (Config) |
+| The battle HUD: help bar, CTB list, party list (`mod/BattleHudPatches.cs`), the battle sequence scenes (BEFEHL footer, glow, lines; `mod/BattleSeqPatches.cs`), command window numbers in the 16x12 font (below, "The battle HUD", "The battle sequence scenes") | 0 | compared with the PS2 (`compare-battle-kami`) through injected game calls |
 
 68 files in all; 20 HD textures have no PS2 counterpart (listed by
 `demaster ui`). Previews and screenshots: `~/ffx-work/demaster/research/ui/`
@@ -152,13 +153,40 @@ section 0 (`YNSC`), each with the 16x16 CT32 CLUT that follows it
 | 14, 15 | | Japanese/Chinese, Korean (kept HD) |
 | 2, 4, 6, 8, 10, 12 | "Install" labels | the same |
 
-The PS2 image is the whole screen (512x448): the logo, menu and bar sit
-within a few pixels of the HD ones (lower-half correlation 0.53-0.55). Its
-top holds the PAL web-site banner and the water strip; in the game the PC
-draws its own water band (`menu/titl/water_NN`, Tk) over that part, so
-the banner is covered (`ingame-title.png`). Whether the PS2 showed the
-banner on the title screen is not known here; if it did not, nothing
-changes, since it is covered.
+The PS2 image is the whole screen (512x448). Its top holds the PAL
+web-site banner and the water strip; in the game the PC draws its own
+water band (`menu/titl/water_NN`, Tk) over that part, so the banner is
+covered (`ingame-title.png`). The PS2 shows the banner (PCSX2, the
+`title` state, `docs/compare.md`); here it stays covered (intended).
+
+**Placement** (`uijob::title_placed`, measured with `tools/compare`). The
+PS2 shows rows 16..432 of the image 1:1 on its 512 x 416 screen. The PC
+draws the layer as a 4:3 quad as wide as the screen and bottom-aligned:
+texture row v at screen line `v * 960 / 448 - 240` of 720 (16:9 and 4:3
+alike; fitted on harness shots), so it showed rows 112..448, 1.24 times
+as big: the logo's top 60 PS2 lines higher, the bottom bar 25. The
+converter now writes each 512 x 448 `titl00` layer laid out for that quad
+(at twice the PS2 size, 1024 x 896, so the 0.8 scale keeps the PS2
+detail): row v holds the PS2 row the PS2 showed at that screen line,
+`16 + (v * 960 / 448 - 240) * 416 / 720`; the rows above the water strip
+(the banner, PS2 rows 0..83) are black, so the PC's translucent water band
+lies over black as before. In 16:9 the vertical framing is the PS2's too,
+the picture stretched sideways as before.
+
+**The menu** ("Neues Spiel" / "Laden" are part of the picture; the cursor
+is the title menu message's, `(0x1c7, 0xc7)` on map 0x17): the PC lays the
+message out with HD numbers, its rectangle from the message's f32 `+0x34`
+(y 211; `TkMenuMessageLayout_008de370` also pins x to 0x160, 0x154 in
+language 3) and the second choice 16 + 21.5 lines below the first
+(`TOLayoutMessageChoices_008b9a60`, f64 `0x00b655e8`, read only there).
+`mod/TitlePatches.cs` (`ui.title`, so that setting is now converter and
+mod) runs the layout with `+0x34` 62 lines lower and the constant at 6.0:
+the cursor sits at the PS2 picture's lines (280 and 302, 22 apart).
+Checked in the harness on the game's own code (`FFX_HOOK_DISABLE=
+replacements`: ffx-rust ports the message code) with call detours that
+do the same (`tools/replays/compare-title.txt`), both choices. The other
+`titl01`/`titl02` screens (the "Fine" and project logos) were not
+compared and keep the PC's quad placement.
 
 `titl02` (the "FINAL FANTASY X PROJECT 1999-2002" logo) and three
 `titl01` layers are the PS2 pictures in the HD too (correlation 1.0): they
@@ -430,7 +458,13 @@ size since 2026-11-03 (`TOMkpBaseMesFont` inside `Ps2Menu.ps2_sized`, the
 PS2's 1612 draw `0x001f3810`; below, "The 16x12 font's size"), and the
 column width follows from their PS2 widths; before, they were the PC's
 battle typeface (`ToMakeBtlEasyEdgeFont`, 0.78), about half the PS2's size.
-The item counts are still the PC's battle digits at 0.78. The scroll bar is the PC's `DrawCrossMenuScrollParts` (grey track,
+The numbers (item counts, MP costs, HP, MP) are the PS2's since 2026-11-04:
+`0x00211e88` draws them with `0x001f3588` -> `0x001f3f30`, the number as
+text (`0x00207650`, FFX.exe `TOIntToMes(value, out, digits, 0)`: `digits`
+characters, left-padded with the font's digit-wide blank) in the 16x12
+font, not font M; the mod does the same (`BattlePatches.number`,
+`research/ui/battle/` not updated; checked with `ui-battle-item.txt`). The
+box's size matches the PS2's (x 0..133, y 339..401 in `compare-battle-kami`). The scroll bar is the PC's `DrawCrossMenuScrollParts` (grey track,
 pink thumb) at the PS2's place, not the PS2's own bar. The cursor is the PS2
 one since 2026-11-03 (below, "The PS2 cursor"). Icons are the HD `icon` art at a
 12 x 12 PS2 size.
@@ -833,6 +867,96 @@ slide and blink. Not done: the trigger-command tabs (the PC starts no
 (the orange glow under the box, `bnormall` track 11: a 100 x 62 rect at (0,
 339)), the footer pieces the PC skips (411, 415, 417).
 
+## The battle sequence scenes (`ui.menus`: code)
+
+The PS2 opens every main command window with two battle sequence scenes
+(PS2 `TOOpenBtlWinMain` `0x002108a0`, by `MsCheckLeftWindow` 0..3): a
+layer-0 one drawn before the windows (`bnormal`, `bnormale`, `bnormall`,
+`bnormalt`: lines at y 329..340, a purple bar (0, 330) 137 x 9, row bands
+418 at y 341, 361, 381, the orange glow (0, 339) 100 x 62 from
+`ff6400` / 0x64 to transparent) and its layer-1 twin after them
+(`...lay`: a black line along y 407, the ring 417 at (26, 407), the
+BEFEHL brush 415 at (-2, 392), the ">>>" plate 411 at (90, 402) pulsing
+blue, the Overdrive tab 413). `TOOpenBtlLimitBreak` (`0x00212f38`) starts
+`bevent` / `blimit` / `btwo` and their lay scenes. Scene data:
+`battle_script.bin` (the PC's copy holds the same scenes). FFX.exe starts
+only `bnormallay`, `bnormalllay` and `blimitlay`; its
+`TOMakePktSeqPrimLayout_008fe0b0` skips 411, 412, 415, 419 and 507, draws
+417 only at y <= 330 (an HD gauge) and 413 only at y <= 300; and its line
+primitive (`TOMakePktSeqPrimLine` `0x008fe070`) is a bare `ret`, so no
+scene line is drawn anywhere on the PC.
+
+**The restoration** (`mod/BattleSeqPatches.cs`): hooks on
+`TOOpenBtlWinMain` and `TOOpenBtlLimitBreak` start the PS2's other scenes
+after the PC's call; the primitive hook draws 411, 415, 416, 418, 419,
+417 below y 330 and 413/414/421 below y 300 the PS2 way (each part at
+`x + dx sx / 100`, `w sx / 100`, the primitive's colour, texel-centre UVs
+with the parts' flips, PS2 battle atlas); and the scene line's call
+(`0x00a7c20d`) goes to a drawer of one-pixel gradient boxes while the
+battle sequence draws (the menus' scene lines stay off: not compared).
+Found by decoding `battle_script.bin` (scratch `hud/agent2/scenes.py`).
+The PC's track waits compare only the first track (`TrackStep` op 2), so
+the tab's blink and the plate's pulse start with the slides; not changed.
+
+Checked: `compare-battle-kami` draws the scenes' resting frame as fixed
+calls (`hud::footer`; the harness can't run hooks): BEFEHL, ring, plate,
+lines, glow and bands match the PS2 shot within a pixel or two
+(`docs/compare.md`). The slide-ins, the pulse and the limit-break scenes
+were not seen in play.
+
+## The battle HUD (`ui.menus`: code)
+
+`TODrawBtlWindow` (PS2 `0x00214ae4`, PC `0x0089b360`) calls the same
+pieces on both: the party list (PS2 `0x0021c498` = `TOBtlDrawStatusWin`),
+the CTB list (`0x002138c8(x, y)` = `TOBtlDrawCtbWindow`, at dum19), the
+window callbacks, the help bar (`0x00218338` = `TOBtlDrawHelpWin`), the
+target info window (`0x00218a80(chr, 0x14, 0x46)` = `TOBtlDrawInfoWin`;
+the PC passes (0xb3, 0xf0)) and its text. The PC rewrote the draws with HD
+sheets and HD coordinates. `mod/BattleHudPatches.cs` replaces three of
+them with the PS2 draws (PS2 units, the PS2 meswin `ps2win` and battle
+atlas `ps2btl`):
+
+- **Help bar** (`0x00218338`): while the help setting is on (MsGetSaveMenu
+  bit 0x400) the scene `bhline` runs (the gold stroke along the top; the
+  PC never starts it); with the help window open, the menu help bar's
+  pieces: plates 0x45/0x46 at `rect_helpsubplt` in `col_helpsubplt`,
+  plates 6/7 at `rect_helpplt` in black at alpha 0x40 (not `col_helpplt`
+  as in the menus), the HELP label (meswin 0x3e), the text at (40, 12) in
+  the 16x12 font. The PC's band and its scrolling of long texts are gone
+  (the PS2 doesn't scroll).
+- **CTB list** (`0x002138c8`): the battle window frame (shapes 400..408,
+  `0x001fa7d8`) 58 x 174 at dum19 (438, 43), the arrows 438/439 right of
+  it, a scroll bar (`0x001fbfc0`: grey box, black inside, light thumb, 8
+  of 16 rows), then each row 22 apart (the PC's row state, the same
+  numbers): the wait bar 40 x 20 in three purples and the face at x +
+  min(wait, 20) (party 440 + chr, Rikku's other face before scenario
+  0x434, aeons 448, monsters by icon type), the first row's orange
+  marker 472; in target selection the targeted rows' markers 429/430 in
+  dum74/dum73. `TOMakePktBoxXYWHRGBA` ignores the PC's scissor, so the
+  bars are cut to the window by hand.
+- **Party list** (`0x0021c498`): three rows from dum45 (206, 346), dum13
+  (22) apart; the acting member's highlight in the Overdrive view
+  (battle shapes 409/410 dum52 wide, dum2 -> dum1, a light line on top
+  and a dark one under it), the targeted members' in the other views
+  (dum40 -> dum41); the name right-aligned at x 321 in the 16x12 font in
+  its HP colour; HP and MP labels (meswin 0xe9/0xea) and the shown values
+  in font M; the Overdrive gauge (`0x0021d1b8`: a black box, solid orange
+  when full, else a light-to-orange gradient over the full width cut at
+  the value). The HP / MP views draw "value/max" (the max in colour 0x80,
+  which the PS2 leaves in the register: white face, black shadow); the
+  status view cycles the statuses every 21 frames, as the PC's draw did.
+
+The target info window and the damage digits: the digits are the PS2's
+(`docs/font.md`, `ui.font`); the info window (`TOBtlDrawInfoWin`) stays HD
+(open).
+
+Checked: `tools/replays/compare-battle-kami.txt` (`@ps2hud`: a jump at
+each PC draw's entry to a call list with the mod's calls, on the game's
+own code). Help bar and party list match the PS2 frame to the pixel but
+for glyph edges; the CTB frame, bars, faces and markers too, but the PC's
+turn order differs (Wakka third against the PS2's seventh: the battle's
+own state from the same save, not the draw). Not seen in play.
+
 ## The Items and Abilities screens (`ui.menus`: code)
 
 The PC kept the PS2 menu logic and window records: every field the PS2
@@ -1171,7 +1295,9 @@ The screenshots of these five screens (2026-11-03) are kept in
   kinds 0/4/5): left as it is; its anchor differs from the PS2 cursor's, so
   replacing it needs each caller's PS2 position.
 - The `?`/`!` icons and the other `meswin` cells outside the ported draws.
-- The battle help bar (`TOBtlDrawHelpWin`): HD.
+- The battle target info window (`TOBtlDrawInfoWin`, PS2 at (0x14, 0x46)),
+  the enemy and Overdrive mini-game windows (Libra, Auron, Tidus, Lulu):
+  HD. The menus' sequence scene lines (the PC draws none) stay off.
 - The battle words' place and the `strtex` labels in play (not reached).
 - `worldmap` (airship map): 512x416 PS2 against a 1920x1080 HD layout.
 - Sphere grid (`menu/abmap/dat00/tex`): named after VRAM pages

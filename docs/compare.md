@@ -26,7 +26,7 @@ Output: `/mnt/c/shots/compare/` (`ps2/`, `ps2hw/`, `pc/` the raw frames,
 | `tools/compare/setup.py` | Writes the settings `PCSX2.ini` needs (pad bindings for the posted keys, F12 screenshot as PNG at the internal resolution, F11 GS dump, the folder memory card, software renderer at native) and the memory card from the PC saves (below). `setup.py renderer <dir> sw\|vk\|dx12 [scale]` switches the renderer. |
 | `tools/compare/pcsx2.sh` | `start [state]` (boots the disc, or `PCSX2_ISO=<dump>` a GS dump; writes the PID to `compare.pid`), `stop` (`taskkill /PID`, never by name), `ctl <pcsx2ctl args>`. |
 | `tools/compare/states.txt` | pcsx2ctl script that makes the save states from a fresh boot: `title`, `field-kami0100`, `field-kami-outside`, `battle-kami`, `field-cdsp0000` (in `C:\_workspaces\pcsx2\sstates\compare\`). |
-| `tools/compare/scenes.toml` | One `[[screen]]` per PC replay: the PS2 state and script, which PS2 shot pairs with which PC shot, and the regions. |
+| `tools/compare/scenes.toml` | One `[[screen]]` per PC replay: the PS2 state and script, which PS2 shot pairs with which PC shot, the regions, and `pc_env` (environment for the PC run: `FFX_HOOK_DISABLE = "replacements"` makes the harness run the game's own code instead of ffx-rust's ports, so a replay's code patches and jumps, standing in for the mod's hooks, take effect; the title and battle scenes need it). |
 | `tools/compare/compare.py` | `ps2`, `hw`, `pc`, `diff`, `all` (below). |
 | `tools/replays/compare-title.txt`, `compare-battle-kami.txt` | PC replays for the title screen and for the same battle as the PS2 state. |
 
@@ -182,19 +182,65 @@ Numbers: mean absolute difference (0-255) of the exact view, whole frame.
 | Equip, weapon list | 10.5 | 7.6 | the rows about 1 line lower; the Weapon row's cursor (the PS2 hides it every other frame while the list is open) | |
 | Customize | 11.3 | 5.5 | glyph edges | |
 | Customize, ability list | 13.8 | 6.8 | glyph edges | |
-| Title | 51.0 | 51.0 | not touched: the Demaster places the picture higher and stretches it (the logo's top about 60 lines higher, the bottom bar about 25); the PC's own water band where the PS2 shows the PlayOnline banner and the water; the PC's small cursor | the water band (`docs/ui.md`) |
-| Battle | 27.3 | 26.9 | command window: text now PS2 size (command region 30.6 -> 26.4), but the "EKSTASE!!" tab and the "BEFEHL" label are missing; the HUD stays HD (help bar, CTB list, party list); the 3D camera frames the scene a little wider | |
+| Title | 51.0 | 51.0 | not touched: the Demaster places the picture higher and stretches it (the logo's top about 60 lines higher, the bottom bar about 25); the PC's own water band where the PS2 shows the PlayOnline banner and the water; the PC's small cursor (since done: "Results (2026-11-04)") | the water band (`docs/ui.md`) |
+| Battle | 27.3 | 26.9 | command window: text now PS2 size (command region 30.6 -> 26.4), but the "EKSTASE!!" tab and the "BEFEHL" label are missing; the HUD stays HD (help bar, CTB list, party list); the 3D camera frames the scene a little wider (since done: "Results (2026-11-04)") | |
 
 "Glyph edges": the PS2 font is drawn from the 4x filtered PS2 pages
 (`docs/font.md`), the PS2 sampled it 1:1; and the glyphs start 0.78 lines
 lower (the PC's y offset for the European languages; the draw takes an
 integer y). Each string leaves a thin outline in the difference.
 
-**Open**: the battle command window's "EKSTASE!!" tab and "BEFEHL" label
+**Open** (2026-11-03; the battle and title items are done since, below): the battle command window's "EKSTASE!!" tab and "BEFEHL" label
 and the rest of the battle HUD; the title picture's placement; the PC's 16-line
 line feed inside a 16x12 string (the PS2's is 20; no menu string seen
 with one). All of it was measured through `tools/calllist`, which makes the
 mod's calls in the harness; the mod itself was not run in Fahrenheit here.
+
+## Results (2026-11-04): battle HUD and title
+
+Exact view, whole frame and regions (mean absolute difference; the
+detail view in brackets):
+
+| Scene | Region | Before | After |
+|---|---|---|---|
+| Title | all | 51.0 (50.3) | 18.2 (17.6) |
+| | banner | 69.8 | 32.6 |
+| | logo | 39.1 | 3.4 |
+| | menu | 30.3 | 5.1 |
+| | bar | 27.8 | 4.4 |
+| Battle | all | 26.9 (26.3) | 19.3 (19.3) |
+| | help | 31.7 | 12.3 |
+| | CTB | 47.6 | 25.2 |
+| | command | 26.4 | 18.9 |
+| | party | 42.0 | 21.3 |
+
+What changed: the title picture at the PS2's place (the converter lays
+the layer out for the PC's quad) and its cursor moved with the menu text
+(the mod's `ui.title` hook, done here by call detours); the battle help
+bar, CTB list and party list drawn the PS2 way (`@ps2hud`), the
+Overdrive tab and the battle sequence scenes' footer, glow, lines and
+row bands (`tab`, `footer`: their resting frame as fixed calls).
+`docs/ui.md`, "Title screen and logos", "The battle sequence scenes",
+"The battle HUD".
+
+Still different:
+
+- **Title, banner** (intended): the PC's own animated, translucent water
+  band covers the top of the screen; under it the converter leaves the
+  PS2 banner's rows black (the user's choice: the banner stays covered).
+  The PS2 shows the banner and its water strip there.
+- **Title, menu**: the cursor is the PC's small hand at the PS2 place (the
+  PS2's hand-and-ball is drawn by the mod's cursor hook only for cursor
+  kind 0; whether the title's cursor takes that path was not checked).
+- **Battle, 3D** (most of the rest): the PC camera frames the scene a
+  little wider, the models stand elsewhere; it shows through every
+  region.
+- **Battle, CTB**: the turn order differs (the PC puts Wakka third, the
+  PS2 seventh, from the same save): the battle's state, not the draw.
+- **Battle, text**: glyph edges as in the menus; the font M digits a
+  little greyer than the PS2's.
+- **Battle, Overdrive tab**: the PS2 shot catches the tab's blink at a
+  lower alpha.
 
 ## Not done
 
