@@ -1,8 +1,9 @@
 # SPDX-License-Identifier: MIT
-# Pushing a tag such as v0.2.0 builds the converter and the mod with that
-# version and publishes a release with a zip that unpacks straight into the
-# Fahrenheit folder. A tag with a "-" (v0.2.0-alpha) makes a prerelease.
-# Needs the FFX_RUST_TOKEN secret (see build.yml).
+# Pushing a tag such as v0.2.0 builds everything as CI does (build.yml), with
+# that version in the converter and the mod, and publishes a GitHub release
+# with the mod zip (unpacks straight into the Fahrenheit folder) and
+# ffx-music-studio.exe. A tag with a "-" (v0.2.0-alpha) makes a prerelease.
+# Needs the FFX_RUST_TOKEN secret (docs/ci.md).
 name: Release
 
 on:
@@ -10,52 +11,44 @@ on:
     tags: [ "v*" ]
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  release:
-    runs-on: windows-latest
-    defaults:
-      run:
-        shell: pwsh
+  build:
+    uses: ./.github/workflows/build.yml
+    with:
+      tag: ${{ github.ref_name }}
+    secrets: inherit
 
+  publish:
+    name: Publish the release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
-    - name: Checkout
-      uses: actions/checkout@v7
-
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v6
+    - uses: actions/download-artifact@v8
       with:
-        dotnet-version: 10.0.x
+        merge-multiple: true
+        path: dist
 
-    - name: Access to ffx-rust
-      env:
-        TOKEN: ${{ secrets.FFX_RUST_TOKEN }}
-      run: |
-        if (-not $env:TOKEN) { throw 'the FFX_RUST_TOKEN secret is not set; cargo cannot fetch ffx-rust' }
-        git config --global url."https://x-access-token:$env:TOKEN@github.com/yutamago/ffx-rust".insteadOf "https://github.com/yutamago/ffx-rust"
-
-    # The mod compares its version with the converter's that built the files,
-    # so both get the tag's.
-    - name: Build
-      env:
-        CARGO_NET_GIT_FETCH_WITH_CLI: "true"
-      run: |
-        $PSNativeCommandUseErrorActionPreference = $true
-        $version = $env:GITHUB_REF_NAME -replace '^v', ''
-        $env:DEMASTER_VERSION = $version
-        cargo build --release -p demaster --target x86_64-pc-windows-msvc
-        dotnet build -c Release -p:Version="$version" ffx-demaster.slnx
-
-    - name: Package
-      run: dotnet run tools/package.cs -- "yuta.demaster-$env:GITHUB_REF_NAME.zip"
-
-    - name: Publish
+    - name: Release
       env:
         GH_TOKEN: ${{ github.token }}
+        TAG: ${{ github.ref_name }}
+        REPO: ${{ github.repository }}
       run: |
-        $tag = $env:GITHUB_REF_NAME
-        $release = @('release', 'create', $tag, "yuta.demaster-$tag.zip", '--verify-tag',
-                     '--title', "FFX Demaster $tag", '--generate-notes')
-        if ($tag.Contains('-')) { $release += '--prerelease' }
-        gh @release
+        ls -l dist
+        cat > notes.md <<EOF
+        Unpack \`yuta.demaster-$TAG.zip\` into your Fahrenheit folder, set your PS2 disc image in
+        \`mods\\yuta.demaster\\demaster.toml\` and run \`mods\\yuta.demaster\\demaster.exe\`.
+        The zip's README.txt has the details. No game data is included: you need an image of
+        your own Final Fantasy X PS2 disc and the Steam HD Remaster.
+
+        \`ffx-music-studio.exe\` (optional) plays and edits the PS2 music of your disc.
+        EOF
+        args=(release create "$TAG" "dist/yuta.demaster-$TAG.zip" dist/ffx-music-studio.exe
+              --repo "$REPO" --verify-tag --title "FFX Demaster $TAG"
+              --notes-file notes.md --generate-notes)
+        if [[ "$TAG" == *-* ]]; then args+=(--prerelease); fi
+        gh "${args[@]}"

@@ -22,7 +22,9 @@ iso = ''
 # look in the usual Steam folders.
 game = ''
 # ffmpeg.exe, which converts the movies (https://ffmpeg.org, not included).
-# Leave empty to use the ffmpeg on your PATH.
+# Leave empty to use ffmpeg.exe next to demaster.exe or in tools\, else the
+# one on your PATH; if there is none, the first build downloads an LGPL build
+# of FFmpeg (168 MB) into tools\ and checks it.
 ffmpeg = ''
 
 [build]
