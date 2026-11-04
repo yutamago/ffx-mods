@@ -1,0 +1,14 @@
+[package]
+name = "demaster-live"
+description = "FFX Demaster's live PS2 music engine: the PS2 sound driver played inside the PC game (demaster_live.dll)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+name = "demaster_live"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+demaster = { path = "../converter" }
+anyhow = "1"

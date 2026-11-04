@@ -39,6 +39,29 @@ pub enum Filter {
     Nearest,
 }
 
+/// `audio.music_engine`: what plays when the game's soundtrack is
+/// "Original" (`docs/music.md`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum MusicEngine {
+    /// The original soundtrack bank rendered by our PS2 sound driver.
+    #[default]
+    Ps2,
+    /// The PC's recordings.
+    Hd,
+    /// The PS2 driver playing inside the game (`demaster_live.dll`),
+    /// driven by the game's music commands; the rendered bank stays as
+    /// the fallback (and for the three tracks with streamed parts).
+    Live,
+}
+
+impl MusicEngine {
+    /// Whether the rendered bank is built.
+    pub fn bank(self) -> bool {
+        self != MusicEngine::Hd
+    }
+}
+
 fn yes() -> bool {
     true
 }
@@ -117,8 +140,9 @@ pub struct Ui {
 pub struct Audio {
     pub soundtrack: Look,
     /// `"ps2"`: the original soundtrack rendered from the PS2 disc's
-    /// sequences by our PS2 sound driver, instead of the PC's recordings.
-    pub music_engine: Look,
+    /// sequences by our PS2 sound driver, instead of the PC's recordings;
+    /// `"live"`: that driver playing in the game.
+    pub music_engine: MusicEngine,
 }
 
 /// Game speed (`docs/timing.md`). These touch play, not only the picture,
@@ -218,7 +242,7 @@ pub const SETTINGS: &[(&str, AppliedBy)] = {
         ("ui.battle_menu_delay", Mod),
         ("ui.button_glyphs", Converter),
         ("audio.soundtrack", Mod),
-        ("audio.music_engine", Converter),
+        ("audio.music_engine", Both),
         ("movies", Converter),
         ("timing.run_speed", Mod),
         ("fixes.npc_mouths", Mod),

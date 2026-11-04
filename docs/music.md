@@ -9,7 +9,9 @@ instruments played by a port of the PS2 sound driver on an SPU2 model, and
 writes a replacement bank in the same format. Choosing "Original" in the
 game's menu (or `audio.soundtrack = "ps2"` for a new game) then plays it.
 
-Phase 1 (this) renders offline. Phase 2 (a live engine) is planned below.
+Phase 1 renders offline. Phase 2 (`audio.music_engine = "live"`, below)
+plays the same driver inside the game, driven by the game's own music
+commands; the rendered bank stays as its fallback.
 
 ## The PS2 data
 
@@ -250,33 +252,121 @@ So in the story it never plays; it can be heard in the sphere theater
 | What it is | Nostalgia's notes (music144: the same melody, 5-grams 1.00/0.95; 7 tracks against 6, re-sequenced, header reverb 4 depth 15000, volume 127) pointed at bank 70, whose 11 instruments (27 regions) are long unpitched one-shot samples: the notes trigger broadband noise bursts (spectrogram: no harmonics, rms -14 dB against Nostalgia's -27 dB), which is why it sounds like random sounds. Bank 70 does not belong to this sequence (or the sequence is a placeholder copied over an older song 70); its twin 071 plays the same notes on a piano-like stereo instrument at volume 0 |
 | Category | an unused leftover, not a sound-effect sequence, ambience or jingle the game plays |
 
-## Phase 2: a live engine (plan)
+## Phase 2: the live engine (`audio.music_engine = "live"`)
 
 The PC game drives music through `iMusic*` commands (ffx-rust `sound.md`,
-"FMOD command queue"); several are empty on PC (`musicTempoDirect/
-Translate`, `musicPitchDirect/Translate`, `musicMuteSet`), and the
-recordings bake in whatever the PS2 did with them. A live engine would play
-the sequences as the PS2 did, commands included:
+"FMOD command queue"), which its `FmodMusic` turns into FMOD event calls.
+With `"live"`, the PS2 driver (`sqseq` + `spu2`, the same code that renders
+the bank) plays inside the game in place of the bank's recordings, while
+the "Original" soundtrack is chosen. What that adds over the bank: the
+PS2's own loop (no loop points cut into a sample), tempo commands, and the
+song's real state when a script pauses, fades or resumes it.
 
-1. A Fahrenheit hook on the FMOD command handlers for the music commands
-   (`0x14..0x2f`, `FfxFmod::music*`) in the C# mod, forwarding them to a
-   native engine (the Rust `sqseq` + `spu2`, built as a DLL next to
-   `demaster.exe`) instead of FMOD's events when the original soundtrack is
-   on.
-2. The engine streams its output into FMOD as one user PCM stream (as the
-   movie player does: `createSound` with a `pcmreadcallback`), so the
-   game's master/music volumes and FMOD's mixer stay; it runs on the FMOD
-   tick (30 Hz) and renders 240 Hz interrupts ahead into a ring buffer.
-3. Commands map to the driver's own: `iMusicRead/DataSend` load BGM + WD
-   (from the converter's extracted copies, not the PC bank), start/stop,
-   `VolumeTranslate/FadeOut` -> song volume slides, `TempoDirect/Translate`
-   -> the tempo modifier (`DAT_00222450`), `PitchDirect` -> the global
-   pitch (`DAT_00222440`), `ReplayPointSet` -> the loop-point snapshot,
-   `CrossPlay` -> two songs at once (the driver has a second song slot).
-   `iMusicPlayState`/`SyncStandby` answer from the engine's state.
-4. The streamed layers of the three rock tracks: find the battle streams on
-   the disc (the driver's `BattleStreaming`, VAG streams in the voice data)
-   and mix them in; until then those three stay the PC's recording.
-5. Check against the offline renders (same bytes for a plain start) and
-   against captures of scenes that use tempo and fades (the game over, an
-   inn's good night).
+### Design
+
+| Part | What | Where |
+|---|---|---|
+| Engine | Rust, a 32-bit `cdylib` built from the converter's crates (`demaster_live.dll`, C ABI): one code base with the offline renderer, already byte-exact. A C# port was not needed | `live/src/engine.rs` (platform-free, tested on Linux), `live/src/hook.rs` (Windows) |
+| Loading | The C# mod (`mod/LiveMusic.cs`, code patch `audio.music_engine` with value `live`) loads `demaster_live.dll` from the mod folder at start and calls `demaster_live_install(mod_dir)`; it says in its log whether it is in. Missing files, or another FFX.exe, leave the game on the bank | `mod/LiveMusic.cs`, `mod/Patches.cs` |
+| Which calls | FFX.exe's import slots of the FMOD `Event` methods `FmodMusic` uses: `start`, `stop`, `getState`, `setCallback`, `setVolume`, `getVolume`, `setPaused`, `getPaused` (`0x00b0c758`, `754`, `750`, `74c`, `748`, `744`, `740`, `73c`) and `EventSystem::update` (`0x00b0c768`). A call whose `Event*` is the event of music record `i` (`FmodMusic +0x10`, 0x3c bytes a record, `+0` the event) while the PS2 set is chosen (`FmodMusic +0x2c` = 1) goes to the engine as music `i` (`musicNNN.bgm`, NNN = the record's music id); every other call (SFX, voices, the arranged soundtrack) goes on to FMOD | `hook.rs` |
+| The game's logic stays | `FmodMusic`'s own logic decides when to start, stop, pause and fade: cross-fades (`crossPlay`), the replay point (a field song paused under a battle and resumed with a fade-in), `releaseOldMusic`'s fade-outs, the music volume setting (multiplied into each event's volume by the game), the soundtrack switch (`switchBGM`). The engine only replaces the sound the events would have made | |
+| Tempo | Commands 0x1d `iMusicTempoTranslate(frames, tempo)` and 0x1e `iMusicTempoDirect(tempo)`, empty on PC: their entries in the handler table `0x00c3a368` go to the engine, which applies the driver's tempo modifier (IRX `0x00222450`, below) | `hook.rs`, `sqseq::Song::tempo_direct/translate` |
+| Sound | One FMOD user stream on the game's `System` (`createSound(NULL, OPENUSER \| CREATESTREAM \| SOFTWARE \| 2D \| LOOP_NORMAL)`, 48 kHz stereo PCM16, decode buffer 0x1000 frames, as the game's movie player makes one), started at the first music start, channel volume 1, priority 0. Its read callback renders the engine. So the music goes through FMOD's mixer and output like everything else (same device, the harness's WAV capture sees it) | `hook.rs` `start_stream`, `pcm_read` |
+| Songs | Every event that plays gets its own `Song` and its own `Spu2` (the PC keeps a paused field song under the battle music; the PS2 driver also had a second song slot). Each is mixed times its event's volume (ramped over 1600 frames, one FMOD tick, except before its first output, where FMOD takes it at once) and the PC event's own volume from `ffx_music_ps2.fev` (`engine::EVENT_DB`, -3 to -14 dB), then through the converter's output stage (`musicjob::Master`: +9 dB, limiter at -1 dBFS). A song left alone is the bank's render sample for sample | `engine.rs` |
+| Stop, end | `stop` is the driver's stop: every voice keyed off, the release and reverb tails play out; the event is ready again at once. A one-shot whose sequence ended plays its tail out (until silent, at most 8 s, as the bank's render), then the event's callback runs with `EVENTFINISHED` (4) from the `EventSystem::update` wrapper on the FMOD thread, as FMOD calls it (the game's `eventcallback` `0x00707a50` clears the record's play state) | |
+| State | `getState` answers 0x18 (playing) while a song plays or is paused for the event, else 1 (ready); `getPaused`/`getVolume` what the game set | |
+| Pause | `setPaused(true)` freezes the song and its chip (the FMOD semantics the PC's replay point relies on): `setPaused(false)` goes on from the same sample | |
+| Data | Job `audio.live` (`converter/src/livejob.rs`) copies from the disc into `<mod>/music/`: `iopsound.irx`, `libsd.irx` (for their tables), the 112 `musicNNN.bgm` and the 100 banks they name (`waveNNNN.wd`), 58 MB. Never in git. The offline bank (`audio.music`) is built as well: it is the fallback and plays the three tracks below | `livejob.rs`, `jobs::MOD_DIRS` |
+| Left to the bank | Otherworld (49), Confrontation (35), Jecht's theme (51): their guitar and vocals were streamed from the disc (below). Also any music whose files are missing (the ten sequences without a bank, which the game never plays) | `engine::KEEP_BANK` |
+| Log | `<mod>/music/live.log`: each start, stop, pause, volume step of 0.1 or more, end, tempo command. `DEMASTER_LIVE_WAV=<file>` also writes the engine's output to a WAV and logs a heartbeat every 5 s; `DEMASTER_LIVE_TEST=<id>` queues `iMuiscSetBgmType(1)`, `iMusicRead(id)`, `iMusicStart(id)` once FMOD runs and `iMusicStop(id)` 20 s later (a test where no scene plays music) | `hook.rs` |
+
+**The driver's tempo modifier** (IRX `0x00109120` direct, `0x00109148`
+translate, applied in the timer `0x00100cd0`): `MusicTempoDirect(v)` (`v`
+-128..127) sets `m = v x 256` (`+ 0xff` when positive); each interrupt
+the song's tempo step is `bpm x (m & 0xffff) >> 16` for `m < 0` (-128:
+half) and `bpm + (bpm x (m + 1) >> 15)` for `m > 0` (127: double).
+`MusicTempoTranslate(frames, v)` slides `m` there in `frames` steps, one
+every 4th interrupt (60 Hz, `0x001003e0`; frames x 60 / 50 when the cycle
+mode `0x00119328` is not 120, i.e. PAL). The modifier is the driver's, not
+a song's: later songs play with it, and a song started under -128 stays
+on its first tick (it starts at 1 BPM until its first `0x08`, and 1 x
+0x8000 >> 16 = 0) until it is reset. The PC's handler of 0x1d halves the
+frames (`ceil(f x 0.5)`, its 30 Hz); the engine takes the script's frames
+at 60 Hz. Only `bsil0000` uses it (W19: `MusicTempoTranslate(120, -360)`,
+clamped to -128, with a 120-frame fade-out: the music slows down as it
+fades; W19/W21 reset it with `MusicTempoDirect(0)`), and the test map
+`test23`. No script uses `MusicPitchDirect/Translate` (IRX `0x001091e4`,
+`0x00109298`, the global pitch `0x00222440`); the engine leaves them
+empty, as the PC does.
+
+### Checked
+
+- **The engine against the renderer** (`cargo test -p demaster-live`;
+  with `DEMASTER_LIVE_MUSIC=<mod>/music` also the disc): a song started
+  and left alone is the converter's render through the same output stage
+  sample for sample (battle theme for 130 s, through its loop jump; game
+  over); start, stop with its tail, a one-shot's end and callback, pause
+  and resume, volume and its ramp, the tempo modifier (96 ticks a second
+  at 120 BPM; 48 at -128, 192 at 127, a slide in between, a later song
+  keeping it).
+- **In the game, with ffx-rust's harness** (`tools/live-test.sh`: the
+  replay through `tools/shotrun`, `live-inject.exe` loads the DLL into the
+  harness's FFX.exe, `FFX_AUDIO_WAV` captures FMOD's mix):
+  - `music-live.txt` (Djose highroad, the soundtrack switched to
+    Original): the restarted field song is music 22 (Spira Unplugged),
+    live; the engine's output is the offline render of music 22 times its
+    event's -10 dB (correlation 1.00000, the limiter's 96 frames of
+    delay); FMOD's mix holds it at gain 1.001 (correlation 0.992, the rest
+    is sound effects). A battle pauses it and starts the battle theme
+    live at the game's volume.
+  - `music-live-return.txt` (the same battle won: the monsters get 1 HP):
+    field 22 -> paused; battle 16 -> faded and stopped at the end;
+    fanfare 138 -> faded out while 22 resumes with a fade-in from 0, from
+    the sample it was paused at (correlation 0.99998 with the render at
+    that point), at the game's volume x event volume exactly.
+  - `music-live-victory.txt` (salvage ship): The Summoning (13) faded out
+    by the script, battle theme, fanfare, each faded and stopped as the
+    game asks.
+  - `music-live-commands.txt` (the game's own `SndMusicTempoTranslate(120,
+    -128)`, `SndMusicTempoDirect(0)`, `iMusicSetPaused(1)`/`(0)`): the
+    song's speed, measured against the render, stays 1.0, falls over 2 s
+    to about 0.5, returns to 1.0 at the direct 0; the pause silences it for
+    3 s and it goes on from the same place.
+  - The volume setting: the harness plays at a test volume of 5%, which the
+    battle and fanfare events get (0.05 x event volume); a field song
+    restarted by the soundtrack switch plays at 1.0, exactly as the PC's
+    own events do (baseline run without the engine: field -27 dB, battle
+    -51 dB; with it -30 / -53 dB, our renders sitting 0-7 dB under the PC's
+    normalised recordings as in the bank): `switchBGM` restarts a song
+    without setting its volume, a PC quirk the engine keeps.
+- **In the game, through Fahrenheit** (a scratch copy of the install, the
+  mod built with `music_engine = "live"`): the mod loads and installs the
+  DLL at start ("audio.music_engine = live: installed"); the title's
+  music (130) starts live; with `DEMASTER_LIVE_TEST=16` the battle theme
+  plays through FMOD's real-time stream thread for 20 s (226 reads, stream
+  time = wall time) and is the render x -13 dB (correlation 0.9989, no
+  dropouts).
+
+Not compared yet: by ear against PCSX2 (the bank's renders were compared
+with the PC's recordings, `## How it was checked`; the live engine adds no
+sound of its own), and the user's own listening.
+
+### Remaining
+
+- **The three rock tracks' streamed layers** (Otherworld, Confrontation,
+  Jecht's theme): find the battle streams on the disc (`BattleStreaming*`
+  in the driver and the EE's `iSfxPlayBattleStreaming`, FMOD command 0x40,
+  `FmodSfx::playBattleStreaming` `0x0070d190`; VAG streams in the voice
+  data) and mix them in, in step with the sequence. Until then they stay
+  the PC's recording from the bank.
+- **Latency**: commands take effect at the stream's next read (up to 85
+  ms, the decode buffer); the bank's events have FMOD's own stream
+  latency. Not measured against each other.
+- **PS2-side volume semantics**: fades follow the PC's `FmodMusic` (30 Hz
+  linear steps of the event volume); the PS2's EE `Sqs*` layer and the
+  driver's song volume slides were not compared with it.
+- **Pitch commands**: unused by the game's scripts; not carried out.
+- Each song has its own SPU2 model; on the PS2 every song played on one
+  chip's 48 voices (two songs at once could take each other's voices).
+  How the PS2 kept the field song under a battle (the PC pauses its
+  event) was not checked.

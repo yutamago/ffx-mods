@@ -72,7 +72,7 @@ every file.
 | `ui.battle_menu_delay` | 18 | the battle menu takes input at once (the HD window's 0.2 s opening animation stays) | 0.3-0.45 s input delays | mod | done (`docs/patches.md`) |
 | `ui.button_glyphs` | 22 | PlayStation button glyphs | Xbox-style | converter (`ui.glyphs`) | pad prompts done (`docs/ui.md`) |
 | `audio.soundtrack` | 20 | a New Game starts with the original soundtrack; loaded saves keep their own choice, and the game's menu still switches it | arranged | mod | done (`docs/patches.md`) |
-| `audio.music_engine` | 20 | the original soundtrack rendered from the PS2 disc's music sequences and instruments by our PS2 sound driver and SPU2 (what "Original" in the game's menu plays) | the PC's recordings of the original soundtrack | converter (`audio.music`) | done (`docs/music.md`) |
+| `audio.music_engine` | 20 | the original soundtrack rendered from the PS2 disc's music sequences and instruments by our PS2 sound driver and SPU2 (what "Original" in the game's menu plays); `"live"`: that driver plays in the game, driven by the game's music commands (fades, pauses, tempo), with the rendered bank as the fallback | the PC's recordings of the original soundtrack | converter (`audio.music`; with `"live"` also `audio.live`: the disc's music files in `music/`) and mod (`"live"`: `demaster_live.dll`) | `"ps2"` done; `"live"` works in the game except the 3 tracks with streamed parts, which stay the bank's (`docs/music.md`, "Phase 2") |
 | `movies` | 15, 21 | the 4:3 PS2 movies with their audio | the cropped HD movies | converter (`movies`, needs ffmpeg; reads `render.aspect`) | 49 of 53, 960 x 720 with `render.aspect = "ps2"`, else with bars in 1280 x 720; the four with a 3D scene on top stay HD (cut to their middle 4:3 with `render.aspect = "ps2"`) (`docs/movies.md`) |
 
 `movies` is a top-level key: it goes above the first `[table]` in the file.
@@ -82,6 +82,14 @@ the filter of the game's graphics options (bilinear/trilinear or
 anisotropic; the PS2 filtered bilinearly too); `"nearest"` shows unfiltered
 texels on the 3D scene's models and maps (effects, 2D rooms, menus and
 post-processing keep theirs). Applied by the mod (`docs/render.md`).
+
+`audio.music_engine` (row 20) has three values: `"ps2"` (default) renders
+the original soundtrack bank from the disc; `"hd"` keeps the PC's
+recordings; `"live"` builds the bank too and copies the disc's music files
+into the mod's `music/` folder, and the mod loads `demaster_live.dll`,
+which plays them in the game while "Original" is chosen. Switching between
+`"ps2"` and `"live"` renders the bank again once (its build key holds the
+value).
 
 Every converted PS2 texture whose HD texture has mip levels gets a full mip
 chain (`phyretex::mip_chain`), so surfaces seen from afar do not shimmer.

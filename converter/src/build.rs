@@ -452,8 +452,14 @@ pub fn run(args: &Args) -> Result<bool> {
     let efl = mod_dir.join("efl").join("x");
     let mut removed = 0;
     for (f, _) in old.jobs.values().flat_map(|j| j.files.iter()) {
-        if !keep.contains(f.as_str()) && f.starts_with("efl/x/") && !f.contains("..") {
+        if keep.contains(f.as_str()) || f.contains("..") {
+            continue;
+        }
+        if f.starts_with("efl/x/") {
             remove_with_dirs(&mod_dir.join(f), &efl);
+            removed += 1;
+        } else if let Some(d) = crate::jobs::MOD_DIRS.iter().find(|d| f.starts_with(**d)) {
+            remove_with_dirs(&mod_dir.join(f), &mod_dir.join(d.trim_end_matches('/')));
             removed += 1;
         }
     }

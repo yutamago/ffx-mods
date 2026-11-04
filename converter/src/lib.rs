@@ -17,6 +17,7 @@ pub mod fxjob;
 pub mod glb;
 pub mod gsmem;
 pub mod jobs;
+pub mod livejob;
 pub mod mapjob;
 pub mod models;
 pub mod moviejob;

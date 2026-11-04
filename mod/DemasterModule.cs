@@ -56,6 +56,9 @@ public sealed class DemasterModule : FhModule {
     /// <summary>The module's log, for the code patches.</summary>
     internal FhLogger log => _logger;
 
+    /// <summary>The mod folder (demaster.toml, efl, music, demaster_live.dll).</summary>
+    internal string mod_dir => _mod_dir;
+
     private string rebuild_command() => $"\"{Path.Combine(_mod_dir, "demaster.exe")}\" build";
 
     public override void render_imgui() {
