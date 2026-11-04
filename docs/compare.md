@@ -282,6 +282,7 @@ Checked against the PS2:
 
 ## Not done
 
+- Unchecked against the PS2 (no save state reaches them): the world map (`ui-worldmap`; the comparison saves have not seen it) and the sphere grid (`ui-spheregrid`; reachable from save 1, a state is cheap to add: main menu, Sphere Grid). Both are converted from the code and data only.
 - More scenes: sphere grid, dialogue windows, the battle sub-menus, shops,
   field maps and models (the PS2 states are cheap to add: walk there with a
   script and `keep`; the PC side needs a replay at the same place).

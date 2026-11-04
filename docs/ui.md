@@ -36,6 +36,8 @@ writes `<out>/efl/x/<HD path>` and a preview per file
 | The 16x12 font at the PS2's size, the menu sequence scenes (`mod/Ps2Menu.cs`, below) | 0 | compared with the PS2 in PCSX2 (`docs/compare.md`) through injected game calls |
 | The PAL menu layout (`jppc/menu/menu_script.bin`, below, "The menu layout data") | 1 | compared with the PS2 (Config) |
 | The battle HUD: help bar, CTB list, party list (`mod/BattleHudPatches.cs`), the battle sequence scenes (BEFEHL footer, glow, lines; `mod/BattleSeqPatches.cs`), command window numbers in the 16x12 font (below, "The battle HUD", "The battle sequence scenes") | 0 | compared with the PS2 (`compare-battle-kami`) through injected game calls |
+| The world map: the PS2 picture (`sgjob.rs`) and its location plates (`mod/WorldMapPatches.cs`, below, "The world map") | 8 (`worldmap`, every menu folder) | not seen in the game: `tools/replays/ui-worldmap.txt` drafted, not run; no PS2 save state |
+| The sphere grid's PS2 texture pages (`sgjob.rs`, below, "The sphere grid") | 34 (`menu/abmap/dat00`, `dat12`) | not seen in the game: `tools/replays/ui-spheregrid.txt` drafted, not run |
 
 68 files in all; 20 HD textures have no PS2 counterpart (listed by
 `demaster ui`). Previews and screenshots: `~/ffx-work/demaster/research/ui/`
@@ -70,7 +72,7 @@ The PS2 menu images are raw indexed images, the palettes in one file:
 | `face_ply.fmt` | 512x256, 8 bit | `face_ply` 1024x512 | 2, other layout | `0x2ed0` | 10 |
 | `face_smn.fmt` | 512x256, 8 bit | `face_smn` 1024x512 | 2, other layout | `0x2ed4` | 11 |
 | `sface_ply.fmt` | 256x128, 8 bit | `menu_*/sface_ply` 256x128 | 1, same pixels | | 10 |
-| `worldmap.fmt` | 512x416, 8 bit | `worldmap` 1920x1080 | other layout | `0x2eac` | not done |
+| `worldmap.fmt` | 512x416, 8 bit | `worldmap` 1920x1080 | the whole 512 x 416 screen (below, "The world map") | `0x2eac` (CBP; TBP `0x3800`) | 5 |
 | `xfont1208.fmt`, `subfont.fmt` | 128x256, 4 bit (two 2-bit pages) | `menu*/xfont1208`, `subfont` | 1 | `0x3d80` | font (`font.md`) |
 | `menu.clp` | 64x64 PSMCT32: 16 CLUTs of 256 colours, each a 16x16 CSM1 rectangle (CLUT *p* at x `16 (p % 4)`, y `16 (p / 4)`) | | | | |
 
@@ -1264,6 +1266,88 @@ The rows are the PC's. `g_TkMenuConfigRows` is 8; the PC replaced Sound with the
 The screenshots of these five screens (2026-11-03) are kept in
 `~/ffx-work/demaster/research/ui/submenus/<replay>/`.
 
+## The sphere grid (`ui.menus`: texture)
+
+**What the textures are.** `menu/abmap/dat00/tex/d3d11/<TBP>_19` (standard grid) and `dat12`
+(expert grid) are named after PS2 VRAM pages: TBP and PSM 19 (PSMT8). They hold the grid itself
+(the board discs, the node spheres and icons, glows, rings) and a few interface pieces (the
+scroll bar's track and thumb in `14080`, the S.LV label and the panel's frame lines in `14400`).
+The PS2 has them in `jppc/menu/abmap/dat00.dat` / `dat12.dat` (700 KB each): TEX0 records of
+0x20 bytes from 0x60 (the TEX0, the image's place in its page in 16-texel units, the page size,
+w, h), CLUT records from 0x580, and at 0x810 a header pointing at per-slot image and CLUT
+offsets; the images are linear PSMT8 with 256-colour CSM1 CLUTs (`sgjob::slots`; dat00: 30
+images on 16 pages). Rebuilt page by page, the PS2 pages have the HD pages' layout: the HD redrew
+them at 2x (correlation 0.76 to 1.0). Exceptions: `00000_19` is one of the two images uploaded
+at 13568 (the second disc), `10000_19` (the four discs in one 2048 x 1024 sheet) and `12288_19`
+are HD-only, `lines` (the link colours) too, and `aio` packs the five node-icon pages (14176,
+14240, 14112, 14080, 14144) at 2x into one 512 x 512 sheet (`aio_es`/`_fr`/`_it`: the same with
+localised level-lock icons).
+
+**The restoration** (`sgjob::sphere_grid`, part of the `ui.menus` job, version 8): each HD page
+gets the PS2 page (or single image) it correlates with best, preferring the page of its own TBP,
+at PS2 size, when the correlation is at least 0.6; `aio` (or the disc language's `aio_xx`) gets
+the five PS2 node-icon pages at 2x (bilinear) in their places. Pages whose opaque black
+surroundings are transparent in the HD (the glows `14304`, `14688`, `14752`, `14784` and
+`14400`'s rings, drawn additively on the PS2) get their brightness as alpha
+(`fxjob::brightness_to_alpha`), so the PC's alpha blend shows no black boxes. Previews: `demaster
+ui` writes `preview/menu_abmap_dat00_tex_*.png` (HD left, PS2 right).
+
+**The interface around the grid** (not ported). The PC draws the sphere grid's own 2D layer from
+the abmap code (`0x00a44d30..0x00a5d120`, `eiAbmDraw`): the character panel
+(`AbmapDrawChrPanel_00a4fbe0`: `AbmapDrawLangTitle_00a45ab0`'s title plate and localised S.LV
+label from the HD-only `12288_19`, the face, the name and the sphere level in the HD battle
+digits), the menu panels (`AbmapPadDrawList_00a58900`, scroll bars `AbmapDrawScrollBar` from
+`14080`), the help lines (`AbmapHelpLineDraw`, the 16x12 font) and the message window (window 7:
+already the PS2 window, "The PS2 windows"). The PS2's panel is `0x00260378` (SLPM_675.13): two
+translucent brown-to-gold gradient bands from the screen edge to x - 13 at y 51..88 and 191..227
+(quad `0x00256978`, alpha 0x30), an anm sprite list from page 14400 at (x - 2, 151) (the S.LV
+label and the frame lines, data `0x0033b050`), the 91 x 98 face at (x - 130, 90), the name
+centred at y 59 and the sphere level at (x - 22, 198) (`docs/ffx-rust-findings.md`); the PC moved
+all of it (face at (x - 95, 80), name at y 158, digits at y 172, HD plates). With the texture
+swap the PC's panel draws its frame lines and S.LV cell from the PS2 `14400`; its title plate
+stays the HD art of `12288_19`. Porting the panel needs the anm sprite format (0x0033b050:
+TEX0, then sprites as 16x fixed-point rectangles and UVs), the PS2 digit draw `0x00257818` and
+the menu panels' PS2 draws, all inside the abmap's own packet path (`g_PppPacketPos`,
+`graphicDrawUIAbmapElement`); open.
+
+**Checked.** `demaster ui`'s previews: every converted page by eye against its HD twin. Not seen in the game: `tools/replays/ui-spheregrid.txt` (save 1, main
+menu, Sphere Grid, the command menu; key presses a best guess) is the replay for it, run once
+without and once with the converter output as the mod. No PS2 save state shows the grid
+(`docs/compare.md`).
+
+## The world map (`ui.menus`: texture and code)
+
+**What the PS2 drew.** SLPM_675.13's world map menu (control `0x00224438` = `TkMenuCtrlWorldMap`
+`0x008e2960`, draw `0x00224700` = `MenuWorldMap_Draw_008e2b60`): the picture
+(`jppc/menu/worldmap.fmt`, 512 x 416 PSMT8 uploaded to TBP `0x3800`, drawn by `0x002002d8` with
+CBP `0x2eac` = `menu.clp` CLUT 5) over the whole screen, faded by the window's `+0x64`; once fully
+in, the marker scene `scene30` at (marker x / 2, marker y / 2 - 16) (`AtelGetMapMarkerX/Y`, save
+`+0xb4`/`+0xb6`) when the marker is set; then the main menu's location plates (the same layout
+words: 0xd2/0xd3 at `rect_placesubplt` in `col_placesubplt`, 0xd8/0xd9 at `rect_placeplt` in
+`col_placeplt`, shape 0xef = 0x27 "Location" at `pos_placeshape`, the place name in the 16x12
+font at `pos_placestr`), all shifted by (512 - (right - left)) / 2 - left so the group is centred.
+
+**What the PC changed.** The same control and the same picture quad (`TODrawUIPicture_008f2bf0`:
+(0, 0)..(512, 416), UVs 0..512 / w, 0..416 / h with `TOGetImageWH(0x2eac)` = 512 x 416), the same
+marker; the HD picture (`menu*/d3d11/worldmap`, 1920 x 1080) is a new painting laid out for the
+whole 16:9 screen. The location bar is an HD sheet quad, meswin shape 200 and the HD font at HD
+places.
+
+**The restoration.** Converter (`sgjob::world_map`, `ui.menus`): the PS2 picture with CLUT 5 at
+PS2 size into the 8 menu folders' `worldmap` (no text on it). Mod (`mod/WorldMapPatches.cs`): a
+hook on `MenuWorldMap_Draw_008e2b60` makes the PS2 draw's calls (picture, marker scene, the
+plates and name centred) in one packet. Control and input stay the PC's.
+
+**Checked.** The picture by eye (preview `menu_de_worldmap.png`: the PS2 map, CLUT 5's light sea
+and parchment, as the HD's colours). Not seen in the game: `tools/replays/ui-worldmap.txt`
+(`@ps2screen worldmap`, `tools/calllist/src/worldmap.rs`) opens the menu with
+`Sg_MenuSetReserve(0x17)`, a guess for its id (the record sleeps menu 0x17 at the end); no save
+in the comparison set has seen the map, so no PS2 state (`docs/compare.md`).
+
+**The airship's destinations.** The airship bridge is the 2D room `hiku00` (PS2 paintings,
+`docs/screen.md`); its destination list is an event message window (the PS2 window,
+"The PS2 windows"). No other map picture was found for it; not looked at further.
+
 ## Shared pieces of the ported menus (`mod/Ps2Menu.cs`)
 
 - `shape` / `shape_c2`: a meswin shape at its own size, every layout part as a
@@ -1299,10 +1383,8 @@ The screenshots of these five screens (2026-11-03) are kept in
   the enemy and Overdrive mini-game windows (Libra, Auron, Tidus, Lulu):
   HD. The menus' sequence scene lines (the PC draws none) stay off.
 - The battle words' place and the `strtex` labels in play (not reached).
-- `worldmap` (airship map): 512x416 PS2 against a 1920x1080 HD layout.
-- Sphere grid (`menu/abmap/dat00/tex`): named after VRAM pages
-  (`14080_19` ...), PS2 source `jppc/menu/abmap/dat00.dat` (700 KB); not
-  looked at.
+- The sphere grid's character panel, menu panels and title plate (PS2 `0x00260378`, above, "The
+  sphere grid": the textures are done, the draws are open).
 - Help screens (`help*/`), `dvdcopy`, `test_proj`: not looked at.
 - Language-neutral elements of text-bearing atlases are only written to
   the disc's languages.
