@@ -121,6 +121,23 @@ pub struct Audio {
     pub music_engine: Look,
 }
 
+/// Game speed (`docs/timing.md`). These touch play, not only the picture,
+/// so they default to the PC's `"hd"`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Timing {
+    /// `"ps2"`: the PS2's default run speed (34; the PC's is 38).
+    pub run_speed: Look,
+}
+
+impl Default for Timing {
+    fn default() -> Self {
+        Timing {
+            run_speed: Look::Hd,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Fixes {
@@ -155,6 +172,7 @@ pub struct Config {
     pub render: Render,
     pub ui: Ui,
     pub audio: Audio,
+    pub timing: Timing,
     pub fixes: Fixes,
 }
 
@@ -202,6 +220,7 @@ pub const SETTINGS: &[(&str, AppliedBy)] = {
         ("audio.soundtrack", Mod),
         ("audio.music_engine", Converter),
         ("movies", Converter),
+        ("timing.run_speed", Mod),
         ("fixes.npc_mouths", Mod),
         ("fixes.farplane_video", Mod),
         ("fixes.lulu_fury", Mod),
@@ -341,6 +360,9 @@ mod tests {
                 v == "true"
             } else if k == "render.texture_filter" {
                 v == "game"
+            } else if k.starts_with("timing.") {
+                // game speed is logic: the PC's by default
+                v == "hd"
             } else {
                 v == "ps2"
             };

@@ -61,6 +61,25 @@ internal static class GamePatches {
     public static bool farplane_video(DemasterModule m, string value) =>
         Native.patch_code(0x0076ebb4, [0x74, 0x28], [0x90, 0x90], m.log);
 
+    // ---- timing.run_speed --------------------------------------------------------------------
+    // Sg_PlayerInitDefault (0x0082d8d0, run at every event jump) sets the player's walk, run and
+    // swim speeds: Sg_PlayerSetSpeed(2, f32 [0x00b59830] = 38.0). The PS2 disc's has 34.0
+    // (SLPM_675.13 0x001164d0: lui 0x4208), and the PC's own scripts still restore 34 after
+    // their special runs (Bsil0100, Mihn*, Nagi0000, ...). The fld at 0x0082d8e6 reads the .rdata
+    // 34.0 at 0x00b656c4 instead (the only 34.0 there; .rdata is read-only, so it stays 34).
+    // docs/timing.md, "Run speed".
+    public static bool run_speed(DemasterModule m, string value) {
+        unsafe {
+            if (*(float*)Native.ptr(0x00b656c4) != 34.0f || *(float*)Native.ptr(0x00b59830) != 38.0f) {
+                m.log.Warning("timing.run_speed: the speed constants are not 34.0/38.0; not patched");
+                return false;
+            }
+        }
+        byte[] original = BitConverter.GetBytes(Native.reloc(0x00b59830));
+        byte[] patched  = BitConverter.GetBytes(Native.reloc(0x00b656c4));
+        return Native.patch_code(0x0082d8e8, original, patched, m.log);
+    }
+
     // ---- ui.loading (splash videos) ----------------------------------------------------------
     // graphicInitScene loops on PhyreScene_isOpeningScreenPlaying (0x00660400, its only caller)
     // while OpeningScreen.swf plays the Square Enix / Virtuos / CRI / Dolby logos, then deletes

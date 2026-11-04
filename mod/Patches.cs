@@ -30,6 +30,7 @@ internal static class Patches {
         new("ui.battle_subtitles",   "hd",    "battle dialogue subtitles",               GamePatches.battle_subtitles),
         new("ui.battle_menu_delay",  "hd",    "battle menu without input delays",        GamePatches.battle_menu_delay),
         new("audio.soundtrack",      "hd",    "original soundtrack for new games",       GamePatches.soundtrack),
+        new("timing.run_speed",      "hd",    "PS2 run speed (34)",                      GamePatches.run_speed),
         new("fixes.npc_mouths",      "false", "NPC mouths closed in cutscenes",          null),
         new("fixes.farplane_video",  "false", "Farplane background video plays",         GamePatches.farplane_video),
         new("fixes.lulu_fury",       "false", "Lulu's Fury spins register",              GamePatches.lulu_fury),

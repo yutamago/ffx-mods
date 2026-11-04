@@ -39,6 +39,7 @@ converter step that doesn't exist yet; **L** needs engine or shader work.
 | 20 | Music | PS2 sequenced soundtrack | Arranged by default; in-game switch to "Original" | Set the game's own option to Original | `audio.soundtrack` | S |
 | 21 | Movie audio | 5.1 in some movies | Stereo | Comes with 15 | `movies` | M |
 | 22 | Button prompts | PS2 glyphs | Xbox-style | PS2 glyph textures | `ui.button_glyphs` | S |
+| 23 | Run speed | 34 (1.70 units a frame) | 38 (1.90), 12 % faster; the PC's own scripts still reset it to 34 in some scenes (`timing.md`) | The PS2 constant; default stays PC (encounter spacing) | `timing.run_speed` | S |
 
 ## PC bugs (default: fixed)
 
@@ -58,7 +59,11 @@ The mod leaves these alone:
 - the boosters (F1-F5: speed-up, Supercharge, encounters, auto-battle, hide HUD) and the Esc-menu cheats;
 - auto-save, PC controls and remapping, the graphics options;
 - PC text (the PAL text is not used), English/Japanese voices;
-- 30 fps logic. PAL's 50 Hz speed and black bars are not reproduced.
+- 30 fps logic (29.97, as the NTSC PS2; menus 59.94). PAL's 25 fps logic
+  (the whole game at 83 % speed, no PAL speed tables) and black bars are
+  not reproduced (`timing.md`, "What a `timing.pal_speed` would take");
+- the PC keeps 29.97 logic steps a second where the PS2 slowed down; only
+  three cutscenes replay the PS2's recorded timing (`timing.md`).
 
 ## Things with no PS2 counterpart (stay HD)
 

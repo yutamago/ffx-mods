@@ -163,6 +163,18 @@ the mod's init) and the start-up went on: the new-game save was built 2 s
 later and the game ran until the 60 s timeout without errors. Not looked at
 on screen (no window capture of the Fahrenheit game).
 
+## `timing.run_speed` (row 23)
+
+`Sg_PlayerInitDefault` (`0x0082d8d0`, at every event jump) sets the run
+speed from the `.rdata` 38.0 at `0x00b59830` (`d9 05` at `0x0082d8e6`); the
+PS2's is 34 (`docs/timing.md`, "Run speed"). With `"ps2"` the operand at
+`0x0082d8e8` points at the `.rdata` 34.0 at `0x00b656c4` (relocated
+addresses, as `ui.battle_subtitles`); both constants are checked first.
+Default `"hd"`.
+
+**Checked:** static (bytes and constants in `FFX.exe` sha256 `0537b2a1…`).
+Not run in the game.
+
 ## `fixes.farplane_video`
 
 **Why it never plays.** The Farplane (`ikai0800`, worker 25, entry 0) starts

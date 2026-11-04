@@ -53,6 +53,16 @@ Numbers refer to the rows of [`differences.md`](differences.md). Status:
 | PS2 music engine (offline render): our port of iopsound.irx + SPU2 model renders the 89 tracks into the `music_ps2` bank | 20 | done | 70/86 tracks correlate ≥0.9 with the PC Original recordings; 3 rock tracks copied (streamed layers); in-game capture matches our render (`docs/music.md`) |
 | PS2 music engine phase 2: live, driven by the game's iMusic* commands (runtime tempo/fades, streamed guitar/vocal layers) | 20 | todo | plan in `docs/music.md` |
 
+## Timing
+
+| Item | Rows | Status |
+|---|---|---|
+| Frame rates, waits, PAL vs NTSC vs PC | | done: measured in PCSX2 and read from both binaries (`docs/timing.md`) |
+| Run speed | 23 | done (static), `timing.run_speed`, default PC; not run in the game |
+| PAL speed (`timing.pal_speed`) | | open: user decision; what it would take in `docs/timing.md` |
+| Lip-sync lag (forum: audio 1/5 s behind) | | open: not explained by the frame logic; needs an audio capture on PC |
+| PS2 slowdown timing outside the 3 sync scenes | | dropped for now: needs NTSC PS2 recordings |
+
 ## Fixes
 
 | Item | Status |
