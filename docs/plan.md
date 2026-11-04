@@ -60,14 +60,14 @@ Numbers refer to the rows of [`differences.md`](differences.md). Status:
 | Frame rates, waits, PAL vs NTSC vs PC | | done: measured in PCSX2 and read from both binaries (`docs/timing.md`) |
 | Run speed | 23 | done (static), `timing.run_speed`, default PS2 (34; user, 2026-11-04); not run in the game |
 | PAL speed (`timing.pal_speed`) | | dropped: the user chose NTSC timing as "the PS2 original" (2026-11-04); what it would take stays in `docs/timing.md` |
-| Lip-sync lag (forum: audio 1/5 s behind) | | open: not explained by the frame logic; needs an audio capture on PC |
+| Lip-sync lag (forum: audio 1/5 s behind) | | measured: the PC voice is heard 167-192 ms after its start frame (PS2 10-40 ms), 80-120 ms later against the picture than the PAL PS2, about 1/5 s after the mouth starts; FMOD's default 1024 x 4 output buffer is most of it. Fix proposed (smaller DSP buffer before `EventSystem::init`), not built: needs a Fahrenheit measurement (`docs/timing.md`, "Voice start") |
 | PS2 slowdown timing outside the 3 sync scenes | | dropped for now: needs NTSC PS2 recordings |
 
 ## Fixes
 
 | Item | Status |
 |---|---|
-| NPC mouths open in cutscenes | unconfirmed | only source: one uncited line in the FF Wiki's version differences; forums only report lip-sync timing. No PC-specific cause in the jaw code; converted PS2 NPCs avoid both suspected causes. Next: compare cutscenes PS2 vs Demaster (`docs/compare.md`, `docs/debugger.md`); drop `fixes.npc_mouths` if nothing shows (`docs/patches.md`) |
+| NPC mouths open in cutscenes | done (`fixes.npc_mouths`): the PC's `Ch_Mouth` sets the mouth texture frame inverted against the PS2, so an NPC (208 models with a texture mouth) keeps the open frame after talking; measured on both (agency clerk: PC 1/1/0, PS2 1/0/1); the patch (`jle` -> `jg` at `0x00834714`) not yet run in Fahrenheit (`docs/patches.md`) |
 | Farplane video | done (static) | movie-init branch patched; particles during the video not checked |
 | Lulu's Fury input | done (static) | skipped diagonal filled in; no real stick test |
 

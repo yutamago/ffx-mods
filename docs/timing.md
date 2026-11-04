@@ -215,10 +215,67 @@ unless the video mode is PAL. So:
   line.
 
 The forum reports that the HD Remaster's audio trails the lips by about
-1/5 s. Nothing in the frame logic explains that: the PC starts the voice
-on the same frame the NTSC PS2 does. A constant lag would have to come from
-FMOD's stream start (buffering) after `SndStartStream2`. Not measured: it
-needs an audio capture with frame times on the PC.
+1/5 s. Measured 2026-11-04, the same lines on both sides (English voices on
+both: the PAL disc has them):
+
+**How.** PC: the harness game at its own rate (`realtime`, no virtual clock,
+FMOD on the sound card), a per-frame trace of the talk byte, the jaw, the
+subtitle window and the voice flags, and the frame times
+(`g_FrameLimiterLast` + `g_AppStartTime`, `GetSystemTimePreciseAsFileTime`
+seconds); the game's own sound captured by a WASAPI process loopback of
+FFX.exe with each packet's QPC time. The same scenes on the virtual clock
+(FMOD NRT, one block per update) give the game-time part. PS2: PCSX2 2.8.2's
+video capture (pictures and SPU2 sound on the emulated clock, 50 pictures a
+second) and PINE samples of the PS2 twins (talk `+0x4e0`, standby
+`0x0078ba14`, `g_SgFrame`), from the states `lipsync-bsil0000` and
+`lipsync-bsil0200` (`sstates\compare\`: save 3 on the beach and on the jungle
+path) and save 2 put on the card (`tools/compare/setup.py ... 1 5 2 3`).
+
+Wakka's "Hey! It's this way!" (save 3, map 0x14; `Chr.SetAutoTalk(1)`, then
+the subtitle, then `VoiceStart`):
+
+| | jaw starts, subtitle opens | `SndStartStream2` | voice audible |
+|---|---|---|---|
+| PC, game time (NRT) | frame 0 | frame 2 (67 ms) | 150 ms (start + 83 ms) |
+| PC, real time (two runs) | frame 0 | frame 2 (67 ms) | 234 / 259 ms (start + 167 / 192 ms) |
+| PS2 PAL (picture and sound as output) | frame 0 | frame 3 (120 ms; PAL wait) | 140 ms after the first picture with the subtitle |
+
+Besaid arrival (save 2, plays on load; mouths from the scene's motions, the
+subtitle opens 2 frames before `VoiceStart` on the PC), voice audible after
+the subtitle starts:
+
+| Line | PC real time (after the window opens; start + x) | PS2 (after the first picture of text) |
+|---|---|---|
+| "Rikku!?" | 242 ms (175) | 125-130 ms |
+| "Äh!?" | 247 ms (180) | 90-160 ms (loud surf) |
+| "Ein Blitzball!?" | 242 ms (175) | 110-135 ms |
+
+So the PC's voice starts on the same frame as the NTSC PS2's (the PAL wait
+adds a frame or so for these short lines), and then takes 167-192 ms to be
+heard, where the PS2 takes 10-40 ms. Taking the PC's picture one frame later
+than its logic frame, the PC voice comes 80-120 ms later against the picture
+than on the PAL PS2 and 110-160 ms later than on an NTSC PS2 (no PAL wait):
+about 200-225 ms after the first picture of the moving mouth, the forum's
+1/5 s. The original also starts voices after the mouth (the script opens the
+subtitle and the mouth first), by 90-160 ms on PAL.
+
+Where the PC's time goes: about 83 ms on the virtual clock (the voice
+command waits for the next `FmodManager_tick`, 30 a second, then the event
+starts in FMOD's update; the rest is the line's own lead-in), plus 84-109 ms
+in real time (FMOD's output buffer and the device; the spread is the FMOD
+thread's 33 ms tick phase). `FfxFmod_initEventSystem` (`0x00706820`) never
+calls `System::setDSPBufferSize`, so FMOD Ex runs its default 1024 samples x
+4 buffers (85 ms at 48 kHz).
+
+**Fix (proposed, not built).** Before `EventSystem::init`, set the low-level
+system's DSP buffer to 256 x 4 (21 ms) or 512 x 2: about 60 ms off every
+sound, voices included. The mod would wrap the `EventSystem::init` import
+(as ffx-rust's `audio_wav.rs` does for its capture) and call
+`System::setDSPBufferSize` on `getSystemObject`'s system. Starting voices
+early instead is not possible: the start waits for the stream to be ready.
+Not implemented: it has to be measured in the game with the mod (Fahrenheit),
+and small buffers can crackle on slow machines; the harness cannot set it
+before FMOD starts.
 
 ## Higher frame rates
 
@@ -272,12 +329,10 @@ only speed.
 
 ## Not done
 
-- A cutscene timed side by side (PS2 in PCSX2 vs PC): needs a voiced scene
-  reachable from a save on both; the measurements above are the PS2 rate,
-  the run, and static reading of both binaries.
+- A cutscene timed side by side for its frame-driven parts (camera,
+  motions): only the voice starts were compared ("Voice start").
 - The PC run speed and logic rate were not measured in the PC game, only
   read from the code.
-- The 1/5 s lip lag: needs an audio capture.
 
 ## Tools
 
