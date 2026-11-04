@@ -184,6 +184,20 @@ language 3) and the second choice 16 + 21.5 lines below the first
 `mod/TitlePatches.cs` (`ui.title`, so that setting is now converter and
 mod) runs the layout with `+0x34` 62 lines lower and the constant at 6.0:
 the cursor sits at the PS2 picture's lines (280 and 302, 22 apart).
+
+**The cursor** (since 2026-11-04, `ui.menus`): the message choices' cursor
+is drawn by `TODrawSelectCursor` (`0x008b5fb0`) as
+`TkMn2DrawCrossCursor(pen x, pen y - 14, 0)`, the small HD pointer. The PS2
+title (PCSX2) shows its kind-0 cursor, meswin shape 45 (the silver pointer
+on the orange ball), at full size. `MainMenuPatches.cross_cursor` draws
+shape 45 for that call (while `g_InvokedFromSelectCursor` `0x018716f0` is
+set) with its anchor 9 units left of the HD call's point; the anchor is
+fitted to the PS2 title (pointer and ball within a pixel), not traced in
+the PS2 code (no SCES_504.92 message routine calls the cursor draw
+`0x001fe800` directly). Every message choice (yes/no, save questions)
+gets the same cursor. calllist: `@ps2select` (`compare-title`). Title menu
+region 5.1 -> 4.1 (whole frame 18.5 -> 18.2); the ball's left edge 307
+against the PS2's 308, its top within a line.
 Checked in the harness on the game's own code (`FFX_HOOK_DISABLE=
 replacements`: ffx-rust ports the message code) with call detours that
 do the same (`tools/replays/compare-title.txt`), both choices. The other
@@ -689,16 +703,33 @@ them after (the shape draws read `0x00c5d778` / `0x00c5d77c` too):
 | `0x018716e0`, `0x018716e4` (shadow) | 0 | 2 - 2 / 3.75, 2 - 2 / 2.596: (+2, +2) PS2 units |
 
 `yoff` is the languages' y offset (1 for languages 1..8, -1 for 10, else
-0, from `TOGetFFXLang`); the glyph's top stays 0.78 lines below the PS2's
-(the integer y cannot take it back). `TkMn2StringWidth` (`0x008c2cb0`)
+0, from `TOGetFFXLang`): `TOGetFontInfo` (`0x008b7240`) writes it into the
+glyph record's `+0x18` (code constants, no data word), and
+`TOMakePktFont1612Font` draws the glyph from `pen y + 0.78 yoff`, so the
+European glyphs sat 0.78 lines below the PS2's (which drew at the pen). Since
+2026-11-04 `Ps2Menu.install` hooks `TOGetFontInfo`: inside `ps2_sized` the
+offset is 0, and the y factor is `18 / (0.78 * 18)` (the table's yoff 0
+column), so the glyph covers the pen's 18 lines exactly. Measured: the help
+line's caps now start on the PS2's line (compare-battle-info).
+
+Line feeds: the PC's text draw (`TOAddPktBaseMesFontLClutTypeRGBA`
+`0x008e92a0`) moves the pen down by the shared double 16.0 at `0x00b313a0`
+(`fadd` at `0x008e9403`); the PS2's (`0x001f43c8`) by 20. `Ps2Menu.install`
+points that one `fadd` at a double of the mod's own, 16.0, which `ps2_sized`
+makes 20.0 around the PS2 texts (the shared constant stays). No compared
+screen has a string with a line feed, so this is unchecked on screen.
+
+`TkMn2StringWidth` (`0x008c2cb0`)
 inside the same words gives the PS2 width (sum of `w` + 2), so everything
 sized from the text follows: the Items sub-command bar (now 496 wide with
 the PS2's spacing, the PS2's bar), the Config choices' centring, the
 Overdrive title, Customize's cost, the battle command window's column.
-Line feeds inside a string still advance the PC's 16 lines, not 20.
 `tools/calllist` does the same with store records around each
 `TOMkpBaseMesFont` call (`menu::expand_shapes`, `btl::ps2btl`) and
-`Ctx::text_width`.
+`Ctx::text_width`; `@ps2font S` (in every injecting replay) puts a stub on
+the `TOGetFontInfo` call at `0x008e9360` that zeroes `+0x18` while a flag the
+store records set is on, and points the line feed's `fadd` at a double the
+store records switch between 16 and 20.
 
 ## The menu sequence scenes (`ui.menus`: code)
 
@@ -895,7 +926,12 @@ after the PC's call; the primitive hook draws 411, 415, 416, 418, 419,
 `x + dx sx / 100`, `w sx / 100`, the primitive's colour, texel-centre UVs
 with the parts' flips, PS2 battle atlas); and the scene line's call
 (`0x00a7c20d`) goes to a drawer of one-pixel gradient boxes while the
-battle sequence draws (the menus' scene lines stay off: not compared).
+battle or (since 2026-11-04) the menu sequence draws. The menus' line was
+off before; a count of the line calls in the harness (a detour on
+`0x00a7c20d`) gives 116 in 60 frames of the battle command window and 0
+with every menu scene the ported screens start (scene0, 4, 9, 10, 11, 14,
+17, 20, 21, 23, 26, 31) running, so the change shows on none of them; it
+makes other menu scenes draw their lines as the PS2's generic drawer did.
 Found by decoding `battle_script.bin` (scratch `hud/agent2/scenes.py`).
 The PC's track waits compare only the first track (`TrackStep` op 2), so
 the tab's blink and the plate's pulse start with the slides; not changed.
@@ -948,9 +984,8 @@ atlas `ps2btl`):
   which the PS2 leaves in the register: white face, black shadow); the
   status view cycles the statuses every 21 frames, as the PC's draw did.
 
-The target info window and the damage digits: the digits are the PS2's
-(`docs/font.md`, `ui.font`); the info window (`TOBtlDrawInfoWin`) stays HD
-(open).
+The damage digits are the PS2's (`docs/font.md`, `ui.font`); the target
+info window and its help-bar line: below.
 
 Checked: `tools/replays/compare-battle-kami.txt` (`@ps2hud`: a jump at
 each PC draw's entry to a call list with the mod's calls, on the game's
@@ -958,6 +993,66 @@ own code). Help bar and party list match the PS2 frame to the pixel but
 for glyph edges; the CTB frame, bars, faces and markers too, but the PC's
 turn order differs (Wakka third against the PS2's seventh: the battle's
 own state from the same save, not the draw). Not seen in play.
+
+## The target info window and its line (`ui.menus`: code)
+
+The window naming a monster's HP and elements while it is targeted, shown
+when the target is a monster (0x14..0x1b) that has been scanned or while
+Sensor is on (`TOBtlCtrlInfoWin`: `MsMenuCheckLook` -1 and
+`MsMenuCheckChrLook` 1, or `MsMenuCheckChrLive`; `g_BtlMenuLook`
+`0x0112a915` = PS2 `0x00317335` makes both answer yes). SCES_504.92 has the
+draw at the same address as SLPM_675.13.
+
+**What the PS2 drew** (`0x00218a80(chr, 0x14, 0x46)` while
+`0x003249ac` = PC `g_BtlInfoStatusShown` `0x0133c93e`):
+
+- The battle window frame (`0x001fa7d8`, battle shapes 400..408) 169 wide,
+  `0x16` + 16 per element row high, + `0x18` with statuses (`0x12` on the
+  Japanese path: `0x0020b858` reads `0x0068f190`, 3 on the PAL disc), and
+  battle shape `0x1aa` (the "INFO" tab) at (x + 0x24, y).
+- From (x + 3, y + 3): meswin `0xe9` (HP) at +2, the HP
+  (`MsGetRamChrHP`) and max right-aligned in font S colour 0 ending at
+  x + 0x54 / x + 0xa0, `"/"` at x + 0x5a (`0x001f64a8`, font S colour 0).
+- One 16-high row per element kind the target has (`0x00219600` = PC
+  `TOBtlElementLampFlags_00897650`: 0 weak, 1 absorb, 2 immune, 3 half): a
+  gradient `0x002198e0(x, y, 163, 16, kind)` (three quads: 40 pixels from
+  colour 0 to 1, the middle from 1 to 2, 40 from 2 to 3; table
+  `0x00570e48`, 7 kinds of 4 RGBA), a one-line gradient of kind 6 on top,
+  and the lamp `0x00219690`: battle shape 431 + kind at x + 24 with the
+  covers 473, 474, 475, 476 for the clear bits 1, 4, 8, 2.
+- With statuses (`g_BtlInfoStatus` `0x0133f5c0` = PS2 `0x00692508`), 2
+  lower: a kind-5 row 22 high and the shown status's name
+  (`MsMenuGetText(1, id, 1)`) centred in 169 at y + 2 in the 16x12 font,
+  the next every 21 frames (`0x002197a0`).
+
+The PC (`TOBtlDrawInfoWin` `0x00893a30`) draws an HD net window at (0xb3,
+0xf0) that slides in from the right with two turning rings.
+
+**The line** in the help bar: the PS2 lays the target's help text
+(`MsGetMenuChrInfo(chr, 1)`) into a box from 80 pixels past the help text's
+end to x 430, y 12..36 (`0x00219550` with the init `0x00218e48`: the box
+x0 = the help text's width `0x00692478` + 0x50; read in PCSX2: 149, 12, 430,
+36), still when it fits, else scrolling 2 pixels a frame, the next copy
+entering at x1 when one's end passes x1 - 20 (`0x00218f20`), drawn in the
+16x12 font inside the box (`0x002192a8`). The PC lays it out under the help
+bar in HD units (`TOBtlInitInfoWinMes`: x 700..1400, y 101..160), scrolls
+1.2 HD units a frame and draws its battle typeface.
+
+**The restoration** (`mod/BattleHudPatches.cs`): `TOBtlDrawInfoWin` is
+replaced by the PS2 draw at (0x14, 0x46); `TOBtlSetInfoWinMes`,
+`TOBtlCtrlInfoWinMes` (after the PC's own, which keeps the shown flag) and
+`TOBtlDrawInfoWinMes` keep and draw the PS2's line state (the box x0 from
+`Ps2Menu.text_width(g_BtlHelpText)`).
+
+**Checked** with the PS2 (`compare-battle-info`: save 5's Thunder Plains
+battle, `g_BtlMenuLook` set, Attack, the first monster; calllist
+`@ps2info`, the line drawn 60 pixels into its scroll as the PS2 shot
+catches it): the frame, tab, HP, both element rows (x1.5 weak, 1/2 half)
+and the lamps match the PS2 to the pixel; whole frame 29.9 -> 20.3, the
+window's region 34.8 -> 16.9 (the rest is the 3D scene behind it). Not
+seen: the status row (the monster had none), the line's scrolling in
+motion. The box starts at x 147 against the PS2's 149 (the help text
+"A: Mergin" measures 67 against the PS2's 69).
 
 ## The Overdrive mini-game windows (`ui.menus`: code)
 
@@ -1427,12 +1522,12 @@ in the comparison set has seen the map, so no PS2 state (`docs/compare.md`).
   driven). The sphere grid's and the aeon pages' sequence scenes are not
   asked for (the other screens' are, "The menu sequence scenes").
 - The HD cursor of the HD screens (`TkMn2DrawCrossCursor` `0x008c0670`,
-  kinds 0/4/5): left as it is; its anchor differs from the PS2 cursor's, so
-  replacing it needs each caller's PS2 position.
+  kinds 0/4/5): left as it is (but for the message choices, "Title screen
+  and logos"); its anchor differs from the PS2 cursor's, so replacing it
+  needs each caller's PS2 position.
 - The `?`/`!` icons and the other `meswin` cells outside the ported draws.
-- The battle target info window (`TOBtlDrawInfoWin`, PS2 at (0x14, 0x46)),
-  the enemy gauges and Libra: HD. Wakka's reels (battle menu texture
-  0x13). The menus' sequence scene lines (the PC draws none) stay off.
+- The enemy gauges and Libra (Scan's window): HD. Wakka's reels (battle
+  menu texture 0x13).
 - The battle words' place and the `strtex` labels in play (not reached).
 - The sphere grid's character panel, menu panels and title plate (PS2 `0x00260378`, above, "The
   sphere grid": the textures are done, the draws are open).

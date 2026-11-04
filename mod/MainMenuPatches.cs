@@ -288,6 +288,28 @@ internal static unsafe class MainMenuPatches {
 
     private static CursorFn? _cursor_hook, _cursor_next;
 
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)] public delegate void CrossCursor(float x, float y, int kind);
+    private const uint CROSS_CURSOR = 0x008c0670;  // TkMn2DrawCrossCursor(f x, f y, kind): the HD cursor
+    private const uint FROM_SELECT  = 0x018716f0;  // g_InvokedFromSelectCursor: set around TODrawSelectCursor's call
+    private static CrossCursor? _cross_hook, _cross_next;
+
+    /// <summary>
+    /// The message choices' cursor (the title menu's, the yes/no and save questions'): the PC's
+    /// TODrawSelectCursor (0x008b5fb0) draws the small HD cursor (TkMn2DrawCrossCursor kind 0) at
+    /// (pen x, pen y - 14); the PS2 drew its kind-0 cursor, meswin shape 45 (seen on the PS2 title
+    /// in PCSX2: the silver pointer on the orange ball), full size, its anchor 9 units left of the
+    /// HD call's point (fitted to the PS2 title: pointer and ball within a pixel; not traced in code).
+    /// </summary>
+    private static void cross_cursor(float x, float y, int kind) {
+        if (kind == 0 && u32(FROM_SELECT) != 0) {
+            first(32, "ui.menus: message choice cursor drawn as the PS2 hand and ball");
+            scoped(() => { cursor((int)x - 9, (int)y); return 0; });
+            return;
+        }
+        _cross_next ??= Native.fn<CrossCursor>(CROSS_CURSOR).chain_from(_cross_hook!).fnptr!;
+        _cross_next(x, y, kind);
+    }
+
     // ---- the background ---------------------------------------------------------------------------
 
     /// <summary>TkMenuDrawAll's background: PS2 0x00243f98 draws (0, 0, 512, 416) from col_menubg0 to col_menubg1.</summary>
@@ -484,7 +506,9 @@ internal static unsafe class MainMenuPatches {
         _bg_hook = bg;
         _all_hook = draw_all;
         _cursor_hook = shape_cursor;
+        _cross_hook = cross_cursor;
         return ok
+            & hook(m, CROSS_CURSOR, _cross_hook)
             & hook(m, MENU_BG, _bg_hook)
             & hook<BGC2>(m, MENU_BG_C2, bg_c2)
             & hook(m, DRAW_ALL, _all_hook)
