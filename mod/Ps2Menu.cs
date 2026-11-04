@@ -143,14 +143,55 @@ internal static unsafe class Ps2Menu {
         if (_sized > 0) return draw();
         float* g = stackalloc float[8];
         for (int k = 0; k < 8; k++) g[k] = *(float*)Native.ptr(_size_words[k]);
-        var v = ps2_size_values(fn<IntFn>(FFX_LANG)());
+        var v = ps2_size_values(_font_hooked ? 0 : fn<IntFn>(FFX_LANG)());
         for (int k = 0; k < 8; k++) *(float*)Native.ptr(_size_words[k]) = v[k];
         _sized++;
+        if (_line_feed != null) *_line_feed = 20.0;
         try { return draw(); }
         finally {
             _sized--;
+            if (_line_feed != null) *_line_feed = 16.0;
             for (int k = 0; k < 8; k++) *(float*)Native.ptr(_size_words[k]) = g[k];
         }
+    }
+
+    // ---- the PS2 text's line: no language y offset, 20-line line feeds ---------------------------
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)] public delegate nint FontInfo(nint text, nint info);
+    private const uint FONT_INFO = 0x008b7240;     // TOGetFontInfo(text, info) -> next; info +0x18 the glyph's y offset
+    private const uint LINE_FEED_FADD = 0x008e9403; // fadd qword [0x00b313a0] (16.0): the line feed of TOAddPktBaseMesFontLClutTypeRGBA
+    private static FontInfo? _info_hook, _info_next;
+    private static bool _font_hooked;
+    private static double* _line_feed;
+
+    /// <summary>
+    /// The European languages' glyphs sit 1 unit (0.78 lines at the PC's 0.78 scale) below the pen
+    /// (TOGetFontInfo's y offset +0x18 for TOGetFFXLang 1..8); the PS2 (0x001f43c8) drew them at the
+    /// pen. Inside ps2_sized the offset is 0 and the y factor takes 18 lines from there.
+    /// </summary>
+    private static nint font_info(nint text, nint info) {
+        _info_next ??= Native.fn<FontInfo>(FONT_INFO).chain_from(_info_hook!).fnptr!;
+        nint r = _info_next(text, info);
+        if (_sized > 0) *(float*)(info + 0x18) = 0f;
+        return r;
+    }
+
+    /// <summary>
+    /// ui.menus: the hook above, and the line feed of the 16x12 text draw (a fadd of the shared
+    /// double 16.0 at 0x00b313a0) pointed at a double of our own, which ps2_sized makes 20 (the
+    /// PS2's line feed, 0x001f43c8) for the PS2 texts.
+    /// </summary>
+    public static bool install(DemasterModule m) {
+        _info_hook = font_info;
+        bool ok = Native.fn<FontInfo>(FONT_INFO).hook(m, _info_hook);
+        _font_hooked = ok;
+        double* d = (double*)NativeMemory.Alloc(8);
+        *d = 16.0;
+        byte[] original = BitConverter.GetBytes(Native.reloc(0x00b313a0));
+        byte[] patched = BitConverter.GetBytes((uint)(nint)d);
+        if (Native.patch_code(LINE_FEED_FADD + 2, original, patched, m.log)) _line_feed = d;
+        else ok = false;
+        return ok;
     }
 
     private static readonly uint[] _size_words = [FONT_SX, FONT_SY, SCALE_X, SCALE_Y, SPACE_0, SPACE_1, SHADOW_X, SHADOW_Y];

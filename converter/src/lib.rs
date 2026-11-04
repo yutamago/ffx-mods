@@ -28,6 +28,7 @@ pub mod ps2fx;
 pub mod ps2map;
 pub mod ps2mesh;
 pub mod ps2movie;
+pub mod sgjob;
 pub mod shaderjob;
 pub mod spu2;
 pub mod sqseq;

@@ -1128,6 +1128,9 @@ pub fn convert(disc: &mut Disc, pc: &ffx_vbf::Archive, parts: Parts) -> Result<(
                 }
             }
         }
+        // the world map picture and the sphere grid's pages (sgjob.rs)
+        crate::sgjob::world_map(disc, pc, clp_palette, &ALL_MENU_FOLDERS, &mut done, &mut notes)?;
+        crate::sgjob::sphere_grid(disc, pc, &region, &mut done, &mut notes)?;
     }
 
     if parts.portraits {
@@ -1337,9 +1340,10 @@ impl Job for UiJob {
     /// as its own texture (`ps2win`, ui.menus). 4: `ps2btl`, the PS2 item
     /// icons and battle words (`icon`), `strtex`. 5: `ps2fnt`, the PS2 fonts
     /// M and S. 6: the disc's `menu_script.bin` (the PAL menu layout).
-    /// 7: the title layers at the PS2's place (`title_placed`).
+    /// 7: the title layers at the PS2's place (`title_placed`). 8: the PS2
+    /// world map picture and the sphere grid's pages (`sgjob.rs`, ui.menus).
     fn version(&self) -> u32 {
-        7
+        8
     }
     fn name(&self) -> &'static str {
         self.name

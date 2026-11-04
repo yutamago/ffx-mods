@@ -47,6 +47,7 @@ internal static unsafe class BattleSeqPatches {
     private const uint BATTLE_LAYOUT = 0x00c5c2c8; // the battle atlas's layout table (= SLPM_675.13 0x00322190)
 
     private const int BATTLE_SCENE = 2;
+    private const int MENU_SCENE = 1;
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] public delegate int OpenWin(nint w);
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] public delegate int CheckLeft(int chr);
@@ -61,8 +62,8 @@ internal static unsafe class BattleSeqPatches {
     private const uint LINE_CALL   = 0x00a7c20d; // the scene line's call to TOMakePktSeqPrimLine (0x008fe070, a bare ret)
     private const uint BOX_C2      = 0x008f3db0; // TODrawBoxXYWHC2(x, y, w, h, c0, c1)
 
-    /// <summary>Battle shapes the PC's drawer skips that the PS2 scenes put below the windows' top (y &gt; 300 / 330 / any).</summary>
-    private static bool ps2_shape(int shape, int y) => shape switch {
+    /// <summary>Battle shapes the PC's drawer skips that the PS2 scenes put below the windows' top (y &gt; 300 / 330 / any); every shape while an Overdrive mini-game window runs (BattleLimitPatches.active).</summary>
+    private static bool ps2_shape(int shape, int y) => BattleLimitPatches.active() || shape switch {
         413 or 414 or 421 => y > 300,
         417 => y > 330,
         411 or 415 or 416 or 418 or 419 => true,
@@ -74,7 +75,7 @@ internal static unsafe class BattleSeqPatches {
 
     private static FhLogger? _log;
     private static int _logged;
-    private static int _in_battle_seq;
+    private static int _in_battle_seq, _in_menu_seq;
     private static readonly List<Delegate> _keep = [];
     private static SeqDraw? _seq_hook, _seq_next;
     private static PrimLayout? _prim_hook, _prim_next;
@@ -88,6 +89,10 @@ internal static unsafe class BattleSeqPatches {
 
     private static int seq_draw(int scene, int a, int b) {
         _seq_next ??= Native.fn<SeqDraw>(SEQ_DRAW).chain_from(_seq_hook!).fnptr!;
+        if (scene == MENU_SCENE) {
+            Interlocked.Increment(ref _in_menu_seq);
+            try { return _seq_next(scene, a, b); } finally { Interlocked.Decrement(ref _in_menu_seq); }
+        }
         if (scene != BATTLE_SCENE) return _seq_next(scene, a, b);
         Interlocked.Increment(ref _in_battle_seq);
         try { return _seq_next(scene, a, b); } finally { Interlocked.Decrement(ref _in_battle_seq); }
@@ -184,10 +189,11 @@ internal static unsafe class BattleSeqPatches {
     /// <summary>
     /// A scene line (record +4 c0, +8 c1, +0xc x, +0xe y, +0x10 x2, +0x12 y2): the PS2 draws a
     /// gouraud, alpha-blended one-pixel line (0x001fcf90); here a one-pixel gradient box, c0 at
-    /// (x, y). Only while the battle sequence draws (the menus' scene lines stay off).
+    /// (x, y). While the battle or the menu sequence draws: the PS2's line drawer serves every
+    /// sequence (the menus' lines since 2026-11-04).
     /// </summary>
     private static void line(nint p) {
-        if (Volatile.Read(ref _in_battle_seq) == 0) return;
+        if (Volatile.Read(ref _in_battle_seq) == 0 && Volatile.Read(ref _in_menu_seq) == 0) return;
         uint c0 = *(uint*)(p + 4), c1 = *(uint*)(p + 8);
         int x = *(short*)(p + 0xc), y = *(short*)(p + 0xe), x2 = *(short*)(p + 0x10), y2 = *(short*)(p + 0x12);
         var box = Ps2Menu.fn<BoxC2>(BOX_C2);

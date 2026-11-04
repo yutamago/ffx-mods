@@ -90,14 +90,17 @@ internal static class MenuPatches {
         return Native.fn<WindowDraw>(WINDOW_DRAW_MENU).hook(m, _draw_menu)
             & Native.fn<MenuPlate>(MENU_PLATE).hook(m, _plate_hook)
             & BattlePatches.windows(m)
+            & Ps2Menu.install(m)
             & MainMenuPatches.install(m)
             & BattleSeqPatches.install(m)
             & BattleHudPatches.install(m)
+            & BattleLimitPatches.install(m)
             & ItemMenuPatches.install(m)
             & EquipMenuPatches.install(m)
             & StatusMenuPatches.install(m)
             & ConfigMenuPatches.install(m)
             & OverdriveMenuPatches.install(m)
-            & CustomizeMenuPatches.install(m);
+            & CustomizeMenuPatches.install(m)
+            & WorldMapPatches.install(m);
     }
 }
