@@ -252,6 +252,11 @@ open when the angle is above `g_ChrMouthTh` (`0x00c49718`, 10 = 1°). Closing
 always ends with angle 0 and frame 0. Nothing PC-specific was found in this
 path.
 
+**Source.** The only report is one uncited line in the Final Fantasy Wiki's
+"Final Fantasy X version differences" ("Several NPCs erroneously have their
+mouths open during certain cutscenes"); forum threads only discuss lip-sync
+timing (checked 2026-11-04).
+
 **Why not patched.** No reproducible case is known (which NPC, which
 event); none of the bug reports found names one. Two candidates, both
 unproven: (1) remodelled HD NPCs whose jaw bone's rest pose differs from the

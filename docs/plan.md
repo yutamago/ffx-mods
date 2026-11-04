@@ -57,7 +57,7 @@ Numbers refer to the rows of [`differences.md`](differences.md). Status:
 
 | Item | Status |
 |---|---|
-| NPC mouths open in cutscenes | open | no PC-specific cause found, no reproducible case known (`docs/patches.md`) |
+| NPC mouths open in cutscenes | unconfirmed | only source: one uncited line in the FF Wiki's version differences; forums only report lip-sync timing. No PC-specific cause in the jaw code; converted PS2 NPCs avoid both suspected causes. Next: compare cutscenes PS2 vs Demaster (`docs/compare.md`, `docs/debugger.md`); drop `fixes.npc_mouths` if nothing shows (`docs/patches.md`) |
 | Farplane video | done (static) | movie-init branch patched; particles during the video not checked |
 | Lulu's Fury input | done (static) | skipped diagonal filled in; no real stick test |
 
