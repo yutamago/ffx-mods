@@ -31,15 +31,23 @@ cd "$ffx_rust"
 FFX_GAME_DIR="${FFX_GAME_DIR:-$HOME/steam-games/FFX-X2-HD}" cargo run --release -q \
   --manifest-path "$shotrun" -- "$replay" "$winwork\\trace.txt" "$@" &
 run=$!
+# Other agents start games too: the game is ours only if exactly one new
+# FFX.exe appeared (checked again after the start-up wait). With two, we
+# can't tell which is ours, so nothing is injected or killed.
+newpids() { comm -13 <(echo "$before") <(pids); }
 pid=""
 for _ in $(seq 1 300); do
-  pid="$(comm -13 <(echo "$before") <(pids) | head -1)"
+  pid="$(newpids | head -1)"
   [ -n "$pid" ] && break
   sleep 1
 done
 if [ -z "$pid" ]; then echo "no new FFX.exe"; wait $run; exit 1; fi
-echo "game PID $pid"
 sleep 20
+if [ "$(newpids | wc -l)" -ne 1 ]; then
+  echo "several new FFX.exe ($(newpids | tr '\n' ' ')): can't tell which is ours; not touching any"
+  wait $run; exit 1
+fi
+echo "game PID $pid"
 # LIVE_NO_INJECT=1: a baseline run with the game's own FMOD music (the
 # replay's waitfor on "LIVE" must go: tools/replays/music-live.txt with its
 # first line removed)
