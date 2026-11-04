@@ -60,7 +60,6 @@ internal static unsafe class BattleHudPatches {
     private static int _logged;
     private static readonly List<Delegate> _keep = [];
     private static readonly nint BHLINE = Marshal.StringToHGlobalAnsi("bhline");
-    private static bool _bhline;
 
     private static void first(int bit, string message) {
         if ((Interlocked.Or(ref _logged, bit) & bit) == 0) _log?.Info(message);
@@ -143,10 +142,8 @@ internal static unsafe class BattleHudPatches {
     private static void help() {
         if (u32(HIDDEN) == 1) return;
         bool on = (*(uint*)fn<PtrFn>(SAVE_MENU)() & 0x400) != 0;
-        if (on != _bhline) {
-            fn<SeqScene>(on ? SEQ_CONTINUE : SEQ_STOP)(2, BHLINE);
-            _bhline = on;
-        }
+        // the PS2 calls these every frame (TOSeqInitScene(2) at each window's opening ends it)
+        if (on != Ps2Menu.scene_on(2, "bhline")) fn<SeqScene>(on ? SEQ_CONTINUE : SEQ_STOP)(2, BHLINE);
         if (!on || Native.u8(HELP_OPEN) != 1) return;
         MainMenuPatches.ps2_scoped(() => {
             fn<Scissor>(SCISSOR_XYWH)(0, 0, 0x200, 0x1a0);
