@@ -61,8 +61,8 @@ internal static unsafe class BattleSeqPatches {
     private const uint LINE_CALL   = 0x00a7c20d; // the scene line's call to TOMakePktSeqPrimLine (0x008fe070, a bare ret)
     private const uint BOX_C2      = 0x008f3db0; // TODrawBoxXYWHC2(x, y, w, h, c0, c1)
 
-    /// <summary>Battle shapes the PC's drawer skips that the PS2 scenes put below the windows' top (y &gt; 300 / 330 / any).</summary>
-    private static bool ps2_shape(int shape, int y) => shape switch {
+    /// <summary>Battle shapes the PC's drawer skips that the PS2 scenes put below the windows' top (y &gt; 300 / 330 / any); every shape while an Overdrive mini-game window runs (BattleLimitPatches.active).</summary>
+    private static bool ps2_shape(int shape, int y) => BattleLimitPatches.active() || shape switch {
         413 or 414 or 421 => y > 300,
         417 => y > 330,
         411 or 415 or 416 or 418 or 419 => true,

@@ -957,6 +957,57 @@ for glyph edges; the CTB frame, bars, faces and markers too, but the PC's
 turn order differs (Wakka third against the PS2's seventh: the battle's
 own state from the same save, not the draw). Not seen in play.
 
+## The Overdrive mini-game windows (`ui.menus`: code)
+
+**What the PS2 drew.** Both platforms' `TODrawBtlWindow` (PS2 `0x00214ae4`, PC `0x0089b360`) call
+the same draws between the party list and the CTB list: the enemy gauges, Libra, then Auron's,
+Tidus's and Lulu's windows and the limit timer (PS2 `0x0021ad88`, `0x0021b360`, `0x0021b9d0`,
+`0x0021a8f8`; PC `TOBtlDrawAuronLimitWindow` `0x00892740`, `TOBtlDrawTidusLimitWindow`
+`0x00897240`, `TOBtlDrawLuluLimitWindow` `0x00895660`, `BtlDrawRatio_008955e0`). The windows'
+records keep the PS2 offsets (PS2 `0x00692678` / `0x00692690` / `0x006926a8` / `0x00692658` = PC
+`0x0133d6f4` / `0x0133d734` / `0x0133d708` / `0x0133f77c`) and are in PS2 units on both (the PC's
+inits remap their HD constants with `graphicUiRemapX2/Y2`). A window draws in its states 3 and 4
+(the input phase); the prompt line is the 16x12 font centred at y `dum225` (`0x0133f778`):
+
+| Window | PS2 draw |
+|---|---|
+| Tidus (0x3010) | the bar `0x00201b68(x, y, w)` (battle shapes 500 at (x - 7, y - 4), 502 at (x + w - 8, y - 4), 501 stretched over w); the hit zone as one box (`+8`, y, `+0xc` x 9) in `dum203`; the marker, battle shape 477, at (`+0xe`, y) |
+| Auron (0x3011) | each button still to press (list `+0x10`, from `+8` to the count `+0xc`) by `0x001fc778` at (`+2` + 30 i, `+4`): icon shapes 600..617 (the d-pad cross from four pieces, lit or not; triangle 608, circle / cross 609 / 610 swapped for the Japanese layout, square 611, L1/R1/L2/R2 612..615, 616, 617) |
+| Lulu (0x3012) | the count (`+0x17`) "%02d" in battle shapes 490.. 16 apart at `dum212`; the fill `TODrawBoxXYWHC2FW(+2, +4, +0x14, 9, dum210, dum211, +6)`; the bar `0x00201b68` |
+| Timer | the seconds left (`+0x18`) "%1.2f" at `dum201`, each character a 20-wide cell: digits battle shapes 480.., the point 479; yellow (`0x80008080`) under one second |
+| Wakka (`0x0021bcc8`) | battle menu texture 0x13 put at sheet 0x3f00, the scene layer 4 (`bwakk`: the reels), text 0x3013 once `bwakk` is in state 3 |
+
+The PS2 draws no backdrop under these windows (the PC's `TODrawLimitBG` `0x008a1ce0`, three HD
+plates, has no twin) and no frame round Wakka's reels (`TODrawWakkaLimitFrame_008a1e50`). The PC
+draws Tidus's hit zone as two gradient halves, an HD marker, an HD bar; Auron's buttons as HD pad
+glyphs 1.5 times as big, 46 further left and lower; Lulu's counter 10 right and 8 up with its own
+fill; the timer 15 right and 20 up with 16-pixel digits (and moved up during the reels); the
+prompts in the battle typeface at y 71.
+
+**The restoration** (`mod/BattleLimitPatches.cs`): hooks on the four PC draws make the PS2 calls
+with FFX.exe's primitives (battle shapes from the PS2 atlas `ps2btl` through `BattleHudPatches.bshape`,
+icon shapes 600.. from the `icon` sheet with half-texel-inset UVs, `TODrawBoxXYWHC2`,
+`TODrawBoxXYWHC2FW`, the 16x12 font at the PS2 size); `TODrawLimitBG` and Wakka's frame draw
+nothing. While Auron's, Tidus's or Lulu's window runs (not during the reels, whose scene draws from
+texture 0x13 at 0x3f00), the battle sequence's primitives are all drawn from the PS2 atlas
+(`BattleSeqPatches.ps2_shape`), so the limit scenes (`bauro`, `btidu`, `blulu`: the cursor 413 above
+y 300 ...) are PS2 art too. The bar's geometry stays the PC's: the PS2 reads Tidus's bar from
+`dum202` / `dum2021` (the PC from constants: x 118, y 196, w 275), and its width sets the marker's
+travel, so changing it would change the timing (logic stays the PC's). Kimahri (Ronso Rage),
+Rikku (Mix), Yuna and the aeons have no window of their own: their Overdrives are command lists
+(BattlePatches' sub windows: kinds 1-4, 6, 0xe, 0x11; Mix's two item picks
+`TODrawWaitBtlWinPrepare`), already drawn the PS2 way. Wakka's reels (texture 0x13) stay as the PC draws them.
+
+**Checked.** Builds only (mod, `tools/calllist`). Replays for the harness: `tools/replays/
+ui-battle-limit-tidus.txt` (fx-overdrive's battle, Spiral Cut, shot in the bar's state 4) and the
+untested drafts `ui-battle-limit-auron.txt`, `-lulu.txt`, `-wakka.txt` (the character alone in
+front, gauge full; whether the game takes empty party slots is a guess), through `@ps2limit`
+(jmps at the PC draws, `FFX_HOOK_DISABLE=replacements`). Not compared with the PS2: no save state
+reaches an Overdrive (PS2 gauge writes would be needed). Uncertain: the icon sheet's pad glyph
+cells are HD art (✕ and ○ were reported swapped in the HD `icon`, "Button glyphs"); whether the
+PC's `icon` sheet has art at cells 600..617 at all; the timer's point and digit cells (a 20-wide
+cell per character, as the PS2 code steps).
+
 ## The Items and Abilities screens (`ui.menus`: code)
 
 The PC kept the PS2 menu logic and window records: every field the PS2
@@ -1296,8 +1347,8 @@ The screenshots of these five screens (2026-11-03) are kept in
   replacing it needs each caller's PS2 position.
 - The `?`/`!` icons and the other `meswin` cells outside the ported draws.
 - The battle target info window (`TOBtlDrawInfoWin`, PS2 at (0x14, 0x46)),
-  the enemy and Overdrive mini-game windows (Libra, Auron, Tidus, Lulu):
-  HD. The menus' sequence scene lines (the PC draws none) stay off.
+  the enemy gauges and Libra: HD. Wakka's reels (battle menu texture
+  0x13). The menus' sequence scene lines (the PC draws none) stay off.
 - The battle words' place and the `strtex` labels in play (not reached).
 - `worldmap` (airship map): 512x416 PS2 against a 1920x1080 HD layout.
 - Sphere grid (`menu/abmap/dat00/tex`): named after VRAM pages
