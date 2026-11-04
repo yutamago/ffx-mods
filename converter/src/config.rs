@@ -133,7 +133,7 @@ pub struct Timing {
 impl Default for Timing {
     fn default() -> Self {
         Timing {
-            run_speed: Look::Hd,
+            run_speed: Look::Ps2,
         }
     }
 }
@@ -360,9 +360,6 @@ mod tests {
                 v == "true"
             } else if k == "render.texture_filter" {
                 v == "game"
-            } else if k.starts_with("timing.") {
-                // game speed is logic: the PC's by default
-                v == "hd"
             } else {
                 v == "ps2"
             };

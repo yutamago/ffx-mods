@@ -137,7 +137,7 @@ time spent moving rather than distance (not traced further), so a faster
 run would cover more ground between battles. That is why the setting
 defaults to the PC's speed.
 
-**Setting.** `timing.run_speed = "ps2"` (default `"hd"`): the PC's
+**Setting.** `timing.run_speed = "ps2"` (the default since 2026-11-04, user decision; `"hd"` keeps the PC's 38): the PC's
 `fld [0x00b59830]` at `0x0082d8e6` reads the `.rdata` 34.0 at `0x00b656c4`
 instead (`mod/GamePatches.cs`). Checked: bytes and constants (static);
 not yet run in the game.
@@ -242,6 +242,10 @@ drive on the PC was not checked.
 
 The defaults keep the PC's NTSC timing. Whether to offer PAL speed is the
 user's call.
+
+**Decision (user, 2026-11-04):** NTSC timing is "the PS2 original": the
+logic stays at the PC's (= NTSC) 29.97 frames a second; no PAL option is
+built. `timing.run_speed` defaults to `"ps2"`.
 
 ## What a `timing.pal_speed` would take
 

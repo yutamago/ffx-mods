@@ -58,8 +58,8 @@ Numbers refer to the rows of [`differences.md`](differences.md). Status:
 | Item | Rows | Status |
 |---|---|---|
 | Frame rates, waits, PAL vs NTSC vs PC | | done: measured in PCSX2 and read from both binaries (`docs/timing.md`) |
-| Run speed | 23 | done (static), `timing.run_speed`, default PC; not run in the game |
-| PAL speed (`timing.pal_speed`) | | open: user decision; what it would take in `docs/timing.md` |
+| Run speed | 23 | done (static), `timing.run_speed`, default PS2 (34; user, 2026-11-04); not run in the game |
+| PAL speed (`timing.pal_speed`) | | dropped: the user chose NTSC timing as "the PS2 original" (2026-11-04); what it would take stays in `docs/timing.md` |
 | Lip-sync lag (forum: audio 1/5 s behind) | | open: not explained by the frame logic; needs an audio capture on PC |
 | PS2 slowdown timing outside the 3 sync scenes | | dropped for now: needs NTSC PS2 recordings |
 

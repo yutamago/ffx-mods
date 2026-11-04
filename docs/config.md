@@ -88,11 +88,12 @@ chain (`phyretex::mip_chain`), so surfaces seen from afar do not shimmer.
 
 ## Timing (default `"hd"`: the PC's speed)
 
-Game speed changes play (how far Tidus gets between encounters, how long
-things take), so these keep the PC's behaviour unless set to `"ps2"`.
+The game's logic runs at the NTSC PS2's rate, 29.97 frames a second, as on
+the PC: the user chose NTSC as "the PS2 original" (2026-11-04). The run speed
+defaults to the PS2's.
 Measurements and the reasons: [`timing.md`](timing.md).
 
-| Key | `"ps2"` | `"hd"` (default) | Applied by | Status |
+| Key | `"ps2"` (default) | `"hd"` | Applied by | Status |
 |---|---|---|---|---|
 | `timing.run_speed` | Tidus runs at the PS2's speed: 34 (1.70 units a frame, 51 a second at the PC's 29.97 frames a second) | 38 (1.90 a frame, 57 a second), 12 % faster; the PC's own scripts still set 34 in some scenes | mod | done, static (bytes checked); not run in the game |
 
