@@ -154,12 +154,17 @@ impl Sources {
 
     /// Instrument bank `id` of `wave_wd.dat`.
     pub fn bank(&self, disc: &mut Disc, id: u16) -> Result<Wd> {
+        let b = self.bank_bytes(disc, id)?;
+        Wd::parse(&b).with_context(|| format!("WD {id}"))
+    }
+
+    /// The bytes of instrument bank `id` (the driver's `waveNNNN.wd`).
+    pub fn bank_bytes(&self, disc: &mut Disc, id: u16) -> Result<Vec<u8>> {
         let dat = format!("{}wave/wave_wd.dat", self.sound_dir);
         let at = Wd::locate(&self.sec, id).with_context(|| format!("no WD {id}"))?;
         let head = disc.read_range(&dat, at, 0x800)?.context("wave_wd.dat")?;
         let size = Wd::size(&head).context("WD header")?;
-        let b = disc.read_range(&dat, at, size)?.context("wave_wd.dat")?;
-        Wd::parse(&b).with_context(|| format!("WD {id}"))
+        disc.read_range(&dat, at, size)?.context("wave_wd.dat")
     }
 
     /// The banks `wave_wd.sec` lists.
@@ -406,7 +411,7 @@ impl Job for MusicJob {
         &["audio.music_engine"]
     }
     fn enabled(&self, config: &Config) -> bool {
-        config.audio.music_engine.ps2()
+        config.audio.music_engine.bank()
     }
     /// 2: long samples in pieces play through (music143, music149).
     fn version(&self) -> u32 {

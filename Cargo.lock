@@ -568,6 +568,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "demaster-live"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "demaster",
+]
+
+[[package]]
 name = "digest"
 version = "0.10.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"

@@ -24,9 +24,14 @@ pub fn registry() -> Vec<Box<dyn Job>> {
     jobs.extend(crate::models::jobs());
     jobs.extend(crate::moviejob::jobs());
     jobs.extend(crate::musicjob::jobs());
+    jobs.extend(crate::livejob::jobs());
     jobs.extend(crate::shaderjob::jobs());
     jobs
 }
+
+/// Folders of the mod (besides `efl/x`) that jobs write: `music/` holds the
+/// live music engine's PS2 files (`livejob.rs`).
+pub const MOD_DIRS: &[&str] = &["music/"];
 
 pub trait Job: Sync {
     /// Unique and stable (`chr.monster`); names the job in the manifest.
@@ -185,6 +190,35 @@ impl Output {
         let mut s = self.state.lock().expect("output lock");
         s.written += 1;
         s.files.push((key, size));
+        Ok(true)
+    }
+
+    /// Puts a file of the mod's own (not a game file) at `<mod>/<rel>`;
+    /// `rel` must be under one of [`MOD_DIRS`]. Same rules as [`Output::put`].
+    pub fn put_mod(&self, rel: &str, bytes: &[u8]) -> Result<bool> {
+        let rel = rel.trim_start_matches('/').to_ascii_lowercase();
+        anyhow::ensure!(
+            MOD_DIRS.iter().any(|d| rel.starts_with(d)) && !rel.split('/').any(|p| p == ".." || p.is_empty()),
+            "bad mod path {rel}"
+        );
+        if !self.state.lock().expect("output lock").taken.insert(rel.clone()) {
+            return Ok(false);
+        }
+        let mod_dir = self.efl.parent().and_then(Path::parent).context("mod folder")?;
+        let path = mod_dir.join(&rel);
+        let same = std::fs::metadata(&path).is_ok_and(|m| m.len() == bytes.len() as u64)
+            && std::fs::read(&path).is_ok_and(|old| old == bytes);
+        if !same {
+            std::fs::create_dir_all(path.parent().context("no parent")?)?;
+            std::fs::write(&path, bytes).with_context(|| path.display().to_string())?;
+        }
+        let mut s = self.state.lock().expect("output lock");
+        if same {
+            s.unchanged += 1;
+        } else {
+            s.written += 1;
+        }
+        s.files.push((rel, bytes.len() as u64));
         Ok(true)
     }
 

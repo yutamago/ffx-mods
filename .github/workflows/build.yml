@@ -82,7 +82,7 @@ jobs:
       run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libwayland-dev libxkbcommon-dev
 
     - name: Test
-      run: cargo test --locked -p demaster -p ffx-music-studio
+      run: cargo test --locked -p demaster -p ffx-music-studio -p demaster-live
 
   windows:
     name: Windows build and package
@@ -101,7 +101,7 @@ jobs:
 
     - uses: dtolnay/rust-toolchain@stable
       with:
-        targets: x86_64-pc-windows-msvc
+        targets: x86_64-pc-windows-msvc, i686-pc-windows-msvc
 
     - uses: Swatinem/rust-cache@v2
 
@@ -112,6 +112,7 @@ jobs:
         version="${TAG#v}"
         if [ -n "$version" ]; then export DEMASTER_VERSION="$version"; fi
         cargo build --locked --release --target x86_64-pc-windows-msvc -p demaster -p ffx-music-studio
+        cargo build --locked --release --target i686-pc-windows-msvc -p demaster-live --lib
 
     - name: Check demaster.exe runs
       run: |
@@ -142,7 +143,7 @@ jobs:
         $names = $zip.Entries.FullName
         $zip.Dispose()
         $names
-        foreach ($f in 'yuta.demaster.dll', 'yuta.demaster.manifest.json', 'demaster.exe', 'demaster.toml', 'README.txt', 'LICENSES.txt') {
+        foreach ($f in 'yuta.demaster.dll', 'yuta.demaster.manifest.json', 'demaster.exe', 'demaster_live.dll', 'demaster.toml', 'README.txt', 'LICENSES.txt') {
           if ($names -notcontains "mods/yuta.demaster/$f") { throw "the zip has no $f" }
         }
         $bad = $names | Where-Object { $_ -notlike 'mods/yuta.demaster/*' -or $_ -match '/(efl|build|tools|preview)/|\.(phyre|iso|bin|img|png|dds|webm|fsb|wav|vbf)$' }

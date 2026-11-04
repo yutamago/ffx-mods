@@ -51,7 +51,7 @@ Numbers refer to the rows of [`differences.md`](differences.md). Status:
 | Texture filtering option | 19 | done | nearest for model/map samplers only; all converted textures now have mip chains |
 | Soundtrack default "Original" | 20 | done (static) | new-game save gets Original; menu switch still works |
 | PS2 music engine (offline render): our port of iopsound.irx + SPU2 model renders the 89 tracks into the `music_ps2` bank | 20 | done | 70/86 tracks correlate ≥0.9 with the PC Original recordings; 3 rock tracks copied (streamed layers); in-game capture matches our render (`docs/music.md`) |
-| PS2 music engine phase 2: live, driven by the game's iMusic* commands (runtime tempo/fades, streamed guitar/vocal layers) | 20 | todo | plan in `docs/music.md` |
+| PS2 music engine phase 2: live, driven by the game's iMusic* commands (runtime tempo/fades, streamed guitar/vocal layers) | 20 | wip | `audio.music_engine = "live"`: `demaster_live.dll` (the driver in the game through FMOD's event imports and a user stream), job `audio.live`; in the game (harness and Fahrenheit): starts, stops, loops, the battle's pause and resume of the field song, fades, fanfare, the volume setting, pause, the tempo commands, all as the game asks; output = the offline render sample for sample. Todo: the 3 rock tracks' streamed layers (stay the bank's recording), a comparison by ear with PCSX2. Default stays `"ps2"` (the bank) (`docs/music.md`, "Phase 2") |
 
 ## Timing
 

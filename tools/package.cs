@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 //
-// Zips a release: mods/yuta.demaster/ with the mod DLL and manifest, demaster.exe, the default
+// Zips a release: mods/yuta.demaster/ with the mod DLL and manifest, demaster.exe,
+// demaster_live.dll (the live music engine), the default
 // demaster.toml, the players' README.txt (tools/package/README.txt), config.md and LICENSES.txt,
 // ready to unpack into the Fahrenheit folder. No game data: the player builds that with
 // demaster.exe from their own disc.
@@ -40,6 +41,13 @@ if (!File.Exists(exe)) {
     return 1;
 }
 
+// The live music engine (audio.music_engine = "live"), 32-bit like FFX.exe: tools/build-live.sh.
+string live = Path.Combine(root, "target", "i686-pc-windows-msvc", "release", "demaster_live.dll");
+if (!File.Exists(live)) {
+    Console.Error.WriteLine($"{live} is missing: build it first (tools/build-live.sh)");
+    return 1;
+}
+
 string licences;
 try {
     licences = File.ReadAllText(Path.Combine(root, "tools", "package", "LICENSES.txt"))
@@ -75,6 +83,7 @@ using (ZipArchive zip = ZipFile.Open(out_path, ZipArchiveMode.Create)) {
         if (File.Exists(p)) add(p, f);
     }
     add(exe, "demaster.exe");
+    add(live, "demaster_live.dll");
     add_text(text("converter", "demaster.toml"), "demaster.toml");
     add_text(text("tools", "package", "README.txt"), "README.txt");
     add_text(text("docs", "config.md"), "config.md");

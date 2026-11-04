@@ -687,6 +687,14 @@ pub struct Song {
     mods: Mods,
     tempo_frac: f64,
     range_snap: Option<RangeSnap>,
+    /// The driver's song tempo modifier (IRX `0x00222450`, x << 12) and
+    /// its slide (step `0x00222454`, steps left `0x00222458`), set by the
+    /// game's `MusicTempoDirect` / `MusicTempoTranslate` (live engine).
+    tempo_mod: i32,
+    tempo_mod_step: i32,
+    tempo_mod_n: i32,
+    /// Interrupts so far (the driver's 60 Hz work runs every 4th).
+    irqs: u32,
 }
 
 /// Output frames per timer interrupt (48 kHz / 240 Hz).
@@ -733,6 +741,10 @@ impl Song {
             mods: Mods::default(),
             tempo_frac: 0.0,
             range_snap: None,
+            tempo_mod: 0,
+            tempo_mod_step: 0,
+            tempo_mod_n: 0,
+            irqs: 0,
         }
     }
 
@@ -835,6 +847,44 @@ impl Song {
         self.tempo >> 12
     }
 
+    /// `MusicTempoDirect(v)` (IRX `0x00109120`): the song's tempo times
+    /// `1 + v / 256` for `v < 0` (-128: half), `1 + (v + 1) / 128` for
+    /// `v > 0` (127: double), 0 the song's own; any slide stops.
+    pub fn tempo_direct(&mut self, v: i8) {
+        self.tempo_mod = Self::tempo_mod_value(v) << 12;
+        self.tempo_mod_n = 0;
+    }
+
+    /// `MusicTempoTranslate(frames, v)` (IRX `0x00109148`): the modifier
+    /// slides to `v` over `frames` 60 Hz steps (NTSC cycle mode).
+    pub fn tempo_translate(&mut self, frames: i32, v: i8) {
+        if frames <= 0 {
+            self.tempo_direct(v);
+            return;
+        }
+        let target = (Self::tempo_mod_value(v) << 12) | 0x800;
+        self.tempo_mod_n = frames;
+        self.tempo_mod_step = target.wrapping_sub(self.tempo_mod) / frames;
+    }
+
+    fn tempo_mod_value(v: i8) -> i32 {
+        let v = i32::from(v) * 0x100;
+        if v > 0 { v + 0xff } else { v }
+    }
+
+    /// The tempo step of one interrupt with the modifier applied (the
+    /// driver's integer arithmetic, IRX `0x00100cd0`).
+    fn modded_tempo(&self, bpm: i32) -> i32 {
+        let u = (self.tempo_mod >> 12) & 0xffff;
+        if u == 0 {
+            bpm
+        } else if self.tempo_mod < 0 {
+            ((bpm as u32).wrapping_mul(u as u32) as i32) >> 16
+        } else {
+            (((bpm as u32).wrapping_mul(u as u32 + 1) as i32) >> 15) + bpm
+        }
+    }
+
     /// Whether the sequence still plays.
     pub fn playing(&self) -> bool {
         self.active > 0
@@ -861,7 +911,7 @@ impl Song {
         }
         self.queue.clear();
         if self.active != 0 {
-            let step = self.tempo >> 12;
+            let step = self.modded_tempo(self.tempo >> 12);
             if self.mods.tempo == 0.0 || self.mods.tempo == 1.0 {
                 self.tempo_counter -= step;
             } else {
@@ -879,6 +929,12 @@ impl Song {
                     }
                 }
             }
+        }
+        // every 4th interrupt (60 Hz, IRX 0x001003e0): the modifier's slide
+        self.irqs = self.irqs.wrapping_add(1);
+        if self.irqs & 3 == 0 && self.tempo_mod_n != 0 {
+            self.tempo_mod = self.tempo_mod.wrapping_add(self.tempo_mod_step);
+            self.tempo_mod_n -= 1;
         }
     }
 

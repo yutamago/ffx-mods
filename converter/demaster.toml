@@ -97,7 +97,10 @@ button_glyphs = "ps2"
 # "ps2": the original soundtrack. "hd": the arranged one.
 soundtrack = "ps2"
 # "ps2": the original soundtrack played by a PS2 sound driver from the disc's
-# sequences and instruments. "hd": the PC's recordings of it.
+# sequences and instruments. "hd": the PC's recordings of it. "live": that
+# PS2 driver playing inside the game, driven by the game's music commands
+# (fades, pauses, tempo as the scripts ask); the rendered bank stays as the
+# fallback.
 music_engine = "ps2"
 
 [timing]

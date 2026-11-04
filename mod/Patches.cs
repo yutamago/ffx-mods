@@ -13,7 +13,8 @@ namespace Yuta.Demaster;
 /// Installs the patch for the setting's value (hooks are queued from init, like any
 /// FhModule's); returns whether it worked. Null until the patch exists.
 /// </param>
-internal sealed record CodePatch(string Key, string Off, string What, Func<DemasterModule, string, bool>? Apply);
+/// <param name="Only">When set, the only value that turns the patch on (other values are off).</param>
+internal sealed record CodePatch(string Key, string Off, string What, Func<DemasterModule, string, bool>? Apply, string? Only = null);
 
 internal enum PatchState { Off, On, NotImplemented, Failed }
 
@@ -31,6 +32,7 @@ internal static class Patches {
         new("ui.battle_subtitles",   "hd",    "battle dialogue subtitles",               GamePatches.battle_subtitles),
         new("ui.battle_menu_delay",  "hd",    "battle menu without input delays",        GamePatches.battle_menu_delay),
         new("audio.soundtrack",      "hd",    "original soundtrack for new games",       GamePatches.soundtrack),
+        new("audio.music_engine",    "hd",    "PS2 music played live by the game's commands", LiveMusic.install, Only: "live"),
         new("timing.run_speed",      "hd",    "PS2 run speed (34)",                      GamePatches.run_speed),
         new("fixes.npc_mouths",      "false", "NPC mouths closed in cutscenes",          null),
         new("fixes.farplane_video",  "false", "Farplane background video plays",         GamePatches.farplane_video),
@@ -43,7 +45,7 @@ internal static class Patches {
         foreach (CodePatch p in ALL) {
             string value = settings.get(p.Key);
             PatchState state;
-            if (value == p.Off) state = PatchState.Off;
+            if (value == p.Off || (p.Only is not null && value != p.Only)) state = PatchState.Off;
             else if (p.Apply is null) state = PatchState.NotImplemented;
             else {
                 try { state = p.Apply(module, value) ? PatchState.On : PatchState.Failed; }
