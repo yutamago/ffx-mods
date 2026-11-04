@@ -97,6 +97,13 @@ soundtrack = "ps2"
 # sequences and instruments. "hd": the PC's recordings of it.
 music_engine = "ps2"
 
+[timing]
+# Game speed changes play, so these keep the PC's "hd" by default
+# (docs/timing.md).
+# "ps2": Tidus runs at the PS2's speed (34 a frame x 0.05; the PC's is 38,
+# 12 % faster, while its own scripts still restore 34 in some scenes).
+run_speed = "hd"
+
 [fixes]
 # NPC mouths that hang open in some cutscenes.
 npc_mouths = true

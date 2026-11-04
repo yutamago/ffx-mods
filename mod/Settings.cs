@@ -41,6 +41,7 @@ internal sealed class DemasterSettings {
         new("ui.button_glyphs",      AppliedBy.Converter, "ps2"),
         new("audio.soundtrack",      AppliedBy.Mod,       "ps2"),
         new("audio.music_engine",    AppliedBy.Converter, "ps2"),
+        new("timing.run_speed",      AppliedBy.Mod,       "hd"),
         new("fixes.npc_mouths",      AppliedBy.Mod,       "true"),
         new("fixes.farplane_video",  AppliedBy.Mod,       "true"),
         new("fixes.lulu_fury",       AppliedBy.Mod,       "true"),

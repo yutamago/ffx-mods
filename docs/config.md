@@ -86,6 +86,19 @@ post-processing keep theirs). Applied by the mod (`docs/render.md`).
 Every converted PS2 texture whose HD texture has mip levels gets a full mip
 chain (`phyretex::mip_chain`), so surfaces seen from afar do not shimmer.
 
+## Timing (default `"hd"`: the PC's speed)
+
+Game speed changes play (how far Tidus gets between encounters, how long
+things take), so these keep the PC's behaviour unless set to `"ps2"`.
+Measurements and the reasons: [`timing.md`](timing.md).
+
+| Key | `"ps2"` | `"hd"` (default) | Applied by | Status |
+|---|---|---|---|---|
+| `timing.run_speed` | Tidus runs at the PS2's speed: 34 (1.70 units a frame, 51 a second at the PC's 29.97 frames a second) | 38 (1.90 a frame, 57 a second), 12 % faster; the PC's own scripts still set 34 in some scenes | mod | done, static (bytes checked); not run in the game |
+
+A PAL speed option (`timing.pal_speed`, the whole game at 25 logic frames
+a second) is not implemented; `timing.md` says what it would take.
+
 ## Fixes (default `true`)
 
 | Key | `true` | Applied by | Status |
