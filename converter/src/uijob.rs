@@ -877,6 +877,52 @@ fn title_layer(hd: usize) -> Option<usize> {
     }
 }
 
+/// A full-screen `titl00` layer (512 x 448) laid out so the PC's quad shows
+/// it where the PS2 did (`docs/ui.md`, "Title screen and logos").
+///
+/// The PS2 shows rows 16..432 of the image 1:1 on its 512 x 416 screen. The
+/// PC draws the layer as a 4:3 quad as wide as the screen, bottom-aligned
+/// (measured, 16:9 and 4:3 alike: texture row v at screen line
+/// `v * 960 / 448 - 240` of 720), so it showed only rows 112..448, 1.24
+/// times as big and 60 lines higher at the logo. The texture here holds, at
+/// row v, the PS2 row that the PS2 showed at that screen line:
+/// `16 + (v * 960 / 448 - 240) * 416 / 720`; columns stay. Written at twice
+/// the PS2 size (1024 x 896) so the 0.8 scale loses no PS2 detail. The
+/// PAL web-site banner above the water strip (rows 0..83) is left black:
+/// the PC draws its own translucent water band (`menu/titl/water_NN`) over
+/// the top of the screen, which covered the banner before (it lay off the
+/// screen) and should go on covering it.
+pub fn title_placed(img: &Rgba) -> Rgba {
+    /// The first row of the PS2 water strip (below the banner).
+    const WATER_TOP: f32 = 83.0;
+    let (w, h) = (img.width * 2, img.height * 2);
+    let mut out = Rgba::new(w, h);
+    let sample = |x: f32, y: f32| -> [u8; 4] {
+        let x = (x - 0.5).clamp(0.0, (img.width - 1) as f32);
+        let y = (y - 0.5).clamp(0.0, (img.height - 1) as f32);
+        let (x0, y0) = (x.floor() as u32, y.floor() as u32);
+        let (x1, y1) = ((x0 + 1).min(img.width - 1), (y0 + 1).min(img.height - 1));
+        let (fx, fy) = (x - x0 as f32, y - y0 as f32);
+        let (a, b, c, d) = (img.get(x0, y0), img.get(x1, y0), img.get(x0, y1), img.get(x1, y1));
+        std::array::from_fn(|k| {
+            let top = a[k] as f32 * (1.0 - fx) + b[k] as f32 * fx;
+            let bot = c[k] as f32 * (1.0 - fx) + d[k] as f32 * fx;
+            (top * (1.0 - fy) + bot * fy).round() as u8
+        })
+    };
+    let hs = img.height as f32;
+    for y in 0..h {
+        let v = (y as f32 + 0.5) / 2.0;
+        let line = v * 960.0 / hs - 240.0;
+        let r = 16.0 + line * 416.0 / 720.0;
+        for x in 0..w {
+            let c = if r < WATER_TOP { [0, 0, 0, img.get(0, 0)[3]] } else { sample((x as f32 + 0.5) / 2.0, r) };
+            out.put(x, y, c);
+        }
+    }
+    out
+}
+
 fn lower_half(img: &Rgba) -> Rgba {
     let h = img.height / 2;
     let row = img.width as usize * 4;
@@ -1143,7 +1189,10 @@ pub fn convert(disc: &mut Disc, pc: &ffx_vbf::Archive, parts: Parts) -> Result<(
                     notes.push(format!("{path}: PS2 layer {k} looks different (correlation {c:.2}), kept HD"));
                     continue;
                 }
-                let img = mapjob::opaque_like(img.clone(), &hd);
+                let mut img = mapjob::opaque_like(img.clone(), &hd);
+                if map == "titl00" && img.height == 448 {
+                    img = title_placed(&img);
+                }
                 done.push(Done {
                     file: phyretex::argb8_from(&template, &img)?,
                     preview: side_by_side(&hd, &img),
@@ -1288,8 +1337,9 @@ impl Job for UiJob {
     /// as its own texture (`ps2win`, ui.menus). 4: `ps2btl`, the PS2 item
     /// icons and battle words (`icon`), `strtex`. 5: `ps2fnt`, the PS2 fonts
     /// M and S. 6: the disc's `menu_script.bin` (the PAL menu layout).
+    /// 7: the title layers at the PS2's place (`title_placed`).
     fn version(&self) -> u32 {
-        6
+        7
     }
     fn name(&self) -> &'static str {
         self.name

@@ -212,7 +212,7 @@ pub const SETTINGS: &[(&str, AppliedBy)] = {
         ("ui.menus", Both),
         ("ui.portraits", Converter),
         ("ui.font", Converter),
-        ("ui.title", Converter),
+        ("ui.title", Both),
         ("ui.loading", Mod),
         ("ui.battle_subtitles", Mod),
         ("ui.battle_menu_delay", Mod),

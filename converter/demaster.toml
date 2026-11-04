@@ -79,7 +79,8 @@ menus = "ps2"
 portraits = "ps2"
 # The PS2 font.
 font = "ps2"
-# The plain title logo instead of "HD Remaster".
+# The PS2 title screen: the plain logo instead of "HD Remaster", the picture
+# and its menu at the PS2 place (converter and mod).
 title = "ps2"
 # "ps2": no loading screen and no splash videos.
 loading = "ps2"
