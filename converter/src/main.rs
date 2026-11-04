@@ -6,7 +6,7 @@ use anyhow::{Context, Result, bail};
 
 fn usage() -> ! {
     eprintln!(
-        "FFX Demaster converter {}\nusage:\n{}\n  demaster chr <iso> <FFX_Data.vbf> <out dir> <kind/name>...\n      bake character textures (PNG previews + .dds.phyre)\n  demaster models <iso> <FFX_Data.vbf> <out dir> all|<kind/name>...\n      PS2 meshes into the remodelled characters (run after chr; docs/models.md)\n  demaster models-debug <chr file> <FFX_Data.vbf> <kind/name>\n      print a PS2 mesh against its HD model\n  demaster materials-debug <FFX_Data.vbf> <kind/name>|<.dae.phyre file>\n      each segment's material, shader variant switches and alpha threshold\n  demaster fx <iso> <FFX_Data.vbf> <out dir> all|<id>...\n      effect textures; id: 7, magic_0007, map/bika/bika00, btlmap/bika/bika00_a, chr/mon/m028\n  demaster maps <iso> <FFX_Data.vbf> <out dir> <map|area|kind>...|all\n      field and battle map textures (PNG previews, maps.tsv + .dds.phyre)\n  demaster ui <iso> <FFX_Data.vbf> <out dir>\n      menus, portraits, title, loading screen, button glyphs, font (PNG previews + .dds.phyre, base.ftc)\n  demaster movies <iso> <FFX_Data.vbf> <mod dir> all|<name>...\n      PS2 movies as WebM (name: opn, sak, ...; ffmpeg: $FFMPEG, else found or downloaded as by build; docs/movies.md)\n  demaster movie-debug <iso> <FFX_Data.vbf> <out dir> <name> [frame]...\n      decode one PS2 movie: statistics, PNGs of the frames, the sound as WAV\n  demaster music <iso> <FFX_Data.vbf> <out dir> all|<id|name>...\n      render PS2 music tracks (musicNNN.bgm) as 48 kHz WAVs (docs/music.md)\n  demaster music-bank <bank.fsb> <out dir> [name...]\n      decode a music bank (FSB5, IMA ADPCM) to WAVs\n  demaster texanim-debug <chr file> <FFX_Data.vbf> <kind/name>\n      print a PS2 texture animation against the HD .ags",
+        "FFX Demaster converter {}\nusage:\n{}\n  demaster chr <iso> <FFX_Data.vbf> <out dir> <kind/name>...\n      bake character textures (PNG previews + .dds.phyre)\n  demaster models <iso> <FFX_Data.vbf> <out dir> all|<kind/name>...\n      PS2 meshes into the remodelled characters (run after chr; docs/models.md)\n  demaster models-debug <chr file> <FFX_Data.vbf> <kind/name>\n      print a PS2 mesh against its HD model\n  demaster materials-debug <FFX_Data.vbf> <kind/name>|<.dae.phyre file>|--variants|--states <variant path>\n      each segment's material, shader variant switches, passes and alpha threshold; every character variant; one variant's pass states\n  demaster fx <iso> <FFX_Data.vbf> <out dir> all|<id>...\n      effect textures; id: 7, magic_0007, map/bika/bika00, btlmap/bika/bika00_a, chr/mon/m028\n  demaster maps <iso> <FFX_Data.vbf> <out dir> <map|area|kind>...|all\n      field and battle map textures (PNG previews, maps.tsv + .dds.phyre)\n  demaster ui <iso> <FFX_Data.vbf> <out dir>\n      menus, portraits, title, loading screen, button glyphs, font (PNG previews + .dds.phyre, base.ftc)\n  demaster movies <iso> <FFX_Data.vbf> <mod dir> all|<name>...\n      PS2 movies as WebM (name: opn, sak, ...; ffmpeg: $FFMPEG, else found or downloaded as by build; docs/movies.md)\n  demaster movie-debug <iso> <FFX_Data.vbf> <out dir> <name> [frame]...\n      decode one PS2 movie: statistics, PNGs of the frames, the sound as WAV\n  demaster music <iso> <FFX_Data.vbf> <out dir> all|<id|name>...\n      render PS2 music tracks (musicNNN.bgm) as 48 kHz WAVs (docs/music.md)\n  demaster music-bank <bank.fsb> <out dir> [name...]\n      decode a music bank (FSB5, IMA ADPCM) to WAVs\n  demaster texanim-debug <chr file> <FFX_Data.vbf> <kind/name>\n      print a PS2 texture animation against the HD .ags",
         build::VERSION,
         build::USAGE
     );
@@ -142,6 +142,45 @@ fn main() -> Result<()> {
                 usage();
             }
             let pc = ffx_vbf::Archive::open(&a[2])?;
+            if a[3] == "--states" {
+                // a shader variant's classes, lists, pointers and pass state objects
+                // (PShaderPassD3D11 +0x18: raster +0x1c, depth +0x44, blend +0x78)
+                let b = pc.read(pc.find(&a[4]).context("no such file")?)?;
+                let e = ffx_phyre::edit::ClusterEdit::parse(&b)?;
+                for c in &e.cluster.classes {
+                    let ms: Vec<String> = c.members.iter().map(|m| format!("{}@{:#x}+{}", m.name, m.offset, m.size)).collect();
+                    println!("class {} size {} base {:?}: {}", c.name, c.size, c.base, ms.join(" "));
+                }
+                for (i, l) in e.lists.iter().enumerate() {
+                    let name = &e.cluster.classes[l.class].name;
+                    println!("list {i} {name} size {} count {}", l.object_size, l.count());
+                    for f in &l.pointer_fixups {
+                        let m = e.cluster.member_by_index(f.member()).map(|x| x.1.name.clone());
+                        println!("  ptr obj {} member {:?} field {:#x} -> list {} obj {} off {:#x} n {}", f.object(), m, f.member(), f.target_list(), f.target(), f.target_offset(), f.count());
+                    }
+                    if name.contains("PassState") || name == "PSceneRenderPass" || name.starts_with("PShaderPass") {
+                        for k in 0..l.count() {
+                            let o = l.object(k);
+                            let words: Vec<String> = o.chunks(4).map(|c| format!("{:08x}", u32::from_le_bytes([c[0], c.get(1).copied().unwrap_or(0), c.get(2).copied().unwrap_or(0), c.get(3).copied().unwrap_or(0)]))).collect();
+                            println!("  obj {k}: {}", words.join(" "));
+                        }
+                        for m in ["m_rasterDesc", "m_depthDesc", "m_blendDesc", "m_stencilRef", "m_passType", "m_passes", "m_state"] {
+                            if let Some(off) = e.cluster.member_offset(name, m) {
+                                println!("  {m} at {off:#x}");
+                            }
+                        }
+                    }
+                }
+                return Ok(());
+            }
+            if a[3] == "--variants" {
+                // every character shader variant: switches and render passes
+                for (p, v) in chralpha::Variants::get(&pc)?.iter() {
+                    let sw: Vec<&str> = v.switches.iter().filter(|x| x.1 == "1").map(|x| x.0.as_str()).collect();
+                    println!("{}\t{:?}\t{}", p.rsplit('/').next().unwrap_or(p), v.passes, sw.join(" "));
+                }
+                return Ok(());
+            }
             let p = if a[3].contains('/') && !a[3].ends_with(".phyre") {
                 let (kind, name) = a[3].split_once('/').context("kind/name")?;
                 format!("ffx_data/gamedata/ps3data/chr/{kind}/{name}/mdl/d3d11/{name}.dae.phyre")

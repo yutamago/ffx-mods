@@ -162,6 +162,13 @@ every HD placement as it is and costs a filtered horizontal downscale.
   (Wakka's movie, ffx-rust's `movie-fmv` steps) encoded 960 x 720,
   filling the 4:3.
 
+- **Against the PS2** (`tools/compare`, 2026-11-04, `docs/compare.md`,
+  "The 3D framing"): a battle (Thunder Plains, save 5) and a field
+  (salvage ship, save 1) from the same saves in PCSX2: the PS2 frame is
+  the middle 4:3 of the HD frame at the same scale in both. The battle's
+  "wider" framing in the first comparison was the replay writing only the
+  output aspect, not the mod. Cutscenes not compared.
+
 Pictures (HD left, 4:3 right; never in git):
 `~/ffx-work/demaster/research/aspect/` `besaid.png`, `djose.png`,
 `dialogue.png`, `menu.png`, `escmenu.png`, `title.png`,

@@ -262,6 +262,11 @@ impl Variants {
         self.by_path.get(&variant_path(id))
     }
 
+    /// Every indexed variant by archive path (`materials-debug --variants`).
+    pub fn iter(&self) -> impl Iterator<Item = (&String, &Variant)> {
+        self.by_path.iter()
+    }
+
     /// The see-through twin of variant `id` (an import id): the same effect
     /// and switches with `UATFOPQ` on (alpha to coverage and the alpha test,
     /// drawn in the opaque pass). `id` itself when it has `UATFOPQ`, or
@@ -269,12 +274,16 @@ impl Variants {
     /// `UATFOPQ` twin too (`ALPHA_ENABLED` off).
     pub fn blended(&self, id: &str, keep_blend: bool) -> Option<(String, &Variant)> {
         let v = self.of(id)?;
-        if v.on("UATFOPQ") || (keep_blend && v.on("ALPHA_ENABLED")) {
+        // DM_BLEND_TWIN: the `ALPHA_ENABLED` twin instead, for comparisons
+        // in the game (docs/models.md, "Alpha": its parts vanish in battle)
+        let blend_twin = std::env::var_os("DM_BLEND_TWIN").is_some();
+        let (on, off) = if blend_twin { ("ALPHA_ENABLED", "UATFOPQ") } else { ("UATFOPQ", "ALPHA_ENABLED") };
+        if v.on(on) || (keep_blend && !blend_twin && v.on(off)) {
             return Some((id.to_owned(), v));
         }
         let mut want = v.on_set();
-        want.remove("ALPHA_ENABLED");
-        want.insert("UATFOPQ");
+        want.remove(off);
+        want.insert(on);
         let (prefix, _) = id.rsplit_once('#')?;
         let dir_file = variant_path(prefix);
         let stem = dir_file.strip_suffix(".phyre")?;
@@ -586,12 +595,12 @@ pub fn debug(hd: &[u8], read: impl Fn(&str) -> Result<Option<Vec<u8>>>) -> Resul
             println!("  layout {} defs, same as the variant's: {:?}", mine.len(), theirs.map(|t| t == mine));
         }
         println!(
-            "seg {s}: {} tris, texture {}, material {m} {} alpha {:?} first pass {:?} switches {}",
+            "seg {s}: {} tris, texture {}, material {m} {} alpha {:?} passes {:?} switches {}",
             seg.indices.len() / 3,
             mat.and_then(|x| x.base_color()).map_or("-", |t| t.path.rsplit('/').next().unwrap_or("")),
             id.rsplit('#').next().unwrap_or(id),
             (mat.and_then(|x| x.parameter("AlphaThreshold")), mat.and_then(|x| x.parameter("clipPlane")), mat.and_then(|x| x.parameter("MaterialColour"))),
-            v.passes.first(),
+            v.passes,
             sw.join(" ")
         );
     }

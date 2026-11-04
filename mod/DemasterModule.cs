@@ -121,7 +121,10 @@ public sealed class DemasterModule : FhModule {
                     text($"{p.Key} = {value}: {p.What}");
                 }
             }
+            // wrapped: at the window's 560 pixels the line was cut off (seen in the game, 2026-11-04)
+            ImGui.PushTextWrapPos(0);
             ImGui.TextDisabled("Settings: demaster.toml in the mod folder. Changes need a rebuild and a restart.");
+            ImGui.PopTextWrapPos();
         }
         ImGui.End();
     }

@@ -317,6 +317,27 @@ use alpha at all.
   materials, the shader list, the face animation or the PS2 cloth (each
   ruled out by a build without it); the cause is open
   (`docs/ffx-rust-findings.md`). The `UATFOPQ` twins draw everything.
+  **Not reproduced with the current converter** (2026-11-04): the same
+  battle and frame (devsave 51, `kimahri.txt` shot `k-09`, the framing of
+  `alpha-blend-battle-lulu.png`) with c006 built three ways, the blended
+  twin (`DM_BLEND_TWIN=1`), the `UATFOPQ` twin (the default) and
+  unchanged (`DM_NO_BLEND=1`), gives three bit-identical frames, necklace
+  and collar drawn in all. So the parts that vanished came from what the
+  older build put where (it predates the PS2 cloth in the HD cloth
+  segments), not from the blended twin as such; that build is gone, so
+  the cause stays open. What the variants' pass states say
+  (`materials-debug --states`): every pass of the character variants
+  (`Opaque`, `Transparent`, `ZPrePass`, `PS2Lighting`, `FakeTransparent`,
+  `HSVPass`, ...) tests depth with `LESS_EQUAL` and writes depth;
+  `Transparent`, `PS2Lighting`, `FakeTransparent` and `HSVPass` blend
+  src alpha / 1 - src alpha; no depth bias, no stencil. The z pre-pass
+  (`PhyreScene_DrawZPrePass`) draws only materials with
+  `ADDITIONAL_ZPREPASS` (no party material has it). The battle fade
+  (`graphicCharacterInstanceSetMeshAlpha`) remaps a material's
+  `Transparent` to `FakeTransparent` while its alpha is under 1. None of
+  it lets the body behind cover a nearer blended segment; that would take
+  a draw against another depth buffer, which was not found.
+  `DM_BLEND_TWIN` stays for the next try.
 - Remodelled models (`models.*`): each PS2 triangle of the template that
   samples a texel with alpha under 240 (PS2 `0x78`; texel centres inside
   its UV triangle, its centroid texel for tiny ones; not the corner texels,

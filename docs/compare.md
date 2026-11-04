@@ -135,6 +135,7 @@ detail view is for texture content, glyph shapes and edges.
 | `ui-customize` | `field-kami0100` | Customize: equipment list on the shield, its ability list | 5 |
 | `compare-title` | `title` | title menu, cursor on Load | none |
 | `compare-battle-kami` | `battle-kami` | first command window | 5, field 34 (kami00) group 0 formation 1 |
+| `compare-field-cdsp` | `field-cdsp0000` | the field after the load (3D framing) | 1, salvage ship |
 
 The loading screen is not in the list: the PS2 shows plain black while it
 loads (from the save list to the field), and the harness's loads are too
@@ -234,13 +235,50 @@ Still different:
   kind 0; whether the title's cursor takes that path was not checked).
 - **Battle, 3D** (most of the rest): the PC camera frames the scene a
   little wider, the models stand elsewhere; it shows through every
-  region.
+  region. Since explained, the replay's fault: "The 3D framing" below.
 - **Battle, CTB**: the turn order differs (the PC puts Wakka third, the
   PS2 seventh, from the same save): the battle's state, not the draw.
 - **Battle, text**: glyph edges as in the menus; the font M digits a
   little greyer than the PS2's.
 - **Battle, Overdrive tab**: the PS2 shot catches the tab's blink at a
   lower alpha.
+
+## The 3D framing (2026-11-04)
+
+The wider battle framing came from `compare-battle-kami.txt`, not from the
+mod: the replay wrote only the output aspect (`0x00c34154` = 4/3) and not
+the camera's, so the camera kept the HD's 16/9 and the whole 16:9 frustum
+was squeezed into the 4:3 (models 3/4 as wide, more scene at the sides).
+The mod's `render.aspect` hook does both halves (`docs/screen.md`); the
+replay now also writes the PS2 screen scale fx `0x01137010` x 4/3 as
+`aspect-djose.txt` does (read back: fx 0.8, fy 0.9333 in this battle;
+the camera's stored aspect then reads 4/3).
+
+Checked against the PS2:
+
+- **Battle** (`compare-battle-kami`): the PS2 frame lines up with the
+  middle 4:3 of the HD frame (Tidus's left edge 190/1280 in the HD =
+  16/512 in the middle 4:3, PS2 15; the bird 341..453, PS2 340..460).
+  3D region (x 0..430, y 40..300 of 512 x 416): 20.6 squeezed, 18.3
+  with the camera write. Whole frame 19.3 -> 19.0. What is left is the
+  camera's place, not the projection: the PS2 camera sits a little
+  further left (the party and the monsters some 10-25 pixels left of the
+  PC's at the same size); the PS2 state was kept 250 frames into the
+  battle, the PC shot 60 frames after the command window, and the CTB
+  order differs too (another battle state). Two PC shots 120 frames
+  apart show the same camera.
+- **Field** (`compare-field-cdsp`, new: save 1 on the salvage ship deck,
+  PS2 state `field-cdsp0000`): the ship's edges, the rail and the hatch
+  line up; 3D region 18.7 squeezed, 15.6 as 4:3; whole frame 15.9. The
+  rest is lighting, Tidus's place after the load (a few pixels) and the
+  minimap (PS2: 130 pixels wide at x 15; PC: 95 at x 40; whether the
+  harness's fx write, which the mod does not make, moves it was not
+  checked).
+- Field and battle go through the same camera code (`Cam_Apply` ->
+  `PhyreScene_setCameraAspectRatio`, `g_PhyreScene3D` set in both), so
+  there is no battle-only projection. **Cutscenes** were not compared
+  with the PS2 (no PS2 state at an event); they use the same path in 3D
+  maps.
 
 ## Not done
 

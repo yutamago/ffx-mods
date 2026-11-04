@@ -15,7 +15,7 @@ Numbers refer to the rows of [`differences.md`](differences.md). Status:
 | Effect textures | 9 | done | 7,357 converted (`docs/effects.md`); brightness moved into alpha where HD does, so bright draws burn out white like the PS2 (Energy Blast confirmed by user). Field-map particles not seen in game |
 | PS2-drawn menu textures, portraits, icons, windows | 12, 22 | wip | done: title, portraits, battle atlas, pad glyphs, loading, message/choice windows, battle command windows, PS2 cursor, item icons, battle words, Overdrive tab, main menu and its Items, Abilities, Status, Equip, Overdrive, Customize, Config screens, PS2 fonts M/S, the 16x12 font at the PS2 size, the PS2 menu sequence scenes (bands), the PAL menu layout (`docs/ui.md`; compared with the PS2 in PCSX2 through injected calls, `docs/compare.md`; not in Fahrenheit). the battle HUD (help bar, CTB list, party list), the battle sequence scenes ("EKSTASE!!" tab, "BEFEHL" footer, glow, lines), the command window's numbers in the 16x12 font, the title picture at the PS2 place (compared with the PS2: battle 26.9 -> 19.3, title 51.0 -> 18.2). Todo: sphere grid, worldmap, the battle target info window and the Overdrive mini-game windows |
 | Config file + converter `build` command | all | done | `docs/config.md` |
-| Fahrenheit mod package | | wip | mod `yuta.demaster` (F8 status window), `demaster.exe`; release zip (`tools/package.cs`: mod, `demaster.exe`, `demaster.toml`, players' `README.txt`, `config.md`, `LICENSES.txt`; built and checked locally, no game data); CI (mod, Linux tests, Windows `demaster.exe` + `ffx-music-studio.exe`, zip check) and tag releases (`docs/ci.md`). Open: CI has never passed, it needs the secret `FFX_RUST_TOKEN` (fine-grained PAT, `yutamago/ffx-rust` Contents read-only, `docs/ci.md`); first release not tagged; F8 window not seen on screen |
+| Fahrenheit mod package | | wip | mod `yuta.demaster` (F8 status window), `demaster.exe`; release zip (`tools/package.cs`: mod, `demaster.exe`, `demaster.toml`, players' `README.txt`, `config.md`, `LICENSES.txt`; built and checked locally, no game data); CI (mod, Linux tests, Windows `demaster.exe` + `ffx-music-studio.exe`, zip check) and tag releases (`docs/ci.md`). Open: CI has never passed, it needs the secret `FFX_RUST_TOKEN` (fine-grained PAT, `yutamago/ffx-rust` Contents read-only, `docs/ci.md`); first release not tagged. The F8 window is seen in the real Fahrenheit install (2026-11-04: opens and closes on F8, "The PS2 files match demaster.toml (32744 files)") |
 
 ## Milestone 2: models
 
@@ -38,7 +38,7 @@ Numbers refer to the rows of [`differences.md`](differences.md). Status:
 | Item | Rows | Status |
 |---|---|---|
 | PS2 FMVs into the PC video format | 15, 21 | done | 49 of 53 (4 with 3D overlays stay HD); ffmpeg downloaded on first use (`docs/movies.md`) |
-| 4:3 aspect ratio | 14 | done | final copy squeezed to 4:3 + PS2 camera aspect; movies 960x720; 105 rooms with PS2 paintings (`docs/screen.md`). Mouse on PS2-style menus unchecked |
+| 4:3 aspect ratio | 14 | done | final copy squeezed to 4:3 + PS2 camera aspect; movies 960x720; 105 rooms with PS2 paintings (`docs/screen.md`). Battle and field framing match the PS2 in PCSX2 (`docs/compare.md`, "The 3D framing"); cutscenes not compared. Mouse on PS2-style menus unchecked |
 | PS2 2D backgrounds | 7 | done | 68 rooms at 16:9, 105 with 4:3; animated parts show one PS2 frame |
 
 ## Milestone 5: rendering
