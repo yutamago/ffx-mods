@@ -36,7 +36,7 @@ writes `<out>/efl/x/<HD path>` and a preview per file
 | The 16x12 font at the PS2's size, the menu sequence scenes (`mod/Ps2Menu.cs`, below) | 0 | compared with the PS2 in PCSX2 (`docs/compare.md`) through injected game calls |
 | The PAL menu layout (`jppc/menu/menu_script.bin`, below, "The menu layout data") | 1 | compared with the PS2 (Config) |
 | The battle HUD: help bar, CTB list, party list (`mod/BattleHudPatches.cs`), the battle sequence scenes (BEFEHL footer, glow, lines; `mod/BattleSeqPatches.cs`), command window numbers in the 16x12 font (below, "The battle HUD", "The battle sequence scenes") | 0 | compared with the PS2 (`compare-battle-kami`) through injected game calls |
-| The world map: the PS2 picture (`sgjob.rs`) and its location plates (`mod/WorldMapPatches.cs`, below, "The world map") | 8 (`worldmap`, every menu folder) | not seen in the game: `tools/replays/ui-worldmap.txt` drafted, not run; no PS2 save state |
+| The world map: the PS2 picture (`sgjob.rs`) and its location plates (`mod/WorldMapPatches.cs`, below, "The world map") | 8 (`worldmap`, every menu folder) | not seen in the game: `tools/replays/ui-worldmap.txt`'s `call 0x00821750 0x17` opens the main menu, not the map; no PS2 save state |
 | The sphere grid's PS2 texture pages (`sgjob.rs`, below, "The sphere grid") | 34 (`menu/abmap/dat00`, `dat12`) | not seen in the game: `tools/replays/ui-spheregrid.txt` drafted, not run |
 
 68 files in all; 20 HD textures have no PS2 counterpart (listed by
@@ -1095,8 +1095,11 @@ Rikku (Mix), Yuna and the aeons have no window of their own: their Overdrives ar
 (BattlePatches' sub windows: kinds 1-4, 6, 0xe, 0x11; Mix's two item picks
 `TODrawWaitBtlWinPrepare`), already drawn the PS2 way. Wakka's reels (texture 0x13) stay as the PC draws them.
 
-**Checked.** Builds only (mod, `tools/calllist`). Replays for the harness: `tools/replays/
-ui-battle-limit-tidus.txt` (fx-overdrive's battle, Spiral Cut, shot in the bar's state 4) and the
+**Checked.** In the harness (2026-11-04): `ui-battle-limit-tidus.txt` runs and its PS2 shot shows
+the bar, the hit zone, the marker, the timer digits ("2.01" in shapes 480..) and the prompt at the
+PS2 places over the battle (no PC backdrop); the prompt's button glyph is followed by a gap (its
+advance scaled by the PS2 size's x factor; open). The rest was built only. Replays for the
+harness: `tools/replays/ui-battle-limit-tidus.txt` (fx-overdrive's battle, Spiral Cut, shot in the bar's state 4) and the
 untested drafts `ui-battle-limit-auron.txt`, `-lulu.txt`, `-wakka.txt` (the character alone in
 front, gauge full; whether the game takes empty party slots is a guess), through `@ps2limit`
 (jmps at the PC draws, `FFX_HOOK_DISABLE=replacements`). Not compared with the PS2: no save state

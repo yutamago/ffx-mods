@@ -135,6 +135,8 @@ detail view is for texture content, glyph shapes and edges.
 | `ui-customize` | `field-kami0100` | Customize: equipment list on the shield, its ability list | 5 |
 | `compare-title` | `title` | title menu, cursor on Load | none |
 | `compare-battle-kami` | `battle-kami` | first command window | 5, field 34 (kami00) group 0 formation 1 |
+| `compare-battle-info` | `battle-kami` | the target info window: `g_BtlMenuLook` set (PS2 `0x00317335`, PC `0x0112a915`), Attack, the first monster | 5 |
+| `ui-spheregrid` | `field-cdsp0000` | the sphere grid after entering it (cursor on Tidus's node, "Nichts vorhanden.") | 1 |
 | `compare-field-cdsp` | `field-cdsp0000` | the field after the load (3D framing) | 1, salvage ship |
 
 The loading screen is not in the list: the PS2 shows plain black while it
@@ -243,6 +245,55 @@ Still different:
 - **Battle, Overdrive tab**: the PS2 shot catches the tab's blink at a
   lower alpha.
 
+## Results (2026-11-04): info window, text line, cursor, sphere grid
+
+Exact view, mean absolute difference (before -> after):
+
+| Scene | Region | Before | After |
+|---|---|---|---|
+| Info window (`compare-battle-info`; before = the HD shot of the same frame) | all | 29.9 | 20.3 |
+| | info | 34.8 | 16.9 |
+| | help (the info line) | 39.9 | 29.4 |
+| Title | all | 18.5 | 18.2 |
+| | menu (the cursor) | 5.1 | 4.1 |
+| Battle (`compare-battle-kami`) | all | 19.0 | 18.7 |
+| Sphere grid (before = the same replay without the PS2 `abmap` pages) | all | 30.7 | 30.9 |
+| Menus (main, Items, Abilities, Overdrive, Status, Config, Equip x2, Customize x2) | all | 5.1, 5.6, 3.1, 4.1, 8.2, 6.5, 5.4, 7.6, 5.5, 6.8 | 5.2, 5.8, 3.2, 4.1, 8.4, 6.6, 5.5, 7.7, 5.6, 6.9 |
+
+- **Info window**: frame, INFO tab, HP, the two element rows and their lamps
+  match the PS2 to the pixel; the region's rest is the 3D scene behind it
+  (the PS2 camera turns to the target differently). The help-bar line sits in
+  the PS2 box; its scroll position is the PS2 shot's by construction (the
+  replay draws it 60 pixels in); its box starts 2 pixels left of the PS2's
+  (the help text "A: Mergin" is 67 wide here, 69 on the PS2). Not seen: the
+  status row, the scrolling in motion.
+- **Text line**: the 16x12 text now starts on the PS2's line (help line caps
+  at 13.8 / 14.0 PS2 lines, zoomed crops); the whole-frame numbers move by
+  0.1-0.2 either way, the glyph edges (the PC's 4x filtered pages against
+  the PS2's 1:1 sampling) dominate the text's difference.
+- **Title cursor**: the PS2 hand and ball at the PS2's place (ball 307 vs
+  308); the rest of the title is unchanged (the banner, intended).
+- **Sphere grid**: the PS2 texture pages change nothing measurable: the PS2
+  camera shows the grid about 1.6 times closer, the PS2 panels (the
+  character window, the help window, the "Status anzeigen" prompt) are blue
+  framed windows where the PC draws its HD panels, the PS2's node links are
+  bright lines, its name tag a brown plate. All of that is the panels' draw
+  and the camera, not the textures (`docs/ui.md`, "The sphere grid": open).
+
+Unchecked against the PS2 (no PS2 state, the code and data only):
+
+- **The Overdrive mini-game windows** (`ui-battle-limit-tidus` and the
+  Auron, Lulu and Wakka drafts; `docs/ui.md`). The Tidus replay runs: the
+  PS2-way bar, hit zone, marker, timer digits and prompt draw at the PS2
+  places in the harness (`/mnt/c/shots/compare/agent-ad97-limit/pair.png`
+  while it lasts). Seen there: the prompt "Press (C) at the right time!" has
+  a gap after the button glyph (the glyph's advance is scaled by the PS2
+  size's x factor 1.85; the PS2's glyph width not known). Auron, Lulu and
+  Wakka were not run. A PS2 state needs a battle with a full gauge (the PS2
+  actor's gauge address not looked up).
+- **The world map** (`ui-worldmap`): the replay's `call 0x00821750 0x17`
+  opens the main menu, not the map, so the hook's draw was not seen either.
+
 ## The 3D framing (2026-11-04)
 
 The wider battle framing came from `compare-battle-kami.txt`, not from the
@@ -282,7 +333,7 @@ Checked against the PS2:
 
 ## Not done
 
-- Unchecked against the PS2 (no save state reaches them): the world map (`ui-worldmap`; the comparison saves have not seen it) and the sphere grid (`ui-spheregrid`; reachable from save 1, a state is cheap to add: main menu, Sphere Grid). Both are converted from the code and data only.
+- Unchecked against the PS2: the world map and the Overdrive mini-game windows (above, "Results (2026-11-04): info window, ...").
 - More scenes: sphere grid, dialogue windows, the battle sub-menus, shops,
   field maps and models (the PS2 states are cheap to add: walk there with a
   script and `keep`; the PC side needs a replay at the same place).
