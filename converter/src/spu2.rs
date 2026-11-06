@@ -40,6 +40,48 @@ pub struct ReverbPreset {
     pub size: u32,
 }
 
+/// One 16-byte PS-ADPCM block (shift/filter, flags, 28 nibbles) into 28
+/// samples; `hist` holds the last two decoded samples and moves on. The
+/// flags (byte 1: 1 loop end, 2 repeat, 4 loop start) are the caller's.
+pub fn decode_block(b: &[u8], hist: &mut [i32; 2]) -> [i16; 28] {
+    let shift = (b[0] & 0xf) as i32;
+    let filter = ((b[0] >> 4) as usize).min(4);
+    let (f0, f1) = FILTERS[filter];
+    let shift = if shift > 12 { 9 } else { shift };
+    let mut out = [0i16; 28];
+    for (i, o) in out.iter_mut().enumerate() {
+        let byte = b[2 + i / 2];
+        let nib = if i & 1 == 0 { byte & 0xf } else { byte >> 4 };
+        let s = ((i32::from(nib as i8) << 28) >> 28) << 12 >> shift;
+        let v = s + ((hist[0] * f0 + hist[1] * f1 + 32) >> 6);
+        let v = v.clamp(-0x8000, 0x7fff);
+        hist[1] = hist[0];
+        hist[0] = v;
+        *o = v as i16;
+    }
+    out
+}
+
+/// The envelope level (0..=0x7fff) per 48 kHz sample of a voice keyed on
+/// with ADSR registers `adsr1`/`adsr2` and keyed off after `key_off_at`
+/// samples, for at most `max` samples (ends early when the release is done).
+/// FFX Music Studio's SoundFont export fits its envelopes to this.
+pub fn envelope_trace(adsr1: u16, adsr2: u16, key_off_at: usize, max: usize) -> Vec<i32> {
+    let mut v = Voice { adsr1, adsr2, phase: Phase::Attack, ..Voice::default() };
+    let mut out = Vec::new();
+    for i in 0..max {
+        if i == key_off_at {
+            v.key_off();
+        }
+        v.envelope();
+        out.push(v.level);
+        if v.phase == Phase::Off {
+            break;
+        }
+    }
+    out
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Phase {
     Off,
@@ -158,25 +200,12 @@ impl Voice {
     fn decode(&mut self, ram: &[u8]) {
         let a = self.nax as usize;
         let b = ram.get(a..a + 16).unwrap_or(&[0; 16]);
-        let shift = (b[0] & 0xf) as i32;
-        let filter = ((b[0] >> 4) as usize).min(4);
         let flags = b[1];
         if flags & 4 != 0 {
             self.lsa = self.nax;
         }
         self.block_flags = flags;
-        let (f0, f1) = FILTERS[filter];
-        let shift = if shift > 12 { 9 } else { shift };
-        for i in 0..28 {
-            let byte = b[2 + i / 2];
-            let nib = if i & 1 == 0 { byte & 0xf } else { byte >> 4 };
-            let s = ((i32::from(nib as i8) << 28) >> 28) << 12 >> shift;
-            let v = s + ((self.hist[0] * f0 + self.hist[1] * f1 + 32) >> 6);
-            let v = v.clamp(-0x8000, 0x7fff);
-            self.hist[1] = self.hist[0];
-            self.hist[0] = v;
-            self.block[i] = v as i16;
-        }
+        self.block = decode_block(b, &mut self.hist);
         self.pos = 0;
     }
 

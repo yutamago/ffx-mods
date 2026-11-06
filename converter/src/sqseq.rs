@@ -257,6 +257,29 @@ impl Wd {
         Some(first + nreg * 0x20 + size)
     }
 
+    /// `FUN_00101c70`: the region instrument `inst` plays for a key and
+    /// velocity (the first of a stereo pair, flag 1).
+    pub fn region_for(&self, inst: usize, key: u8, vel: u8) -> usize {
+        let rs = &self.regions;
+        let mut r = self.instruments[inst];
+        if rs[r].flags & 0x30000 != 0 {
+            while rs[r].flags & 0x200 == 0 && rs[r].key_hi < key as i8 {
+                if rs[r].flags & 1 != 0 {
+                    r += 1;
+                }
+                r += 1;
+            }
+            let k = rs[r].key_hi;
+            while rs[r].flags & 0x200 == 0 && rs[r].vel_hi < vel && rs[r].key_hi == k {
+                if rs[r].flags & 1 != 0 {
+                    r += 1;
+                }
+                r += 1;
+            }
+        }
+        r.min(rs.len() - 1)
+    }
+
     /// The regions of instrument `i` (up to the next instrument's first).
     pub fn instrument_regions(&self, i: usize) -> &[Region] {
         let Some(&first) = self.instruments.get(i) else { return &[] };
@@ -659,6 +682,64 @@ pub struct Marks {
     pub dropped: u32,
 }
 
+/// What the sequencer's commands did (FFX Music Studio's MIDI export): see
+/// [`Song::log`].
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum SeqEvent {
+    /// A key-on command (`0x10`-`0x13`), queued for the next interrupt.
+    NoteOn { key: u8, vel: u8 },
+    /// A queued key-on that did not start: no voice was free (the driver
+    /// then drops the rest of the interrupt's key-ons too). Logged at the
+    /// tick of its `NoteOn`.
+    Dropped { key: u8 },
+    /// A key-off of the track's key that takes effect (not tied).
+    NoteOff { key: u8 },
+    /// Tie on (`0x2a`: the next key-ons reuse the voice) or off (`0x2b`).
+    Tie(bool),
+    /// Program change (`0x20`) to an instrument of the bank.
+    Program(usize),
+    /// Sustain pedal (`0x3c`).
+    Pedal(bool),
+    /// Pitch bend `-0x2000..0x1fff` (`0x5c`) and the bend range in
+    /// semitones (`0x5d`).
+    Bend(i16),
+    BendRange(i8),
+    /// The track's volume, expression (`0..=0x3fff`, linear) and pan
+    /// position (`0x40` left, `0x80` centre, `0xc0` right) after the tick's
+    /// commands and slides, when they changed.
+    Volume(i32),
+    Expression(i32),
+    Pan(i32),
+    /// The reverb (wet) send of the track's voices on or off (`0x60`-`0x62`).
+    Wet(bool),
+    /// Tempo in BPM (`0x08`).
+    Tempo(u8),
+    /// The reverb depth (`0x0a`, `0x0b` target): `x / 128` of full.
+    Depth(i8),
+    /// The song's loop point (`0x02` in track 1) and the jump back to it.
+    LoopPoint,
+    LoopJump,
+    /// A counted loop: its start (`0x04`) and its end command (`0x05`) with
+    /// the pass that just ended and the count.
+    RepeatStart,
+    RepeatEnd { pass: u16, count: u16 },
+    /// The track's end (`0x00`).
+    End,
+}
+
+/// One logged event: the tick (sequence ticks played since the start, not
+/// jumping back with the loops: 48 a quarter note at the song's tempo) and
+/// the track.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct LogEntry {
+    pub tick: u64,
+    /// Output frame of the interrupt that played the tick (48 kHz; key-ons
+    /// sound from the next interrupt, `FRAMES_PER_IRQ` later).
+    pub frame: u64,
+    pub track: usize,
+    pub event: SeqEvent,
+}
+
 #[derive(Clone)]
 pub struct Song {
     tab: Arc<Tables>,
@@ -695,6 +776,13 @@ pub struct Song {
     tempo_mod_n: i32,
     /// Interrupts so far (the driver's 60 Hz work runs every 4th).
     irqs: u32,
+    /// When `Some`, every command's effect is appended here (FFX Music
+    /// Studio's MIDI export). Off by default; it changes nothing else.
+    pub log: Option<Vec<LogEntry>>,
+    /// Ticks played since the start (the log's clock).
+    ticks_run: u64,
+    /// Per track the volume, expression and pan last logged.
+    log_mix: Vec<[i32; 3]>,
 }
 
 /// Output frames per timer interrupt (48 kHz / 240 Hz).
@@ -745,6 +833,20 @@ impl Song {
             tempo_mod_step: 0,
             tempo_mod_n: 0,
             irqs: 0,
+            log: None,
+            ticks_run: 0,
+            log_mix: Vec::new(),
+        }
+    }
+
+    /// Sequence ticks played since the start (loops included).
+    pub fn ticks_run(&self) -> u64 {
+        self.ticks_run
+    }
+
+    fn note(&mut self, track: usize, event: SeqEvent) {
+        if let Some(l) = &mut self.log {
+            l.push(LogEntry { tick: self.ticks_run, frame: self.frame, track, event });
         }
     }
 
@@ -962,9 +1064,11 @@ impl Song {
             let alive = self.tick(1);
             self.tick += 1;
             if alive != 0 {
+                self.ticks_run += 1;
                 break;
             }
             if self.mods.no_loop {
+                self.ticks_run += 1;
                 if self.song_flags & 1 != 0 {
                     // what `end_track` does when a song without loop ends
                     for v in self.voices.iter_mut().filter(|v| v.track.is_some()) {
@@ -983,8 +1087,10 @@ impl Song {
                 continue;
             }
             if self.song_flags & 1 == 0 {
+                self.ticks_run += 1;
                 break;
             }
+            self.note(1, SeqEvent::LoopJump);
             let s = self.snapshot.clone().expect("loop point");
             self.active = s.active;
             self.tempo = s.tempo;
@@ -1058,6 +1164,9 @@ impl Song {
                     }
                     self.tracks[ti].wait += d;
                 }
+                if self.log.is_some() {
+                    self.log_mix(ti);
+                }
                 if self.dirty != 0 || self.mix_dirty {
                     let tflags = self.tracks[ti].flags;
                     for v in self.voices.iter_mut().filter(|v| v.track == Some(ti)) {
@@ -1076,6 +1185,23 @@ impl Song {
             }
         }
         self.active
+    }
+
+    /// Logs the track's volume, expression and pan when they changed.
+    fn log_mix(&mut self, ti: usize) {
+        if self.log_mix.len() < self.tracks.len() {
+            self.log_mix.resize(self.tracks.len(), [-1; 3]);
+        }
+        let t = &self.tracks[ti];
+        let now = [t.vol.v >> 12, t.expr.v >> 12, (t.pan.v >> 12).clamp(0, 0xff)];
+        let last = self.log_mix[ti];
+        self.log_mix[ti] = now;
+        let ev = [SeqEvent::Volume(now[0]), SeqEvent::Expression(now[1]), SeqEvent::Pan(now[2])];
+        for k in 0..3 {
+            if now[k] != last[k] {
+                self.note(ti, ev[k]);
+            }
+        }
     }
 
     /// `FUN_001057a0`: slides and LFO delays over `m` ticks.
@@ -1142,10 +1268,13 @@ impl Song {
                 let t = &mut self.tracks[ti];
                 t.sp = (t.sp + 1) & 3;
                 t.stack[t.sp] = (t.pos.expect("pos"), 0);
+                self.note(ti, SeqEvent::RepeatStart);
             }
             0x05 => {
                 let n = self.arg(ti);
                 let n = if n == 0 { 256 } else { u16::from(n) };
+                let pass = self.tracks[ti].stack[self.tracks[ti].sp].1 + 1;
+                self.note(ti, SeqEvent::RepeatEnd { pass, count: n });
                 let t = &mut self.tracks[ti];
                 t.stack[t.sp].1 += 1;
                 if t.stack[t.sp].1 != n {
@@ -1161,6 +1290,7 @@ impl Song {
             0x08 => {
                 let b = self.arg(ti);
                 self.tempo = i32::from(b) << 12;
+                self.note(ti, SeqEvent::Tempo(b));
             }
             0x09 => {
                 // tempo slide: the driver keeps it but never applies it
@@ -1171,11 +1301,13 @@ impl Song {
                 let b = self.arg(ti) as i8;
                 self.depth.set(i32::from(b) << 12);
                 self.depth_dirty = true;
+                self.note(ti, SeqEvent::Depth(b));
             }
             0x0b => {
                 let n = self.arg(ti);
                 let b = self.arg(ti) as i8;
                 self.depth.to(i32::from(b), if n == 0 { 256 } else { u32::from(n) });
+                self.note(ti, SeqEvent::Depth(b));
             }
             0x0c => {
                 self.arg(ti);
@@ -1218,6 +1350,7 @@ impl Song {
                 if p < self.wd.instruments.len() {
                     t.inst = Some(p);
                     t.adsr_ovr = [-1; 8];
+                    self.note(ti, SeqEvent::Program(p));
                 } else {
                     t.inst = None;
                 }
@@ -1278,8 +1411,12 @@ impl Song {
             0x2a => {
                 let t = &mut self.tracks[ti];
                 t.flags2 = t.flags2 & !T2_KEYED | T2_TIE;
+                self.note(ti, SeqEvent::Tie(true));
             }
-            0x2b => self.tracks[ti].flags2 &= !T2_TIE,
+            0x2b => {
+                self.tracks[ti].flags2 &= !T2_TIE;
+                self.note(ti, SeqEvent::Tie(false));
+            }
             0x2c => {
                 let n = self.arg_varlen(ti);
                 let b = self.arg(ti) as i8;
@@ -1331,6 +1468,7 @@ impl Song {
             0x3c => {
                 let b = self.arg(ti);
                 let on = b != 0;
+                self.note(ti, SeqEvent::Pedal(on));
                 let t = &mut self.tracks[ti];
                 if on { t.flags |= T_PEDAL } else { t.flags &= !T_PEDAL }
                 self.for_voices(ti, |v| if on { v.flags |= T_PEDAL } else { v.flags &= !T_PEDAL });
@@ -1441,6 +1579,7 @@ impl Song {
                 t.bend_raw = raw as i16;
                 t.bend = (raw * i32::from(t.bend_range) >> 5) as i16;
                 self.bend(ti);
+                self.note(ti, SeqEvent::Bend(raw as i16));
             }
             0x5d => {
                 let r = self.arg(ti) as i8;
@@ -1448,15 +1587,18 @@ impl Song {
                 t.bend_range = r;
                 t.bend = (i32::from(t.bend_raw) * i32::from(r) >> 5) as i16;
                 self.bend(ti);
+                self.note(ti, SeqEvent::BendRange(r));
             }
             0x60 => {
                 self.tracks[ti].flags |= 0x3c00;
                 self.mix_dirty = true;
+                self.note(ti, SeqEvent::Wet(true));
             }
             0x61 => {
                 let t = &mut self.tracks[ti];
                 t.flags = t.flags & !0x3000 | 0xc00;
                 self.mix_dirty = true;
+                self.note(ti, SeqEvent::Wet(false));
             }
             0x62 => {
                 let a = self.arg(ti);
@@ -1475,6 +1617,7 @@ impl Song {
                 };
                 t.flags = f;
                 self.mix_dirty = true;
+                self.note(ti, SeqEvent::Wet(f & 0x3000 != 0));
             }
             0x64 | 0x65 | 0x68 | 0x69 => {
                 let bit = if op < 0x68 { 0x200 } else { 0x100 };
@@ -1547,6 +1690,7 @@ impl Song {
     fn end_track(&mut self, ti: usize) {
         self.tracks[ti].flags2 = 0;
         self.key_off(ti);
+        self.note(ti, SeqEvent::End);
         for v in self.voices.iter_mut().filter(|v| v.track == Some(ti)) {
             v.tflags &= 0xee;
         }
@@ -1566,6 +1710,7 @@ impl Song {
             return;
         }
         self.song_flags |= 1;
+        self.note(1, SeqEvent::LoopPoint);
         let adj = 1 - self.tracks[1].wait;
         let mut p = self.tracks[1].pos.expect("pos");
         let d = varlen(&self.bgm.data, &mut p) as i32;
@@ -1590,6 +1735,8 @@ impl Song {
 
     /// `FUN_00102d50`: queues a key-on.
     fn key_on(&mut self, ti: usize) {
+        let (key, vel) = (self.tracks[ti].key, self.tracks[ti].vel);
+        self.note(ti, SeqEvent::NoteOn { key, vel });
         let t = &mut self.tracks[ti];
         if self.queue.len() < 48 {
             self.queue.push(KeyOn { track: ti, key: t.key, vel: t.vel, tflags: t.tflags });
@@ -1605,6 +1752,7 @@ impl Song {
         }
         let key = t.key;
         t.porta_n = 0;
+        self.note(ti, SeqEvent::NoteOff { key });
         self.queue.retain(|k| !(k.track == ti && k.key == key));
         for v in self.voices.iter_mut().filter(|v| v.track == Some(ti) && v.key == key) {
             v.flags |= 2;
@@ -1658,24 +1806,7 @@ impl Song {
 
     /// `FUN_00101c70`: the region for a key and velocity.
     fn region(&self, inst: usize, key: u8, vel: u8) -> usize {
-        let rs = &self.wd.regions;
-        let mut r = self.wd.instruments[inst];
-        if rs[r].flags & 0x30000 != 0 {
-            while rs[r].flags & 0x200 == 0 && rs[r].key_hi < key as i8 {
-                if rs[r].flags & 1 != 0 {
-                    r += 1;
-                }
-                r += 1;
-            }
-            let k = rs[r].key_hi;
-            while rs[r].flags & 0x200 == 0 && rs[r].vel_hi < vel && rs[r].key_hi == k {
-                if rs[r].flags & 1 != 0 {
-                    r += 1;
-                }
-                r += 1;
-            }
-        }
-        r.min(rs.len() - 1)
+        self.wd.region_for(inst, key, vel)
     }
 
     /// `FUN_00102468` + `FUN_00101d20`: starts a queued note.
@@ -1802,8 +1933,17 @@ impl Song {
         }
         let mut kon = 0u64;
         let queue = std::mem::take(&mut self.queue);
-        for k in &queue {
+        for (i, k) in queue.iter().enumerate() {
             if !self.start_note(spu, *k, &mut kon) {
+                if self.log.is_some() {
+                    // queued in the tick before this interrupt
+                    let at = self.ticks_run.saturating_sub(1);
+                    for k in &queue[i..] {
+                        if let Some(l) = &mut self.log {
+                            l.push(LogEntry { tick: at, frame: self.frame, track: k.track, event: SeqEvent::Dropped { key: k.key } });
+                        }
+                    }
+                }
                 break;
             }
         }
