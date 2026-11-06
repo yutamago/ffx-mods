@@ -211,7 +211,7 @@ sample in `ffx_music_ps2_bank00.fsb` is named after the soundtrack
 ("1_09_battle_theme", disc 1 track 9; "m_NN" for the sphere theater's
 numbers); `musicjob::TRACKS` keeps one PS2 sequence per sample. Where two
 ids share an event (149/160, 157/179, 166/181) only one carried the name.
-The studio now shows a name for every sequence, the unofficial ones marked
+FFX Music Studio (its own repository now) shows a name for every sequence, the unofficial ones marked
 "(proposed)" (`library::PROPOSED`).
 
 | id | where the game plays it | what it is | proposed name |

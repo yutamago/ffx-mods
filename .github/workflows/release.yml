@@ -1,8 +1,7 @@
 # SPDX-License-Identifier: MIT
 # Pushing a tag such as v0.2.0 builds everything as CI does (build.yml), with
 # that version in the converter and the mod, and publishes a GitHub release
-# with the mod zip (unpacks straight into the Fahrenheit folder) and
-# ffx-music-studio.exe. A tag with a "-" (v0.2.0-alpha) makes a prerelease.
+# with the mod zip (unpacks straight into the Fahrenheit folder). A tag with a "-" (v0.2.0-alpha) makes a prerelease.
 # Needs the FFX_RUST_TOKEN secret (docs/ci.md).
 name: Release
 
@@ -44,10 +43,8 @@ jobs:
         \`mods\\yuta.demaster\\demaster.toml\` and run \`mods\\yuta.demaster\\demaster.exe\`.
         The zip's README.txt has the details. No game data is included: you need an image of
         your own Final Fantasy X PS2 disc and the Steam HD Remaster.
-
-        \`ffx-music-studio.exe\` (optional) plays and edits the PS2 music of your disc.
         EOF
-        args=(release create "$TAG" "dist/yuta.demaster-$TAG.zip" dist/ffx-music-studio.exe
+        args=(release create "$TAG" "dist/yuta.demaster-$TAG.zip"
               --repo "$REPO" --verify-tag --title "FFX Demaster $TAG"
               --notes-file notes.md --generate-notes)
         if [[ "$TAG" == *-* ]]; then args+=(--prerelease); fi

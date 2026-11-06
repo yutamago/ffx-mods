@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: MIT
 # CI: builds and tests everything, and packages the release zip as an artifact.
 #   mod        the C# mod (Linux; needs no secret)
-#   linux      converter and FFX Music Studio tests (Linux)
-#   windows    demaster.exe and ffx-music-studio.exe (MSVC, static CRT), the
+#   linux      converter tests (Linux)
+#   windows    demaster.exe (MSVC, static CRT), the
 #              release zip (tools/package.cs) with a check that it holds no
 #              game data
 # release.yml calls this workflow with the tag, so a release is built the same way.
@@ -63,7 +63,7 @@ jobs:
         retention-days: 7
 
   linux:
-    name: Converter and studio tests (Linux)
+    name: Converter tests (Linux)
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v7
@@ -77,12 +77,8 @@ jobs:
 
     - uses: Swatinem/rust-cache@v2
 
-    # The studio's window (eframe: winit, glutin) builds against these.
-    - name: System libraries
-      run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libwayland-dev libxkbcommon-dev
-
     - name: Test
-      run: cargo test --locked -p demaster -p ffx-music-studio -p demaster-live
+      run: cargo test --locked -p demaster -p demaster-live
 
   windows:
     name: Windows build and package
@@ -107,11 +103,11 @@ jobs:
 
     # --target applies .cargo/config.toml's +crt-static: no Visual C++ runtime needed.
     # A release sets DEMASTER_VERSION, which the mod compares with its own version.
-    - name: Build demaster.exe and ffx-music-studio.exe
+    - name: Build demaster.exe
       run: |
         version="${TAG#v}"
         if [ -n "$version" ]; then export DEMASTER_VERSION="$version"; fi
-        cargo build --locked --release --target x86_64-pc-windows-msvc -p demaster -p ffx-music-studio
+        cargo build --locked --release --target x86_64-pc-windows-msvc -p demaster
         cargo build --locked --release --target i686-pc-windows-msvc -p demaster-live --lib
 
     - name: Check demaster.exe runs
@@ -153,10 +149,4 @@ jobs:
       with:
         name: zip
         path: ${{ env.ZIP }}
-        if-no-files-found: error
-
-    - uses: actions/upload-artifact@v7
-      with:
-        name: studio
-        path: target/x86_64-pc-windows-msvc/release/ffx-music-studio.exe
         if-no-files-found: error
