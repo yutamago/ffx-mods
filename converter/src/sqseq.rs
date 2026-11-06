@@ -956,6 +956,46 @@ impl Song {
         ext.queue.entry(tick).or_default().push((ti, cmd.to_vec()));
     }
 
+    /// External input: a new header (song volume, reverb mode and depth,
+    /// flags), as if the song had started with it; a reverb mode that
+    /// changes clears the work area.
+    pub fn ext_set_header(&mut self, spu: &mut Spu2, h: ExtHeader) {
+        if self.ext.is_none() || ExtHeader::of(&self.bgm) == h {
+            return;
+        }
+        let old = ExtHeader::of(&self.bgm);
+        let b = Arc::make_mut(&mut self.bgm);
+        b.volume = h.volume;
+        b.reverb_mode = h.reverb_mode;
+        b.reverb_depth = h.reverb_depth;
+        b.flags = h.flags;
+        if h.reverb_mode != old.reverb_mode {
+            let mode = usize::from(h.reverb_mode);
+            if mode != 0 && mode < self.tab.reverb.len() {
+                spu.set_reverb(0, self.tab.reverb[mode]);
+                spu.set_reverb(1, self.tab.reverb[mode]);
+            } else {
+                spu.reverb_off();
+            }
+        }
+        if h.reverb_depth != old.reverb_depth {
+            let d = if h.reverb_depth != 0 { i32::from(h.reverb_depth) << 4 } else { 0x7fff << 4 };
+            self.depth = Slide { v: d, ..Slide::default() };
+            self.depth_dirty = true;
+        }
+        if h.flags & 0x10000 != old.flags & 0x10000 {
+            for t in &mut self.tracks {
+                if h.flags & 0x10000 != 0 {
+                    t.tflags |= 0x10;
+                    t.flags2 &= !T2_NO_AUTO_OFF;
+                } else {
+                    t.tflags &= !0x10;
+                    t.flags2 |= T2_NO_AUTO_OFF;
+                }
+            }
+        }
+    }
+
     /// External input: commands waiting for their tick.
     pub fn ext_pending(&self) -> usize {
         self.ext.as_ref().map_or(0, |e| e.queue.values().map(Vec::len).sum())
