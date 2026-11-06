@@ -540,6 +540,9 @@ struct Track {
     detune: i16,
     scale: i8,
     bend_range: i8,
+    /// External input: the track has played `0x00` (no slides, no pan LFO)
+    /// until its next command.
+    ext_off: bool,
 }
 
 impl Track {
@@ -573,6 +576,7 @@ impl Track {
             detune: 0,
             scale: 0,
             bend_range: 2,
+            ext_off: false,
         }
     }
 }
@@ -725,6 +729,66 @@ pub enum SeqEvent {
     RepeatEnd { pass: u16, count: u16 },
     /// The track's end (`0x00`).
     End,
+    /// A command the typed events above do not cover, as stored: the
+    /// envelope (`0x30`-`0x39`), portamento and pitch slide (`0x28`, `0x29`,
+    /// `0x2c`), the voice flags (`0x3d`-`0x3f`), the LFOs (`0x40`-`0x56`),
+    /// pitch scale and detune (`0x58`-`0x5b`), the mix switches (`0x60`-
+    /// `0x62`, `0x64`-`0x69`) and the depth slide (`0x0b`). `args` holds its
+    /// arguments in order (a variable-length one as its value), the rest 0.
+    Raw { op: u8, args: [u32; 3] },
+}
+
+/// Commands logged as [`SeqEvent::Raw`].
+fn raw_logged(op: u8) -> bool {
+    matches!(op, 0x0b | 0x28 | 0x29 | 0x2c | 0x30..=0x39 | 0x3d..=0x3f | 0x40..=0x56 | 0x58..=0x5b | 0x60..=0x62 | 0x64..=0x69)
+}
+
+/// Pseudo commands of the external input ([`Song::ext_command`]): values the
+/// sequence reaches only through slides, set at once. Volume and expression
+/// `0..=0x3fff` (two bytes, little endian), the pan position (`0x80` centre;
+/// two bytes, signed), the mix switches (one byte: bit 0 dry left, 1 dry
+/// right, 2 wet left, 3 wet right, as `0x60`-`0x62` set them).
+pub const EXT_VOLUME: u8 = 0x80;
+pub const EXT_EXPRESSION: u8 = 0x81;
+pub const EXT_PAN: u8 = 0x82;
+pub const EXT_MIX: u8 = 0x83;
+/// The song's end (what the last `0x00` of a song without loop does: every
+/// voice keyed off and let go, the sustain pedal too).
+pub const EXT_SONG_END: u8 = 0x84;
+
+/// The header of an external song ([`Song::external`]): what a `.bgm`
+/// header gives the driver.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ExtHeader {
+    /// The song volume (`0..=0x7f`).
+    pub volume: u8,
+    /// Reverb mode (`libsd`: 0 off, 1-9).
+    pub reverb_mode: u8,
+    /// Reverb depth (0: full).
+    pub reverb_depth: i16,
+    /// Header flags (`0x10000`: automatic key-offs, voice flag `0x10`).
+    pub flags: u32,
+}
+
+impl Default for ExtHeader {
+    fn default() -> Self {
+        ExtHeader { volume: 0x7f, reverb_mode: 0, reverb_depth: 0, flags: 0 }
+    }
+}
+
+impl ExtHeader {
+    pub fn of(bgm: &Bgm) -> Self {
+        ExtHeader { volume: bgm.volume, reverb_mode: bgm.reverb_mode, reverb_depth: bgm.reverb_depth, flags: bgm.flags }
+    }
+}
+
+/// Commands from outside waiting for their tick.
+#[derive(Debug, Clone, Default)]
+struct Ext {
+    /// By tick: (track, command bytes), in the order given.
+    queue: std::collections::BTreeMap<u64, Vec<(usize, Vec<u8>)>>,
+    /// The commands of the tick being played.
+    now: Vec<(usize, Vec<u8>)>,
 }
 
 /// One logged event: the tick (sequence ticks played since the start, not
@@ -783,6 +847,11 @@ pub struct Song {
     ticks_run: u64,
     /// Per track the volume, expression and pan last logged.
     log_mix: Vec<[i32; 3]>,
+    /// External input (FFX PS2 Sound): see [`Song::external`].
+    ext: Option<Box<Ext>>,
+    /// The command being carried out from the external input, and where
+    /// its next argument is.
+    ext_src: Option<(Vec<u8>, usize)>,
 }
 
 /// Output frames per timer interrupt (48 kHz / 240 Hz).
@@ -836,6 +905,152 @@ impl Song {
             log: None,
             ticks_run: 0,
             log_mix: Vec::new(),
+            ext: None,
+            ext_src: None,
+        }
+    }
+
+    /// A song played from outside (FFX PS2 Sound, the DAW plugin): `tracks`
+    /// tracks without sequence data that never end on their own; their
+    /// commands come from [`Song::ext_command`] and are carried out in the
+    /// track's turn of their tick (after its slides), exactly as if they
+    /// stood in the sequence there. The clock is the driver's own (tempo
+    /// command `0x08`, 1 BPM before the first) or given per interrupt
+    /// ([`Song::ext_irq`]).
+    pub fn external(tab: Arc<Tables>, wd: Arc<Wd>, tracks: usize, header: ExtHeader, spu: &mut Spu2) -> Self {
+        let tracks = tracks.clamp(1, 255);
+        let mut b = vec![0u8; 0x20];
+        b[..4].copy_from_slice(b"BGM ");
+        b[6..8].copy_from_slice(&wd.id.to_le_bytes());
+        b[8] = tracks as u8;
+        b[9] = header.reverb_mode;
+        b[10..12].copy_from_slice(&header.reverb_depth.to_le_bytes());
+        b[12] = header.volume;
+        b[0xe..0x10].copy_from_slice(&48u16.to_le_bytes());
+        b[0x14..0x18].copy_from_slice(&header.flags.to_le_bytes());
+        for _ in 0..tracks {
+            // the longest wait (never reached), then the end
+            let t = [0xffu8, 0xff, 0xff, 0x7f, 0x00];
+            b.extend_from_slice(&(t.len() as u32).to_le_bytes());
+            b.extend_from_slice(&t);
+        }
+        let n = b.len() as u32;
+        b[0x10..0x14].copy_from_slice(&n.to_le_bytes());
+        let bgm = Arc::new(Bgm::parse(&b).expect("external song header"));
+        let mut s = Song::new(tab, bgm, wd, spu);
+        s.ext = Some(Box::default());
+        s
+    }
+
+    /// External input: `cmd` (a command as stored in a sequence, `op` and
+    /// its arguments, or one of the `EXT_*` pseudo commands) for track `ti`
+    /// at `tick` ([`Song::ticks_run`] when it plays). Commands of one tick
+    /// and track run in the order given; a tick already played: the next.
+    /// The loop commands (`0x02`-`0x06`) are ignored; `0x00` ends the track
+    /// until its next command. No effect on a song from a sequence.
+    pub fn ext_command(&mut self, tick: u64, ti: usize, cmd: &[u8]) {
+        let Some(ext) = &mut self.ext else { return };
+        if ti >= self.tracks.len() || cmd.is_empty() || (0x02..=0x06).contains(&cmd[0]) {
+            return;
+        }
+        ext.queue.entry(tick).or_default().push((ti, cmd.to_vec()));
+    }
+
+    /// External input: commands waiting for their tick.
+    pub fn ext_pending(&self) -> usize {
+        self.ext.as_ref().map_or(0, |e| e.queue.values().map(Vec::len).sum())
+    }
+
+    /// External input: drops the commands waiting.
+    pub fn ext_clear(&mut self) {
+        if let Some(e) = &mut self.ext {
+            e.queue.clear();
+        }
+    }
+
+    /// One timer interrupt without output (the caller renders the chip,
+    /// `FRAMES_PER_IRQ` frames to the next one). `ticks`: `None` runs the
+    /// driver's own tempo counter, `Some(n)` plays exactly `n` ticks.
+    pub fn ext_irq(&mut self, spu: &mut Spu2, ticks: Option<u32>) {
+        match ticks {
+            None => self.timer(spu),
+            Some(n) => {
+                if self.voices_in_use != 0 || !self.queue.is_empty() {
+                    self.flush_key_offs(spu);
+                    self.update_voices(spu);
+                }
+                self.queue.clear();
+                if self.active != 0 {
+                    for _ in 0..n {
+                        self.ticks();
+                    }
+                }
+                self.irqs = self.irqs.wrapping_add(1);
+            }
+        }
+        self.frame += FRAMES_PER_IRQ as u64;
+    }
+
+    /// The external commands of track `ti` due now.
+    fn ext_run(&mut self, ti: usize) {
+        let Some(ext) = &mut self.ext else { return };
+        if !ext.now.iter().any(|c| c.0 == ti) {
+            return;
+        }
+        let mine: Vec<Vec<u8>> = {
+            let (m, rest): (Vec<_>, Vec<_>) = std::mem::take(&mut ext.now).into_iter().partition(|c| c.0 == ti);
+            ext.now = rest;
+            m.into_iter().map(|c| c.1).collect()
+        };
+        for cmd in mine {
+            let op = cmd[0];
+            let arg16 = |i: usize| i32::from(i16::from_le_bytes([cmd.get(i).copied().unwrap_or(0), cmd.get(i + 1).copied().unwrap_or(0)]));
+            if op != 0 {
+                self.tracks[ti].ext_off = false;
+            }
+            match op {
+                EXT_VOLUME | EXT_EXPRESSION => {
+                    let v = arg16(1).clamp(0, 0x3fff) << 12;
+                    let t = &mut self.tracks[ti];
+                    if op == EXT_VOLUME { t.vol.set(v) } else { t.expr.set(v) }
+                    self.dirty |= 2;
+                }
+                EXT_PAN => {
+                    let t = &mut self.tracks[ti];
+                    t.pan.set(arg16(1) << 12);
+                    if t.panlfo.wave.is_none() {
+                        t.panlfo.out = 0;
+                    }
+                    self.dirty |= 2;
+                }
+                EXT_MIX => {
+                    let b = u32::from(cmd.get(1).copied().unwrap_or(0) & 0xf);
+                    let t = &mut self.tracks[ti];
+                    t.flags = t.flags & !0x3c00 | b << 10;
+                    self.mix_dirty = true;
+                }
+                EXT_SONG_END => {
+                    for v in self.voices.iter_mut().filter(|v| v.track.is_some()) {
+                        v.flags = v.flags & !0xd | 2;
+                        v.track = None;
+                    }
+                    self.marks.end = Some(self.frame);
+                }
+                0x00 => {
+                    self.tracks[ti].flags2 = 0;
+                    self.key_off(ti);
+                    for v in self.voices.iter_mut().filter(|v| v.track == Some(ti)) {
+                        v.tflags &= 0xee;
+                    }
+                    self.tracks[ti].ext_off = true;
+                }
+                0x01..=0x7f => {
+                    self.ext_src = Some((cmd, 1));
+                    self.command(ti, op, 1);
+                    self.ext_src = None;
+                }
+                _ => {}
+            }
         }
     }
 
@@ -1126,6 +1341,16 @@ impl Song {
         if self.depth.run(n) {
             self.depth_dirty = true;
         }
+        if let Some(ext) = &mut self.ext {
+            let now = self.ticks_run;
+            while let Some(e) = ext.queue.first_entry() {
+                if *e.key() > now {
+                    break;
+                }
+                let v = e.remove();
+                ext.now.extend(v);
+            }
+        }
         let mut left = self.active;
         let mut ti = 0;
         while left != 0 && ti < self.tracks.len() {
@@ -1135,7 +1360,9 @@ impl Song {
                 let w = self.tracks[ti].wait;
                 let m = w.min(n);
                 self.tracks[ti].wait = w - n;
-                self.slides(ti, m);
+                if !self.tracks[ti].ext_off {
+                    self.slides(ti, m);
+                }
                 if self.tracks[ti].flags2 & T2_NO_AUTO_OFF == 0 && self.tracks[ti].wait == 1 {
                     self.key_off(ti);
                 }
@@ -1148,6 +1375,19 @@ impl Song {
                     }
                     self.tracks[ti].pos = Some(p);
                     self.command(ti, op, n);
+                    if self.log.is_some() && raw_logged(op) {
+                        let mut q = p;
+                        let mut args = [0u32; 3];
+                        for (k, a) in arg_bytes(op).unwrap_or(&[]).iter().enumerate() {
+                            args[k] = if *a == 0 {
+                                varlen(&self.bgm.data, &mut q)
+                            } else {
+                                q += 1;
+                                u32::from(self.bgm.data.get(q - 1).copied().unwrap_or(0))
+                            };
+                        }
+                        self.note(ti, SeqEvent::Raw { op, args });
+                    }
                     let Some(mut p) = self.tracks[ti].pos else { break };
                     let mut d = varlen(&self.bgm.data, &mut p) as i32;
                     self.tracks[ti].pos = Some(p);
@@ -1164,6 +1404,9 @@ impl Song {
                     }
                     self.tracks[ti].wait += d;
                 }
+                if self.ext.is_some() {
+                    self.ext_run(ti);
+                }
                 if self.log.is_some() {
                     self.log_mix(ti);
                 }
@@ -1177,6 +1420,9 @@ impl Song {
                 left -= 1;
             }
             ti += 1;
+        }
+        if let Some(ext) = &mut self.ext {
+            ext.now.clear();
         }
         if self.song_flags & 2 != 0 {
             self.song_flags &= !2;
@@ -1193,7 +1439,9 @@ impl Song {
             self.log_mix.resize(self.tracks.len(), [-1; 3]);
         }
         let t = &self.tracks[ti];
-        let now = [t.vol.v >> 12, t.expr.v >> 12, (t.pan.v >> 12).clamp(0, 0xff)];
+        // the pan as the voices add it up (it can leave 0..=0xff before the
+        // pan LFO and the clamp)
+        let now = [t.vol.v >> 12, t.expr.v >> 12, t.pan.v >> 12];
         let last = self.log_mix[ti];
         self.log_mix[ti] = now;
         let ev = [SeqEvent::Volume(now[0]), SeqEvent::Expression(now[1]), SeqEvent::Pan(now[2])];
@@ -1240,12 +1488,19 @@ impl Song {
     }
 
     fn arg(&mut self, ti: usize) -> u8 {
+        if let Some((c, at)) = &mut self.ext_src {
+            *at += 1;
+            return c.get(*at - 1).copied().unwrap_or(0);
+        }
         let p = self.tracks[ti].pos.expect("pos");
         self.tracks[ti].pos = Some(p + 1);
         self.bgm.data.get(p).copied().unwrap_or(0)
     }
 
     fn arg_varlen(&mut self, ti: usize) -> u32 {
+        if let Some((c, at)) = &mut self.ext_src {
+            return varlen(c, at);
+        }
         let mut p = self.tracks[ti].pos.expect("pos");
         let v = varlen(&self.bgm.data, &mut p);
         self.tracks[ti].pos = Some(p);
@@ -1948,7 +2203,7 @@ impl Song {
             }
         }
         if self.active != 0 {
-            for t in self.tracks.iter_mut().filter(|t| t.pos.is_some()) {
+            for t in self.tracks.iter_mut().filter(|t| t.pos.is_some() && !t.ext_off) {
                 if let Some(w) = t.panlfo.wave {
                     let x = self.tab.wave(w, t.panlfo.phase >> 12);
                     t.panlfo.phase = t.panlfo.phase.wrapping_add(t.panlfo.rate as u32);
@@ -2148,4 +2403,145 @@ pub fn render(
         }
     }
     Ok(song.marks)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A bank of one instrument: one region, a looped square wave.
+    fn square_wd() -> Wd {
+        let mut block = vec![0x00u8, 0x07];
+        block.extend([0x77; 7]);
+        block.extend([0x88; 7]);
+        let mut b = vec![0u8; 0x24];
+        b[..2].copy_from_slice(b"WD");
+        b[4..8].copy_from_slice(&(block.len() as u32).to_le_bytes());
+        b[8..12].copy_from_slice(&1u32.to_le_bytes());
+        b[12..16].copy_from_slice(&1u32.to_le_bytes());
+        b[0x20..0x24].copy_from_slice(&0x30u32.to_le_bytes());
+        b.resize(0x30, 0);
+        let mut r = [0u8; 0x20];
+        r[..4].copy_from_slice(&0x200u32.to_le_bytes());
+        r[12..16].copy_from_slice(&0x1fc6_80ffu32.to_le_bytes());
+        r[0x14] = 127;
+        r[0x15] = 127;
+        r[0x16] = 127;
+        b.extend(r);
+        b.extend(block);
+        Wd::parse(&b).expect("wd")
+    }
+
+    fn bgm(tracks: &[Vec<u8>]) -> Bgm {
+        let mut b = vec![0u8; 0x20];
+        b[..4].copy_from_slice(b"BGM ");
+        b[8] = tracks.len() as u8;
+        b[9] = 0xff;
+        b[12] = 0x60;
+        for t in tracks {
+            b.extend_from_slice(&(t.len() as u32).to_le_bytes());
+            b.extend_from_slice(t);
+        }
+        Bgm::parse(&b).expect("bgm")
+    }
+
+    fn push_varlen(c: &mut Vec<u8>, mut x: u32) {
+        let mut v = vec![(x & 0x7f) as u8];
+        x >>= 7;
+        while x != 0 {
+            v.insert(0, (x & 0x7f) as u8 | 0x80);
+            x >>= 7;
+        }
+        c.extend(v);
+    }
+
+    /// The log of a song as external commands, in the order the driver
+    /// carried them out.
+    fn as_ext(log: &[LogEntry]) -> Vec<(u64, usize, Vec<u8>)> {
+        let mut out = Vec::new();
+        let last_end = log.iter().rposition(|e| e.event == SeqEvent::End);
+        for (i, e) in log.iter().enumerate() {
+            let c: Vec<u8> = match e.event {
+                SeqEvent::NoteOn { key, vel } => vec![0x11, key, vel],
+                SeqEvent::NoteOff { key } => vec![0x1a, key],
+                SeqEvent::Tie(on) => vec![if on { 0x2a } else { 0x2b }],
+                SeqEvent::Program(p) => vec![0x20, p as u8],
+                SeqEvent::Pedal(on) => vec![0x3c, u8::from(on)],
+                SeqEvent::Bend(raw) => {
+                    let v = (i32::from(raw) + 0x2000) as u16;
+                    vec![0x5c, (v & 0x7f) as u8, (v >> 7) as u8]
+                }
+                SeqEvent::BendRange(r) => vec![0x5d, r as u8],
+                SeqEvent::Volume(v) => [vec![EXT_VOLUME], (v as i16).to_le_bytes().to_vec()].concat(),
+                SeqEvent::Expression(v) => [vec![EXT_EXPRESSION], (v as i16).to_le_bytes().to_vec()].concat(),
+                SeqEvent::Pan(v) => [vec![EXT_PAN], (v as i16).to_le_bytes().to_vec()].concat(),
+                SeqEvent::Tempo(b) => vec![0x08, b],
+                SeqEvent::Depth(d) => vec![0x0a, d as u8],
+                SeqEvent::Raw { op, args } => {
+                    let mut c = vec![op];
+                    for (k, a) in arg_bytes(op).unwrap_or(&[]).iter().enumerate() {
+                        if *a == 0 { push_varlen(&mut c, args[k]) } else { c.push(args[k] as u8) }
+                    }
+                    c
+                }
+                SeqEvent::End => {
+                    out.push((e.tick, e.track, vec![0x00]));
+                    if Some(i) == last_end {
+                        out.push((e.tick, e.track, vec![EXT_SONG_END]));
+                    }
+                    continue;
+                }
+                _ => continue,
+            };
+            out.push((e.tick, e.track, c));
+        }
+        out
+    }
+
+    #[test]
+    fn external_input_plays_like_the_sequence() {
+        let tab = Arc::new(Tables::generic());
+        let wd = Arc::new(square_wd());
+        let tracks = vec![
+            vec![0, 0x08, 120, 0, 0x0a, 64, 96, 0x08, 90, 0, 0x00],
+            vec![
+                0, 0x20, 0, 0, 0x22, 100, 0, 0x26, 32, 0, 0x60, 0, 0x11, 60, 100, 24, 0x23, 48, 20, 0, 0x12, 64, 24, 0x1a,
+                60, 0, 0x47, 4, 2, 0, 0x40, 30, 10, 0, 0, 0x5c, 0, 70, 24, 0x18, 0, 0x13, 90, 48, 0x5d, 12, 0, 0x5c, 0,
+                50, 0, 0x5a, 3, 0, 0x58, 16, 12, 0x18, 0, 0x28, 20, 0, 0x11, 50, 90, 10, 0x18, 0, 0x11, 57, 90, 30, 0x18,
+                0, 0x29, 0, 0x00,
+            ],
+            vec![
+                6, 0x20, 0, 0, 0x50, 60, 20, 1, 0, 0x3c, 127, 0, 0x11, 48, 80, 0, 0x2a, 30, 0x12, 50, 0, 0x2b, 30, 0x18,
+                0, 0x3c, 0, 0, 0x35, 8, 0, 0x31, 40, 0, 0x11, 55, 127, 0, 0x2c, 20, 4, 40, 0x1a, 55, 0, 0x61, 0, 0x11,
+                55, 60, 20, 0x00,
+            ],
+        ];
+        let bgm = Arc::new(bgm(&tracks));
+        let irqs = 240 * 8;
+
+        let mut spu = Spu2::new(wd.samples.clone());
+        let mut song = Song::new(tab.clone(), bgm.clone(), wd.clone(), &mut spu);
+        song.log = Some(Vec::new());
+        let mut want = Vec::new();
+        for _ in 0..irqs {
+            song.interrupt(&mut spu, &mut want);
+        }
+        let log = song.log.take().expect("log");
+        assert!(want.iter().any(|s| s[0] != 0), "the song sounds");
+        assert!(log.iter().any(|e| matches!(e.event, SeqEvent::Raw { op: 0x40, args: [30, 10, 0] })));
+
+        let mut spu = Spu2::new(wd.samples.clone());
+        let mut ext = Song::external(tab, wd.clone(), 3, ExtHeader::of(&bgm), &mut spu);
+        for (tick, ti, c) in as_ext(&log) {
+            ext.ext_command(tick, ti, &c);
+        }
+        let mut got = Vec::new();
+        for _ in 0..irqs {
+            ext.ext_irq(&mut spu, None);
+            spu.render(FRAMES_PER_IRQ, &mut got);
+        }
+        let first = want.iter().zip(&got).position(|(a, b)| a != b);
+        assert_eq!(first, None, "first difference at frame {first:?}");
+        assert_eq!(ext.ext_pending(), 0);
+    }
 }
