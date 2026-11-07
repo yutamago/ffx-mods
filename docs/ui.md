@@ -23,7 +23,7 @@ chains (`docs/render.md`, "Texture quality").
 | Part | Files | In the game |
 |---|---|---|
 | Title screen (`map/titl/titl00/2d`): PS2 logo, menu, bar at the PS2 place; the menu cursor moved with it (`mod/TitlePatches.cs`) | 12 layers (EN x2, DE, FR, IT, ES, 6 "Install" labels) | checked (`boot.txt`, English); compared with the PS2 (`compare-title`) |
-| "FINAL FANTASY X PROJECT" logo (`titl02`), "Fine" screen pieces (`titl01`) | 4 (the HD kept the PS2 pictures) | logo checked |
+| "FINAL FANTASY X PROJECT" boot logo (`titl02` 1, 5, 6, at the PS2 place), "Fine" screen pieces (`titl01`) | 6 | boot logo checked in the game against the PS2 |
 | "HD Remaster" under the opening's logo (`magic_0662/logo_hdremaster`) | 1, transparent | not reached by a replay |
 | Loading screen (`menu/loading`: `ld00..24`, `loadingbg`) | 26, transparent | not seen: the harness loads hide it |
 | Battle atlas (`menu_de`, `menu_us` `battle`): CTB faces, markers, letters; the damage digits with `ui.font` (also into `menu_fr`, `menu_it`, `menu_es`, `font.md`) | 2 (15 and 16 PS2 elements each), 5 with `ui.font` | checked (`battle-attack.txt`): PS2 CTB faces |
@@ -161,10 +161,16 @@ section 0 (`YNSC`), each with the 16x16 CT32 CLUT that follows it
 | 2, 4, 6, 8, 10, 12 | "Install" labels | the same |
 
 The PS2 image is the whole screen (512x448). Its top holds the PAL
-web-site banner and the water strip; in the game the PC draws its own
-water band (`menu/titl/water_NN`, Tk) over that part, so the banner is
-covered (`ingame-title.png`). The PS2 shows the banner (PCSX2, the
-`title` state, `docs/compare.md`); here it stays covered (intended).
+web-site banner and the water strip, both part of the still picture: the
+PS2 title does not move (PCSX2 frames a second apart are identical). The PC
+draws an animated water band over that part, `graphicDrawMainMenuWaterEffect`
+(`0x0063e920`) -> `PhyreScene_drawMainMenuWaveEffect` (`0x0065b5b0`): one
+of the 70 `menu/titl/Water_NN` textures per frame (`DAT_00ccba09` counts
+0..69), a 512 x 175 UI element at (0, 0), white at alpha 100, from the main
+loop while `g_YnTest20Seen` (`0x025d5ebc`) is set. Under `ui.title`
+(`mod/TitlePatches.cs`) the call is skipped and the converter keeps the
+banner and the water strip in the layer (ui job version 10; before, rows
+0..83 were black under the PC's band).
 
 **Placement** (`uijob::title_placed`, measured with `tools/compare`). The
 PS2 shows rows 16..432 of the image 1:1 on its 512 x 416 screen. The PC
@@ -175,9 +181,7 @@ as big: the logo's top 60 PS2 lines higher, the bottom bar 25. The
 converter now writes each 512 x 448 `titl00` layer laid out for that quad
 (at twice the PS2 size, 1024 x 896, so the 0.8 scale keeps the PS2
 detail): row v holds the PS2 row the PS2 showed at that screen line,
-`16 + (v * 960 / 448 - 240) * 416 / 720`; the rows above the water strip
-(the banner, PS2 rows 0..83) are black, so the PC's translucent water band
-lies over black as before. In 16:9 the vertical framing is the PS2's too,
+`16 + (v * 960 / 448 - 240) * 416 / 720`. In 16:9 the vertical framing is the PS2's too,
 the picture stretched sideways as before.
 
 **The menu** ("Neues Spiel" / "Laden" are part of the picture; the cursor
@@ -205,14 +209,22 @@ region 5.1 -> 4.1 (whole frame 18.5 -> 18.2); the ball's left edge 307
 against the PS2's 308, its top within a line.
 Checked in the harness on the game's own code (`FFX_HOOK_DISABLE=
 replacements`: ffx-rust ports the message code) with call detours that
-do the same (`tools/replays/compare-title.txt`), both choices. The other
-`titl01`/`titl02` screens (the "Fine" and project logos) were not
-compared and keep the PC's quad placement.
+do the same (`tools/replays/compare-title.txt`), both choices. The `titl01`
+screens (the "Fine" pieces) were not compared and keep the PC's quad
+placement.
 
-`titl02` (the "FINAL FANTASY X PROJECT 1999-2002" logo) and three
-`titl01` layers are the PS2 pictures in the HD too (correlation 1.0): they
-are written as PS2 for consistency. The other `titl01` layers ("Fine" at
-the end) have a different HD layout and stay HD.
+`titl02` holds the boot screens: 0, 4, 7 "Squaresoft presents" on the PS2
+(the HD's "SQUARE ENIX", kept HD), 1 and 5 the "FINAL FANTASY X PROJECT
+1999-2002" boot logo, 2 and 3 the publisher, 6 the demo note. The HD
+redrew the boot logo (a taller, narrower emblem, condensed text in pink,
+smaller and lower: correlation 0.54), so `titl02` pairs from 0.5 and
+layers 1, 5 and 6 are the PS2's, laid out with `title_placed` like
+`titl00` (the same quad): the emblem and the wide letter-spaced text at the
+PS2's size and place (ui job version 10; `C:\shots\fix-alpha\title\`
+`cmp-bootlogo.png`: PS2, before, after). Three `titl01` layers are the PS2
+pictures in the HD too (correlation 1.0) and are written as PS2; the other
+`titl01` layers ("Fine" at the end) have a different HD layout and stay
+HD.
 
 `magic_0662/tex/d3d11/logo_hdremaster` is the "HD Remaster" strip under
 the logo in the opening: written transparent (the effects job leaves it

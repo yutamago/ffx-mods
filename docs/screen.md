@@ -196,8 +196,9 @@ Unchanged and already right:
 - The boot logo ("FINAL FANTASY X PROJECT") and the title's "FINAL
   FANTASY X" logo and its letters: the same with and without the hook,
   so another path; the title logo has the PS2's size and place. The boot
-  logo is the HD's redrawn art (smaller, lower than the PS2's), not an
-  aspect matter.
+  logo is a `titl02` layer (a full-screen quad, not an event sprite); the
+  HD's redrawn art looked squeezed, now the PS2's picture at the PS2's
+  place (`ui.title`, docs/ui.md "Title screen and logos").
 - Sparks and pyreflies of the opening are 3D effects (`pppDrawShape*`:
   corners through the part matrix and the camera), so the camera aspect
   hook already gives them the PS2 proportions; not measured (they are a

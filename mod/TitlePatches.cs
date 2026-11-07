@@ -18,6 +18,14 @@ namespace Yuta.Demaster;
 /// constant 0x00b655e8, read nowhere else). Here the layout runs with +0x34 62 lines lower and
 /// the constant is 6.0, so the choices are 22 lines apart, as the PS2 picture's lines.
 /// </para>
+/// <para>
+/// The water band: the PC draws an animated band over the top of the title
+/// (graphicDrawMainMenuWaterEffect 0x0063e920 -> PhyreScene_drawMainMenuWaveEffect 0x0065b5b0: one of
+/// the 70 menu/titl Water_NN textures a frame, 512 x 175 at (0, 0), alpha 100), called from the
+/// main loop while g_YnTest20Seen (0x025d5ebc) is set. The PS2 title is a still picture: its water
+/// strip and the PAL web-site banner above it are part of the title layer (the ui.title job writes
+/// them). The hook skips the band.
+/// </para>
 /// </summary>
 internal static unsafe class TitlePatches {
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] public delegate int Layout(nint message);
@@ -32,6 +40,14 @@ internal static unsafe class TitlePatches {
     private static FhLogger? _log;
     private static int _logged;
     private static Layout? _hook, _next;
+    private static Fn.Void? _water;
+    private static int _water_logged;
+
+    private const uint WATER = 0x0063e920;           // graphicDrawMainMenuWaterEffect()
+
+    private static void water() {
+        if (Interlocked.Exchange(ref _water_logged, 1) == 0) _log?.Info("ui.title: title water band skipped");
+    }
 
     private static int layout(nint m) {
         _next ??= Native.fn<Layout>(LAYOUT).chain_from(_hook!).fnptr!;
@@ -48,6 +64,8 @@ internal static unsafe class TitlePatches {
         _log = m.log;
         _hook = layout;
         bool ok = Native.patch_code(CHOICE_STEP, BitConverter.GetBytes(21.5), BitConverter.GetBytes(STEP), m.log);
+        _water = water;
+        ok &= Native.fn<Fn.Void>(WATER).hook(m, _water);
         return ok & Native.fn<Layout>(LAYOUT).hook(m, _hook);
     }
 }

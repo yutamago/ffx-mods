@@ -888,13 +888,10 @@ fn title_layer(hd: usize) -> Option<usize> {
 /// row v, the PS2 row that the PS2 showed at that screen line:
 /// `16 + (v * 960 / 448 - 240) * 416 / 720`; columns stay. Written at twice
 /// the PS2 size (1024 x 896) so the 0.8 scale loses no PS2 detail. The
-/// PAL web-site banner above the water strip (rows 0..83) is left black:
-/// the PC draws its own translucent water band (`menu/titl/water_NN`) over
-/// the top of the screen, which covered the banner before (it lay off the
-/// screen) and should go on covering it.
+/// PAL web-site banner and the still water strip under it are kept, as the
+/// PS2 showed them: the mod turns the PC's animated water band
+/// (`menu/titl/water_NN`) off (`mod/TitlePatches.cs`).
 pub fn title_placed(img: &Rgba) -> Rgba {
-    /// The first row of the PS2 water strip (below the banner).
-    const WATER_TOP: f32 = 83.0;
     let (w, h) = (img.width * 2, img.height * 2);
     let mut out = Rgba::new(w, h);
     let sample = |x: f32, y: f32| -> [u8; 4] {
@@ -916,8 +913,7 @@ pub fn title_placed(img: &Rgba) -> Rgba {
         let line = v * 960.0 / hs - 240.0;
         let r = 16.0 + line * 416.0 / 720.0;
         for x in 0..w {
-            let c = if r < WATER_TOP { [0, 0, 0, img.get(0, 0)[3]] } else { sample((x as f32 + 0.5) / 2.0, r) };
-            out.put(x, y, c);
+            out.put(x, y, sample((x as f32 + 0.5) / 2.0, r));
         }
     }
     out
@@ -1185,15 +1181,22 @@ pub fn convert(disc: &mut Disc, pc: &ffx_vbf::Archive, parts: Parts) -> Result<(
                 // the PS2 ones hold the water strip and the web site banner)
                 let small = resize(&hd, img.width, img.height);
                 let c = mapjob::correlation(&lower_half(&small), &lower_half(img));
-                // titl00's layers are paired by language (`title_layer`); the
-                // others (titl01 "Fine", titl02 the project logo) only where
-                // the HD kept the PS2 picture: their layouts differ.
-                if c < if map == "titl00" { 0.3 } else { 0.9 } {
+                // titl00's layers are paired by language (`title_layer`);
+                // titl02's boot logo (1, 5: the HD redrew the emblem and the
+                // text, 0.54) by place; titl01 ("Fine") only where the HD
+                // kept the PS2 picture: their layouts differ. (titl02 0, 4,
+                // 7: Squaresoft against the HD's Square Enix, 0.03.)
+                let min = match map {
+                    "titl00" => 0.3,
+                    "titl02" => 0.5,
+                    _ => 0.9,
+                };
+                if c < min {
                     notes.push(format!("{path}: PS2 layer {k} looks different (correlation {c:.2}), kept HD"));
                     continue;
                 }
                 let mut img = mapjob::opaque_like(img.clone(), &hd);
-                if map == "titl00" && img.height == 448 {
+                if map != "titl01" && img.height == 448 {
                     img = title_placed(&img);
                 }
                 done.push(Done {
@@ -1344,9 +1347,12 @@ impl Job for UiJob {
     /// world map picture and the sphere grid's pages (`sgjob.rs`, ui.menus).
     /// 9: one mip level (`phyretex::argb8_one_level`) for everything drawn
     /// on the screen (not the sphere grid's pages): the game's texture
-    /// quality shrinks no one-level texture (`docs/render.md`).
+    /// quality shrinks no one-level texture (`docs/render.md`). 10: the
+    /// title keeps the PS2 banner and water strip (the mod drops the PC's
+    /// water band); the PS2 boot logo (`titl02` 1 and 5), and `titl02` at
+    /// the PS2's place (`title_placed`).
     fn version(&self) -> u32 {
-        9
+        10
     }
     fn name(&self) -> &'static str {
         self.name
