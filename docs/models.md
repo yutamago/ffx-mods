@@ -11,6 +11,8 @@ remodelled character the jobs write, under
   as one ARGB8 atlas at PS2 size, one mip level, a new texture (see
   "Conversion" 4);
 - `<name>.ahwin32`: the asset list with that texture added.
+- `<name>.cdf`: the cloth file with the PS2 cloth triangles (see "Cloth"),
+  for characters with simulated PS2 cloth.
 
 For tests, `demaster models <iso> <FFX_Data.vbf> <out> all|<kind/name>...`
 writes the same files plus `<out>/preview/<name>-atlas.png` and the
@@ -184,44 +186,66 @@ How the PC draws cloth:
   on free vertices and (26, 26, 26) on anchored ones.
 
 The PS2 cloth entry (`0x24` bytes) says which of a piece's vertices are
-simulated: `u16` free count `+0`, `u16` fixed count `+2`, total `+0x1c`
-(= free + fixed in all 355 cloth entries of the disc's `.chr` files); the
-vertex list `+8` holds the free vertices, then the fixed ones, each run
-sorted. The fixed ones are where the piece hangs from the body: the base
-of Wakka's crest (piece (0, 3): 255 free, 50 fixed), the ankle ends of his
-shins ((0, 0): 28 free, 4 fixed).
+simulated: `u16` pinned count `+0`, `u16` moving count `+2`, total `+0x1c`
+(= pinned + moving in all 355 cloth entries of the disc's `.chr` files);
+the vertex list `+8` holds the pinned vertices, then the moving ones, each
+run sorted. `Sg_ClothStep` copies the pinned points from the model's
+skinned vertices every step and moves the others (ffx-rust
+`ffx_sg::cloth`, `strand`). Wakka's crest (0, 3): 255 pinned, 50 moving
+(at mid-height); his shins (0, 0): 28 pinned, 4 moving (the ankle flaps).
+Job versions 4 and before read the runs the other way round.
 
-So every PS2 cloth piece (of a skinned model) goes into the segment tagged
-with it: the HD's segment of that piece if there is one, else a copy of
-the instance's largest HD cloth segment, tagged after the import. The PS2
-triangles lie exactly on the simulated ones. A fixed vertex gets the skin
-colour; a free one the colour of the nearest free vertex of the HD
-segment of its piece (the HD's binding mode), or the HD cloth segments'
-most common free colour. Characters without HD cloth segments (no cloth
-shader to copy) keep their cloth skinned. 55 characters draw their PS2
-cloth this way.
+**Binding** (`Ch_PreCalcActiveClothMesh`, `InsideTriangle`,
+`FUN_0082dbc0`): a bound vertex is drawn as the barycentric mix of the
+simulated triangle it was bound to, and the triangles it can bind to are
+**the `.cdf`'s triangles of its piece**, at most `0x300`. Among those
+whose barycentrics lie in [-0.1, 1.1] (widened step by step) the one
+nearest the vertex's plane wins; a white vertex is drawn on that plane, a
+red one keeps its distance off it (× 1.1). The HD's `.cdf` lists the HD's
+cloth shape, not the PS2's: Wakka's crest has 54 triangles there (24
+two-triangle cards over 102 of the piece's 305 vertices), the PS2 crest
+526. Bound to the HD's cards, the PS2 crest was flattened onto their
+planes: a short tuft lying back. Wakka's shins (HD: 4 triangles, the ankle
+flaps) folded into a sliver the same way, and Tidus's close-up c101 drew a
+quad of its piece (2, 0) (4 pinned vertices with chain texels, normally
+behind the pendant) on the HD's triangles of that piece: the dark
+"arrowhead" on his chest.
 
-**Pieces the HD has another shape for stay skinned.** When no vertex of
-the PS2 piece lies within 0.1 units of the HD's segment of that piece
-(`models::SHARED`), every vertex gets the skin colour: the PC's
-simulation of the piece is set up for the HD's shape. Wakka's PS2 piece
-(0, 0) is both shins (the bare lower legs between trousers and sandals),
-the HD's is two small flaps at the ankles (0.24 apart at the nearest);
-simulated, his left shin folded into a thin sliver in the intro (a gap
-between knee and foot), with either colour rule; skinned it is whole,
-as on the PS2 (`/mnt/c/shots/fix-alpha/models/cmp/party-wakka.png`).
-The pieces the HD kept share vertices with it (0.03 apart at most among
-the party). Kept skinned (build of 2026-11-07): c004 (0, 4), c005 (0, 0),
-c006 (3, 4), c103 (1, 3), c104 (2, 9) and (2, 13), c105 (2, 0), m112
-(0, 4), m248 (0, 3), n217 (2, 0), n222 (0, 3).
+So the converter (job version 5):
 
-Before the PS2's fixed list was read, the colours came from the nearest HD
-vertex alone, and pieces the HD never drew kept the vertices shared with
-non-cloth triangles skinned. The first try kept the old colour (26, 26, 26) on every cloth vertex:
-nothing was bound, and Rikku's sashes stood up in their bind pose. The
-rule before that left PS2 pieces out where an HD cloth segment lay within
-0.5 units of 60 % of their vertices; it matched Wakka's crest to a small
-HD cloth segment (median distance 0.24) and hid the crest altogether.
+- writes the character's `<name>.cdf` (next to its `.ahwin32`) with each
+  simulated PS2 piece's own triangles first (the model's triangles whose
+  corners all belong to the piece, tag `100 + piece`, PS2 UVs) and the
+  HD's after them (some hidden HD segments pass only their own sub-part's
+  triangles, `passThisTriangle`; Kimahri's piece (0, 10)). Every PS2
+  vertex lies on its own triangle, so it binds exactly and moves as the
+  PS2 simulation moves it. A piece with more than `0x300` triangles, or a
+  character without a `.cdf`, stays skinned (none among the 165: 55 characters get a `.cdf`, build of
+  2026-11-07);
+- puts every PS2 cloth piece (of a skinned model) into the segment tagged
+  with it: the HD's segment of that piece if there is one, else a copy of
+  the instance's largest HD cloth segment, tagged after the import;
+- colours the pinned vertices with the skin colour (skinned with the
+  body, as the PS2's pinned points follow the skin) and the moving ones
+  with the colour of the nearest free vertex of the HD segment of its
+  piece (the HD's binding mode), or the HD cloth segments' most common
+  free colour. Characters without HD cloth segments (no cloth shader to
+  copy) keep their cloth skinned.
+
+The rule of job version 4 that kept pieces skinned when the HD's segment
+of them was another shape (Wakka's shins and 10 more) is gone: with the
+PS2 triangles listed they are simulated like on the PS2.
+
+Before (versions 3, 4): colours from the nearest HD vertex, then from the
+PS2 runs read the wrong way round; neither could help, since the binding
+went to the HD's triangles. The first try kept the old colour (26, 26, 26)
+on every cloth vertex: nothing was bound, and Rikku's sashes stood up in
+their bind pose. The rule before that left PS2 pieces out where an HD cloth
+segment lay within 0.5 units of 60 % of their vertices; it hid Wakka's
+crest altogether.
+
+`DM_CLOTH=1 demaster models-debug ...` prints each piece's pinned and
+moving runs with their bind-pose extent.
 
 ## Texture animation (eyes, mouths)
 
@@ -477,7 +501,7 @@ centre, in `/mnt/c/shots/fix-alpha/models/cmp/`:
 
 | Image | What | Result |
 |---|---|---|
-| `tidus.png` | c101 close-up ("CG supervisor") | before: flat chunky hair cards with hard edges, no chain, no earring, smeared face (quarter-size texture, `UATFOPQ` at threshold 0 without MSAA); after: fine strands, the chain with its pendant, the earring, the face's texels, as on the PS2 |
+| `tidus.png` | c101 close-up ("CG supervisor") | before: flat chunky hair cards with hard edges, no chain, no earring, smeared face (quarter-size texture, `UATFOPQ` at threshold 0 without MSAA); after: fine strands, the chain with its pendant, the earring, the face's texels, as on the PS2 (a dark arrowhead above the pendant was left: fixed in version 5, below) |
 | `party-wakka.png` | Wakka, Rikku, Lulu at the fire | Wakka's left shin was a sliver (simulated piece (0, 0)); whole now. Rikku's hair strands soft, no longer see-through cards |
 | `kimahri.png` | Kimahri from behind | mane and fur fringes soft; before, a flat grey card |
 | `yuna.png` | Yuna close-up | face, hair and necklace at the PS2's texel size (before: blurred); the blue hair ornament (cloth) hangs further out than on the PS2 |
@@ -487,6 +511,21 @@ Key frames of the runs (3440x1440) in `/mnt/c/shots/fix-alpha/models/`:
 PS2 cloth anchors: the shin still a sliver), `e3/s-046.png` (the shin
 piece skinned by hand: whole), `e4/` (all of job version 4). Still
 different from the PS2: see "Gaps".
+
+**Cloth on the PS2's triangles** (2026-11-07, job version 5, same
+install and settings; PS2 | version 4 | version 5, in
+`/mnt/c/shots/fix-alpha/cloth/cmp/`):
+
+| Image | What | Result |
+|---|---|---|
+| `wakka-crest.png` | Wakka at the fire ("Character designer") | version 4: a short tuft lying back; now tall, its top curling back, as in the PS2 frame of the same moment |
+| `tidus-chain.png` | c101 close-up ("CG supervisor") | the dark arrowhead above the pendant is gone, as on the PS2 |
+| `kimahri.png` | Kimahri from behind ("Scenario") | the mane's top stands up like the PS2's (version 4: short) |
+| `party.png` | Wakka, Rikku, Lulu | shins whole (now simulated, only the ankle flaps move), Rikku's hair and sashes, Lulu as before |
+| `yuna.png` | Yuna close-up | the blue hair ornament hangs by her hair as on the PS2 (version 4: further out) |
+
+Runs: `cloth/v5a`, `v5b`, `v5c` (the intro's timing varies by up to 8 s
+from run to run).
 
 ## Checked in the game
 
@@ -519,15 +558,6 @@ Second pass (texture animation, cloth, NPCs, monsters), comparisons in
 
 ## Gaps
 
-- **Wakka's crest** (PS2 piece (0, 3), simulated) lies back as a short
-  tuft in the intro where the PS2 shows it standing tall (as in the bind
-  pose); the same with the colours of the nearest HD vertex (job version
-  3) and with the PS2's fixed list. Skinning it would stand it up without
-  its sway; not done.
-- **Tidus's chain** (c101): where the two strands meet the pendant a small
-  dark arrowhead shows on his chest (the strands' dark pointed ends, which
-  the bind pose keeps behind the pendant); the PS2 frames show none. Maybe
-  the 4-bone limit (up to 15 % of a c101 vertex's weight dropped).
 - **Kept meshes** (`chr.*`) still use the `UATFOPQ` twin and HD-template
   mip chains: at `VQ_LOW` their PS2 pages load at a quarter size and
   their fringes are alpha tested. The other texture jobs (maps, effects,
@@ -538,11 +568,11 @@ Second pass (texture animation, cloth, NPCs, monsters), comparisons in
   converted path. The kept-mesh frames are checked as images only.
 - Characters whose animated material is per instance (m070, m072-m076)
   keep static faces; the plan takes one `Mat_CTA` segment per character.
-- **Cloth**: a piece the HD had as skinned geometry (Tidus's apron) now
-  swings with the PS2 simulation; its anchored vertices are guessed (the
-  ones shared with non-cloth triangles), not read from PS2 data.
+- **Cloth**: pieces are simulated by the PC's port of the PS2 code on the
+  PS2 data; a sway was not compared frame by frame with the PS2.
 - **4-bone limit**: up to 15 % of a vertex's weight is dropped
-  (renormalised). Not visible in the shots.
+  (renormalised). Not visible in the shots (Tidus's chain "arrowhead",
+  once suspected, was the cloth binding).
 - **Lighting**: the HD character shader lights the PS2 mesh; the face
   comes out flatter and darker than on the PS2 (milestone 5).
 - c041 (Tidus swimming, events) is converted with the PS2 bind pose, but

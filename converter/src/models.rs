@@ -182,8 +182,10 @@ impl Job for ModelsJob {
     /// template material that does not blend. 4: textures in one level (no
     /// quality drop), see-through parts blended with the PS2's alpha test,
     /// PS2 cloth anchors, pieces the HD has another shape for skinned.
+    /// 5: the `.cdf` lists the PS2 cloth triangles; the PS2 pins the first
+    /// run of a cloth entry, not the second.
     fn version(&self) -> u32 {
-        4
+        5
     }
     fn name(&self) -> &'static str {
         self.name
@@ -315,20 +317,77 @@ struct ClothTarget {
     tag: (u32, u32),
     segment: Option<usize>,
     material: usize,
-    /// Kept skinned, not simulated: the HD's segment of the piece is
-    /// another shape (see [`SHARED`]).
+    /// Kept skinned, not simulated: the `.cdf` cannot list its triangles
+    /// (none, or more than [`CDF_MAX_TRIANGLES`]).
     skinned: bool,
 }
 
-/// A PS2 cloth piece whose HD segment has no vertex within this distance
-/// (HD units) of any of its vertices is another shape: the PC's simulation
-/// of the piece is set up for the HD's shape, and the PS2's folded away.
-/// Wakka's shins (PS2 piece (0, 0), whole lower legs) against the HD's two
-/// small ankle flaps of that piece (0.24 apart at the nearest): the left
-/// shin was drawn as a sliver while simulated, whole when skinned like the
-/// PS2 shows it. The pieces the HD kept share vertices with it (0.03 apart
-/// at most among the party's).
-const SHARED: f64 = 0.1;
+/// The most triangles of a piece the PC searches when it binds a vertex
+/// (`InsideTriangle` `0x00828c10`: its scratch arrays hold 0x300).
+const CDF_MAX_TRIANGLES: usize = 0x300;
+
+/// A `.cdf` (`Ch_ClothMeshMapping` `0x00826340`): the bounding box (6
+/// `f32`), then per piece `u16 model, piece, count, pad` and `count`
+/// triangles of 32 bytes; a model `ffff` ends it.
+struct Cdf {
+    head: Vec<u8>,
+    /// ((model, piece), pad, triangle records)
+    pieces: Vec<((u16, u16), u16, Vec<u8>)>,
+    tail: Vec<u8>,
+}
+
+impl Cdf {
+    fn parse(b: &[u8]) -> Result<Self> {
+        let u = |o: usize| -> Result<u16> { Ok(u16::from_le_bytes(b.get(o..o + 2).context("cdf: short")?.try_into()?)) };
+        let mut pieces = Vec::new();
+        let mut o = 24;
+        while u(o)? != 0xffff {
+            let n = usize::from(u(o + 4)?);
+            let tris = b.get(o + 8..o + 8 + 32 * n).context("cdf: short")?.to_vec();
+            pieces.push(((u(o)?, u(o + 2)?), u(o + 6)?, tris));
+            o += 8 + 32 * n;
+        }
+        Ok(Self { head: b[..24].to_vec(), pieces, tail: b[o..].to_vec() })
+    }
+
+    fn write(&self) -> Vec<u8> {
+        let mut b = self.head.clone();
+        for ((m, p), pad, tris) in &self.pieces {
+            for x in [*m, *p, (tris.len() / 32) as u16, *pad] {
+                b.extend_from_slice(&x.to_le_bytes());
+            }
+            b.extend_from_slice(tris);
+        }
+        b.extend_from_slice(&self.tail);
+        b
+    }
+}
+
+/// The PS2 triangles of a cloth piece as `.cdf` records: the model's
+/// triangles whose three corners are vertices of the piece (not
+/// degenerate), each `u16 v0, v1, v2`, the tag `100 + piece` (sub-part 1:
+/// `passThisTriangle` `0x00829870` lets every sub-part through to a
+/// segment tagged with the piece itself, and some characters' pieces only
+/// sub-part 1), the corners' PS2 UVs (1/16 texel) as `f32` pairs.
+fn cdf_triangles(m: &ps2mesh::Model, c: &ps2mesh::Cloth, piece: u16) -> Vec<u8> {
+    let set: BTreeSet<u16> = c.vertices.iter().copied().collect();
+    let mut b = Vec::new();
+    for t in &m.tris {
+        let v = t.corners.map(|c| c.vertex);
+        if v[0] == v[1] || v[1] == v[2] || v[0] == v[2] || !v.iter().all(|x| set.contains(x)) {
+            continue;
+        }
+        for x in v.into_iter().chain([100 + piece]) {
+            b.extend_from_slice(&x.to_le_bytes());
+        }
+        for c in &t.corners {
+            for x in c.uv {
+                b.extend_from_slice(&f32::from(x).to_le_bytes());
+            }
+        }
+    }
+    b
+}
 
 /// Per segment, its cloth piece (`m_clothmodelIndex`, `m_clothIndex`;
 /// `None` for -1).
@@ -913,6 +972,11 @@ pub fn convert_bytes(
             && tags.get(s).is_some_and(Option::is_some)
     };
     let mut cloth_targets: Vec<ClothTarget> = Vec::new();
+    let cdf_path = {
+        let dir = hd_path.split("/mdl/").next().context("model path")?;
+        format!("{dir}/{}.cdf", dir.rsplit('/').next().context("model path")?)
+    };
+    let mut cdf = read(&cdf_path)?.as_deref().map(Cdf::parse).transpose().context("HD .cdf")?;
     // per model: PS2 vertex -> piece (the first piece that has it)
     let mut piece_of: Vec<HashMap<u16, usize>> = vec![HashMap::new(); mesh.models.len()];
     for (mi, m) in mesh.models.iter().enumerate() {
@@ -936,14 +1000,42 @@ pub fn convert_bytes(
                 .max_by_key(|&s| (model.segments[s].indices.len(), std::cmp::Reverse(s)));
             let seg = own.unwrap_or(template);
             let Some(material) = model.segments[seg].material else { continue };
-            let skinned = own.is_some_and(|s| {
-                let hd = &model.segments[s].positions;
-                !c.vertices.iter().filter_map(|&v| verts[mi].get(usize::from(v))).any(|x| {
-                    hd.iter().any(|p| (0..3).map(|k| (f64::from(p[k]) - x.pos[k]).powi(2)).sum::<f64>() <= SHARED * SHARED)
-                })
-            });
+            // The PC binds each vertex of the segment to the nearest
+            // triangle the `.cdf` lists for the piece. The HD's lists hold
+            // the HD's shape (Wakka's crest (0, 3): 54 triangles, 24 cards,
+            // where the PS2 has 526): vertices off them were projected
+            // onto those cards and the crest lay flat. So the piece's own
+            // PS2 triangles go first; they lie on them, and the search
+            // keeps the first of equally near triangles. The HD's follow
+            // for the hidden HD segments, some of which pass only their
+            // own sub-part's triangles (`passThisTriangle`: Kimahri's
+            // piece (0, 10)).
+            let mut tris = cdf_triangles(m, c, u16::try_from(ci)?);
+            let n = tris.len() / 32;
+            let skinned = match cdf.as_mut() {
+                Some(cdf) if (1..=CDF_MAX_TRIANGLES).contains(&n) => {
+                    let key = (u16::try_from(mi)?, u16::try_from(ci)?);
+                    match cdf.pieces.iter_mut().find(|p| p.0 == key) {
+                        Some(p) => {
+                            let keep = p.2.len().min(32 * (CDF_MAX_TRIANGLES - n));
+                            if keep < p.2.len() {
+                                report += &format!(
+                                    "  PS2 cloth piece {tag:?}: {} of the HD's {} triangles left out of the .cdf\n",
+                                    (p.2.len() - keep) / 32,
+                                    p.2.len() / 32
+                                );
+                            }
+                            tris.extend_from_slice(&p.2[..keep]);
+                            p.2 = tris;
+                        }
+                        None => cdf.pieces.push((key, 0, tris)),
+                    }
+                    false
+                }
+                _ => true,
+            };
             if skinned {
-                report += &format!("  PS2 cloth piece {tag:?} kept skinned: the HD's segment {} of it is another shape\n", seg);
+                report += &format!("  PS2 cloth piece {tag:?} kept skinned: {n} triangles, the .cdf cannot list them\n");
             }
             let t = cloth_targets.len();
             cloth_targets.push(ClothTarget { tag, segment: own, material, skinned });
@@ -990,14 +1082,13 @@ pub fn convert_bytes(
     }
     // Cloth vertex colours steer the PC's binding (`Ch_PreCalcActiveClothMesh`):
     // all channels at most 0.3 keep the vertex skinned, larger ones bind it
-    // to the simulated triangles. The PS2 piece says which of its vertices
-    // are fixed (they follow the skin: skin colour) and which it simulates
-    // (bound: a free colour, the one of the nearest free vertex of the HD
-    // segment of the piece, else the HD's usual free colour). The colours
-    // of the nearest HD vertex alone took Wakka's shins (PS2 piece (0, 0),
-    // anchored at the ankles) from the HD's small flaps of that piece and
-    // bound half of each shin to the simulation, half to the skin: the
-    // left shin folded into a sliver.
+    // to the simulated triangle it lies in (red with its distance off the
+    // triangle, white on it: 0 for the PS2 vertices, which lie on their
+    // triangles). The PS2 piece says which of its vertices the simulation
+    // moves; the pinned ones it copies from the skinned model, so they keep
+    // the skin colour and are skinned like the body around them. A moving
+    // vertex gets the colour of the nearest free vertex of the HD segment
+    // of its piece (the HD's binding mode), else the HD's usual free colour.
     let skin_like = |c: &[u8; 4]| c[..3].iter().all(|&v| v <= 77);
     let free_color = {
         let mut c: BTreeMap<[u8; 4], usize> = BTreeMap::new();
@@ -1010,17 +1101,11 @@ pub fn convert_bytes(
         }
         c.into_iter().max_by_key(|e| e.1).map_or([255; 4], |e| e.0)
     };
-    // per model: vertices fixed in a piece and simulated in none
-    let fixed: Vec<BTreeSet<u16>> = mesh
-        .models
-        .iter()
-        .map(|m| {
-            let free: BTreeSet<u16> = m.cloths.iter().flat_map(|c| c.vertices[..c.free.min(c.vertices.len())].iter().copied()).collect();
-            m.cloths.iter().flat_map(|c| c.fixed().iter().copied()).filter(|v| !free.contains(v)).collect()
-        })
-        .collect();
+    // per model: the vertices some piece moves
+    let moving: Vec<BTreeSet<u16>> =
+        mesh.models.iter().map(|m| m.cloths.iter().flat_map(|c| c.moving().iter().copied()).collect()).collect();
     let cloth_color = |mi: usize, v: u16, pos: [f64; 3], target: &ClothTarget, skin: [u8; 4]| -> [u8; 4] {
-        if fixed[mi].contains(&v) || target.skinned {
+        if !moving[mi].contains(&v) || target.skinned {
             return skin;
         }
         let Some(s) = target.segment else { return free_color };
@@ -1288,6 +1373,10 @@ pub fn convert_bytes(
     report += &format!("  segments written {:?}, {hidden} HD segments hidden\n", imported.segments);
 
     let mut files = vec![(hd_path.to_owned(), bytes)];
+    // the PS2 triangles of the simulated pieces
+    if let Some(cdf) = cdf.filter(|_| cloth_targets.iter().any(|t| !t.skinned)) {
+        files.push((cdf_path, cdf.write()));
+    }
     let template_tex = read(&first.texture)?.with_context(|| format!("no {}", first.texture))?;
     files.push((new_path, phyretex::argb8_one_level(&template_tex, &atlas, Some((&old_id, &new_id)))?));
     let list_path = format!("{dir}/{name}.ahwin32");
@@ -1445,6 +1534,29 @@ pub fn debug(chr: &[u8], hd: &[u8]) -> Result<()> {
                 "model {mi} cloth {ci}: {} vertices, unskinned {none}, bones {bones:?}, triangles by texture {tex:?}",
                 c.vertices.len()
             );
+        }
+    }
+    // DM_CLOTH=1: each cloth piece's pinned and moving vertices (bind
+    // pose, PS2 units, y down).
+    if std::env::var_os("DM_CLOTH").is_some() {
+        for (mi, m) in mesh.models.iter().enumerate() {
+            let base = ps2w.get(usize::from(m.base)).copied();
+            for (ci, c) in m.cloths.iter().enumerate() {
+                for (name, run) in [("pinned", &c.vertices[..c.pinned.min(c.vertices.len())]), ("moving", c.moving())] {
+                    let mut lo = [f64::MAX; 3];
+                    let mut hi = [f64::MIN; 3];
+                    for &v in run {
+                        let Some(p) = m.vertices.get(usize::from(v)) else { continue };
+                        let p = p.map(f64::from);
+                        let w = base.map_or(p, |b| crate::ps2mesh::transform(&b, p));
+                        for k in 0..3 {
+                            lo[k] = lo[k].min(w[k]);
+                            hi[k] = hi[k].max(w[k]);
+                        }
+                    }
+                    println!("model {mi} cloth {ci} {name}: {} vertices, bind pose from {lo:.0?} to {hi:.0?}", run.len());
+                }
+            }
         }
     }
     for (i, inst) in model.instances.iter().enumerate() {
