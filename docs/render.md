@@ -416,5 +416,7 @@ atlases, the weapons, the fire effect (`magic_0662`), the loading and menu
 textures load whole; the map's 59 HD textures, the HD menus and fonts keep
 `TQ_LOW`. The pyreflies streaming over the ruins have the PS2's fine
 sparkle with the patch and at max settings, a smeared band without
-(`/mnt/c/shots/fix-alpha/tex/cmp/pyreflies.png`: PS2, before, after, max). At `TQ_HIGH` the hook
-returns at once (quality 0).
+(`/mnt/c/shots/fix-alpha/tex/cmp/pyreflies.png`: PS2, before, after, max).
+The title menu is the same in all four and as the PS2's
+(`/mnt/c/shots/fix-alpha/tex/cmp/title.png`): most of its layers had one
+level already. At `TQ_HIGH` the hook returns at once (quality 0).
