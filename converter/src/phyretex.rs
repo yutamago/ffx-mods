@@ -190,6 +190,20 @@ pub fn argb8_from(template: &[u8], image: &Rgba) -> Result<Vec<u8>> {
 /// one.
 pub fn argb8_as(template: &[u8], image: &Rgba, id: Option<(&str, &str)>) -> Result<Vec<u8>> {
     let hd_mips = ffx_phyre::Texture::parse(template.to_vec()).is_ok_and(|t| t.mip_levels > 1);
+    argb8_levels(template, image, id, hd_mips)
+}
+
+/// [`argb8_as`] with one level whatever the HD texture has. The game's
+/// texture quality drops the top levels of a texture with a chain (2 of
+/// them at `TQ_LOW`, the `VQ_LOW` preset; ffx-rust `docs/formats/phyre.md`,
+/// "How the game loads a texture"), never of a one-level texture: a PS2
+/// texture that must keep its texels at every setting (the characters') is
+/// written this way.
+pub fn argb8_one_level(template: &[u8], image: &Rgba, id: Option<(&str, &str)>) -> Result<Vec<u8>> {
+    argb8_levels(template, image, id, false)
+}
+
+fn argb8_levels(template: &[u8], image: &Rgba, id: Option<(&str, &str)>, mips: bool) -> Result<Vec<u8>> {
     let mut e = ClusterEdit::parse(template).context("parsing the HD texture")?;
     let list = e
         .list_of("PTexture2D")
@@ -205,7 +219,7 @@ pub fn argb8_as(template: &[u8], image: &Rgba, id: Option<(&str, &str)>) -> Resu
         w > 0 && h > 0 && image.pixels.len() == (w * h * 4) as usize,
         "bad image"
     );
-    let chain = if hd_mips { mip_chain(image) } else { vec![image.clone()] };
+    let chain = if mips { mip_chain(image) } else { vec![image.clone()] };
     let levels = chain.len() as u32;
     put_u32(obj, COMMON_BASE + M_MIPMAP_COUNT, levels - 1);
     put_u32(obj, COMMON_BASE + M_MAX_MIP_LEVEL, w.max(h).ilog2());
