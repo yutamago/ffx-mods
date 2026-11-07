@@ -122,6 +122,8 @@ shrink to the PS2 width.
    descender showed as a dash over the `y` of "System". At 4x the filter
    reaches 1/8 of a PS2 texel past a cell, and the glyphs look as soft as
    at PS2 size.
+   The pages have one mip level (`ui.*` job version 9), which the game's
+   texture quality does not reduce (`docs/render.md`, "Texture quality").
 4. Write `uspc/menu/base.ftc` with the new width table. The header and size
    stay the PC's: 128x234 page, 230 glyphs. `CdLib` reads the size from its
    own table.

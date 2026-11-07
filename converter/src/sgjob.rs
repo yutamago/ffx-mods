@@ -331,7 +331,7 @@ pub fn world_map(
         let Some((template, hd)) = load_hd(pc, &path)? else { continue };
         let img = mapjob::opaque_like(img.clone(), &hd);
         done.push(Done {
-            file: phyretex::argb8_from(&template, &img)?,
+            file: phyretex::argb8_one_level(&template, &img, None)?,
             preview: side_by_side(&hd, &resize(&img, hd.width, hd.height)),
             note: format!("{path}: the PS2 world map, 512 x 416, CLUT {WORLDMAP_PALETTE} (jppc/menu/worldmap.fmt)"),
             path,

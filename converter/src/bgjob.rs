@@ -28,9 +28,12 @@ pub fn jobs() -> Vec<Box<dyn Job>> {
 struct BgJob;
 
 impl Job for BgJob {
-    /// 2: textures with mip chains (phyretex::mip_chain).
+    /// 2: textures with mip chains (phyretex::mip_chain). 3: one level
+    /// again (`phyretex::argb8_one_level`): a painting fills the screen and
+    /// is never minified, and the game's texture quality shrinks no
+    /// one-level texture (`docs/render.md`).
     fn version(&self) -> u32 {
-        2
+        3
     }
     fn name(&self) -> &'static str {
         "maps.backgrounds"
@@ -172,7 +175,7 @@ pub fn convert(
                 }
                 let img = alpha_like(img, &hd);
                 done.push(Done {
-                    file: phyretex::argb8_from(&template, &img)?,
+                    file: phyretex::argb8_one_level(&template, &img, None)?,
                     preview: uijob::side_by_side(&hd, &img),
                     note: format!("{path}: PS2 picture {k} (correlation {c:.2})"),
                     path: path.clone(),

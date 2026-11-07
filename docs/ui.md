@@ -12,6 +12,11 @@ writes `<out>/efl/x/<HD path>` and a preview per file
 `demaster build` the jobs are `ui.menus` (settings `ui.menus` and
 `ui.portraits`), `ui.title`, `ui.loading`, `ui.glyphs`
 (`ui.button_glyphs`) and `ui.font` (`fontjob.rs`, [`font.md`](font.md)).
+Every texture they write for the screen is one mip level (job version 9):
+drawn at the PS2 size or larger, it is never minified, and the game's
+texture quality (`TQ_LOW` drops two levels of a chain) reduces no
+one-level texture; the sphere grid's pages, which zoom out, keep their
+chains (`docs/render.md`, "Texture quality").
 
 ## Summary (German disc, 2026-11-02)
 

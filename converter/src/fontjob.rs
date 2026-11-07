@@ -298,7 +298,7 @@ pub fn convert(disc: &mut Disc, pc: &ffx_vbf::Archive) -> Result<(Vec<Done>, Vec
             };
             let img = page_image(&alpha[p], pw, ph, rgb);
             done.push(Done {
-                file: phyretex::argb8_from(&template, &img)?,
+                file: phyretex::argb8_one_level(&template, &img, None)?,
                 preview: side_by_side(&hd_img, &img),
                 note: format!("{path}: {}x{}, {note}", img.width, img.height),
                 path,

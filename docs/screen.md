@@ -253,7 +253,10 @@ title screen).
 
 The job pairs the HD parts sorted by (layer, part) with the PS2 transfers
 in file order (sizes within 8 pixels: the PS2 pads them) and writes each
-PS2 picture at its PS2 size into the HD texture (ARGB8). It keeps HD:
+PS2 picture at its PS2 size into the HD texture (ARGB8), in one mip level
+(job version 3): a painting fills the screen and is never minified, and the
+game's texture quality reduces no one-level texture (`docs/render.md`,
+"Texture quality"). It keeps HD:
 
 - with `render.aspect = "hd"` only: rooms whose full-screen pictures
   correlate under 0.85 with the HD ones: the HD **re-framed** 37 rooms

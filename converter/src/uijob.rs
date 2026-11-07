@@ -1033,7 +1033,7 @@ pub fn convert(disc: &mut Disc, pc: &ffx_vbf::Archive, parts: Parts) -> Result<(
                     continue;
                 }
                 done.push(Done {
-                    file: phyretex::argb8_from(&template, &img)?,
+                    file: phyretex::argb8_one_level(&template, &img, None)?,
                     preview: side_by_side(&hd, &img),
                     note: format!("{path}: {} ({dir})", what.join(", ")),
                     path,
@@ -1072,7 +1072,7 @@ pub fn convert(disc: &mut Disc, pc: &ffx_vbf::Archive, parts: Parts) -> Result<(
                 let img = indexed(a.w, a.h, &idx, &clp_palette(&clp, a.palette));
                 let path = format!("{PS3}/{folder}/d3d11/{name}.dds.phyre");
                 done.push(Done {
-                    file: phyretex::argb8_as(&template, &img, Some((&format!("{}.dds", a.name), id)))?,
+                    file: phyretex::argb8_one_level(&template, &img, Some((&format!("{}.dds", a.name), id)))?,
                     preview: side_by_side(&hd, &resize(&img, hd.width, hd.height)),
                     note: format!("{path}: the whole PS2 {}, PS2 size ({dir})", a.name),
                     path,
@@ -1090,7 +1090,7 @@ pub fn convert(disc: &mut Disc, pc: &ffx_vbf::Archive, parts: Parts) -> Result<(
                 let img = ps2_font(&raw, &fclp);
                 let path = format!("{PS3}/{folder}/d3d11/{PS2_FONT}.dds.phyre");
                 done.push(Done {
-                    file: phyretex::argb8_as(&template, &img, Some(("meswin.dds", PS2_FONT_ID)))?,
+                    file: phyretex::argb8_one_level(&template, &img, Some(("meswin.dds", PS2_FONT_ID)))?,
                     preview: side_by_side(&hd, &img),
                     note: format!("{path}: the PS2 fonts M and S in their colours ({fdir})"),
                     path,
@@ -1101,7 +1101,7 @@ pub fn convert(disc: &mut Disc, pc: &ffx_vbf::Archive, parts: Parts) -> Result<(
             if let (Some(raw), Some((template, hd))) = (disc.read(&format!("{dir}/icon.fmt"))?, load_hd(pc, &path)?) {
                 match convert_icon(&nibbles(&raw), &clp, &hd, own) {
                     Some(img) => done.push(Done {
-                        file: phyretex::argb8_from(&template, &img)?,
+                        file: phyretex::argb8_one_level(&template, &img, None)?,
                         preview: side_by_side(&hd, &img),
                         note: format!(
                             "{path}: {ICON_ITEMS} PS2 item icons, battle words at the PS2 places ({})",
@@ -1118,7 +1118,7 @@ pub fn convert(disc: &mut Disc, pc: &ffx_vbf::Archive, parts: Parts) -> Result<(
                 if let (Some(raw), Some((template, hd))) = (disc.read(&format!("{dir}/strtex.fmt"))?, load_hd(pc, &path)?) {
                     match convert_strtex(&nibbles(&raw), &clp, &hd) {
                         Some(img) => done.push(Done {
-                            file: phyretex::argb8_from(&template, &img)?,
+                            file: phyretex::argb8_one_level(&template, &img, None)?,
                             preview: side_by_side(&hd, &img),
                             note: format!("{path}: the PS2 labels ({dir})"),
                             path,
@@ -1144,7 +1144,7 @@ pub fn convert(disc: &mut Disc, pc: &ffx_vbf::Archive, parts: Parts) -> Result<(
                     let Some((template, hd)) = load_hd(pc, &path)? else { continue };
                     match convert_sheet(sh, &idx, &clp, &hd) {
                         Some((img, how)) => done.push(Done {
-                            file: phyretex::argb8_from(&template, &img)?,
+                            file: phyretex::argb8_one_level(&template, &img, None)?,
                             preview: side_by_side(&hd, &img),
                             note: format!("{path}: cells {how}"),
                             path,
@@ -1197,7 +1197,7 @@ pub fn convert(disc: &mut Disc, pc: &ffx_vbf::Archive, parts: Parts) -> Result<(
                     img = title_placed(&img);
                 }
                 done.push(Done {
-                    file: phyretex::argb8_from(&template, &img)?,
+                    file: phyretex::argb8_one_level(&template, &img, None)?,
                     preview: side_by_side(&hd, &img),
                     note: format!("{path}: PS2 layer {k} (correlation {c:.2})"),
                     path,
@@ -1209,7 +1209,7 @@ pub fn convert(disc: &mut Disc, pc: &ffx_vbf::Archive, parts: Parts) -> Result<(
         if let Some((template, hd)) = load_hd(pc, &path)? {
             let img = transparent_like(&hd);
             done.push(Done {
-                file: phyretex::argb8_from(&template, &img)?,
+                file: phyretex::argb8_one_level(&template, &img, None)?,
                 preview: side_by_side(&hd, &img),
                 note: format!("{path}: transparent"),
                 path,
@@ -1224,7 +1224,7 @@ pub fn convert(disc: &mut Disc, pc: &ffx_vbf::Archive, parts: Parts) -> Result<(
             if let Some((template, hd)) = load_hd(pc, &path)? {
                 let img = transparent_like(&hd);
                 done.push(Done {
-                    file: phyretex::argb8_from(&template, &img)?,
+                    file: phyretex::argb8_one_level(&template, &img, None)?,
                     preview: side_by_side(&hd, &img),
                     note: format!("{path}: transparent"),
                     path,
@@ -1254,7 +1254,7 @@ pub fn convert(disc: &mut Disc, pc: &ffx_vbf::Archive, parts: Parts) -> Result<(
                     }
                 }
                 done.push(Done {
-                    file: phyretex::argb8_from(&template, &img)?,
+                    file: phyretex::argb8_one_level(&template, &img, None)?,
                     preview: side_by_side(&hd, &img),
                     note: format!("{pad}: PlayStation glyphs"),
                     path: pad,
@@ -1342,8 +1342,11 @@ impl Job for UiJob {
     /// M and S. 6: the disc's `menu_script.bin` (the PAL menu layout).
     /// 7: the title layers at the PS2's place (`title_placed`). 8: the PS2
     /// world map picture and the sphere grid's pages (`sgjob.rs`, ui.menus).
+    /// 9: one mip level (`phyretex::argb8_one_level`) for everything drawn
+    /// on the screen (not the sphere grid's pages): the game's texture
+    /// quality shrinks no one-level texture (`docs/render.md`).
     fn version(&self) -> u32 {
-        8
+        9
     }
     fn name(&self) -> &'static str {
         self.name
