@@ -122,12 +122,31 @@ pub const OP_DP3: u32 = 16;
 pub const OP_MAD: u32 = 50;
 pub const OP_MAX: u32 = 52;
 pub const OP_MUL: u32 = 56;
+pub const OP_RSQ: u32 = 68;
 const OP_CUSTOMDATA: u32 = 53;
+/// Every instruction opcode below the declarations (88 on) except
+/// `customdata`, for [`instructions`] to decode in full.
+pub const ALU: [u32; 87] = {
+    let mut a = [0; 87];
+    let mut i = 0;
+    while i < 87 {
+        a[i] = if i < 53 { i as u32 } else { i as u32 + 1 };
+        i += 1;
+    }
+    a
+};
+/// Flow control: `break`, `breakc`, `call`, `callc`, `case`, `continue`,
+/// `continuec`, `default`, `else`, `endif`, `endloop`, `endswitch`, `if`,
+/// `loop`, `ret`, `retc`, `switch`.
+pub const FLOW: [u32; 17] = [2, 3, 4, 5, 6, 7, 8, 10, 18, 21, 22, 23, 31, 48, 62, 63, 76];
 /// Opcode token bit: `_sat`.
 pub const SATURATE: u32 = 1 << 13;
 
 pub const REG_TEMP: u32 = 0;
+pub const REG_INPUT: u32 = 1;
 pub const REG_IMMEDIATE32: u32 = 4;
+/// Operand token of a one-component 32-bit immediate (`l(x)`), followed by its value.
+pub const IMMEDIATE32_SCALAR: u32 = (REG_IMMEDIATE32 << 12) | 1;
 pub const REG_CONSTANT_BUFFER: u32 = 8;
 
 /// One operand, as far as the patches need it.
@@ -145,6 +164,9 @@ pub struct Operand {
     pub index: Vec<Option<u32>>,
     /// Token positions (in the program, in tokens) of an immediate's values.
     pub values: std::ops::Range<usize>,
+    /// Token position of the operand token, and the operand's length in tokens.
+    pub at: usize,
+    pub len: usize,
     pub neg: bool,
     pub abs: bool,
 }
@@ -162,6 +184,19 @@ impl Operand {
     /// A temp register `rN`.
     pub fn temp(&self) -> Option<u32> {
         (self.reg == REG_TEMP && self.index.len() == 1).then(|| self.index[0]).flatten()
+    }
+    /// An input register `vN`.
+    pub fn input(&self) -> Option<u32> {
+        (self.reg == REG_INPUT && self.index.len() == 1).then(|| self.index[0]).flatten()
+    }
+    /// The single component a one-component source reads (`.x` select or a
+    /// swizzle repeating one component).
+    pub fn src_component(&self) -> Option<u32> {
+        match (self.comps, self.mode) {
+            (2, 2) => Some(self.sel & 3),
+            (2, 1) if (0..4).all(|c| (self.sel >> (2 * c)) & 3 == self.sel & 3) => Some(self.sel & 3),
+            _ => None,
+        }
     }
     /// `cb<slot>[<reg>]` with immediate indices.
     pub fn cbuffer(&self) -> Option<(u32, u32)> {
@@ -183,6 +218,7 @@ pub struct Instruction {
 }
 
 fn operand(t: &[u32], at: &mut usize) -> Result<Operand> {
+    let start = *at;
     let tok = *t.get(*at).context("operand past the end")?;
     *at += 1;
     let comps = tok & 3;
@@ -241,7 +277,7 @@ fn operand(t: &[u32], at: &mut usize) -> Result<Operand> {
         values = *at..*at + n;
         *at += n;
     }
-    Ok(Operand { reg, comps, mode, sel, index, values, neg, abs })
+    Ok(Operand { reg, comps, mode, sel, index, values, at: start, len: *at - start, neg, abs })
 }
 
 /// The tokens of a `SHDR`/`SHEX` chunk (version, length, then the program).

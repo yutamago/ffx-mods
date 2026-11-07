@@ -52,6 +52,10 @@ impl Job for LightingJob {
     fn settings(&self) -> &'static [&'static str] {
         &["render.lighting"]
     }
+    /// 2: N.L with the interpolated normal, not renormalised (Gouraud).
+    fn version(&self) -> u32 {
+        2
+    }
     fn enabled(&self, config: &Config) -> bool {
         config.render.lighting.ps2()
     }
@@ -80,8 +84,8 @@ impl Job for LightingJob {
             total.add(&s);
         }
         Ok(format!(
-            "{n} shader files: {} lit pixel shaders, {} lights changed to the PS2 falloff, {} shaders left as they were",
-            total.patched, total.lights, total.skipped
+            "{n} shader files: {} lit pixel shaders, {} lights changed to the PS2 falloff, {} normals left unnormalised, {} shaders left as they were",
+            total.patched, total.lights, total.unnormalised, total.skipped
         ))
     }
 }
@@ -94,6 +98,8 @@ pub struct Stats {
     pub lights: usize,
     /// Lit pixel shaders whose code did not have one pattern per light.
     pub skipped: usize,
+    /// Normal renormalisations removed.
+    pub unnormalised: usize,
 }
 
 impl Stats {
@@ -101,6 +107,7 @@ impl Stats {
         self.patched += o.patched;
         self.lights += o.lights;
         self.skipped += o.skipped;
+        self.unnormalised += o.unnormalised;
     }
 }
 
@@ -111,11 +118,12 @@ pub fn patch_file(bytes: &mut [u8]) -> Result<Stats> {
         match patch_container(&mut bytes[at..at + size])? {
             None => {}
             // A lit shader the pattern did not fit.
-            Some(0) => s.skipped += 1,
-            Some(lights) => {
+            Some(Lit { lights: 0, .. }) => s.skipped += 1,
+            Some(lit) => {
                 dxbc::reseal(bytes, at, size);
                 s.patched += 1;
-                s.lights += lights;
+                s.lights += lit.lights;
+                s.unnormalised += lit.unnormalised;
             }
         }
     }
@@ -144,20 +152,28 @@ fn imm_all(t: &[u32], o: &dxbc::Operand, v: f32) -> bool {
     o.reg == dxbc::REG_IMMEDIATE32 && !o.values.is_empty() && o.values.clone().all(|p| f32::from_bits(t[p]) == v)
 }
 
+/// What [`patch_container`] changed in a lit shader.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Lit {
+    /// Lights given the PS2 falloff (0 when the code did not match, then
+    /// nothing is written).
+    pub lights: usize,
+    /// Normal renormalisations removed (the `rsq`s the lights' normals came through).
+    pub unnormalised: usize,
+}
+
 /// Patches one container in place (checksum not updated). `None`: not a lit
-/// character pixel shader; `Some(n)`: n lights patched (0 when the code did
-/// not match, then nothing is written).
-pub fn patch_container(c: &mut [u8]) -> Result<Option<usize>> {
+/// character pixel shader.
+pub fn patch_container(c: &mut [u8]) -> Result<Option<Lit>> {
     let Some(lights) = lit_lights(c) else { return Ok(None) };
     if lights.is_empty() {
         return Ok(None);
     }
     let Some(&(_, at, size)) = dxbc::chunks(c)?.iter().find(|(t, ..)| t == b"SHDR" || t == b"SHEX") else {
-        return Ok(Some(0));
+        return Ok(Some(Lit { lights: 0, unnormalised: 0 }));
     };
     let mut t = dxbc::tokens(&c[at..at + size]);
-    let code = dxbc::instructions(&t, &[dxbc::OP_DP3, dxbc::OP_MAD, dxbc::OP_MUL, dxbc::OP_ADD, dxbc::OP_MAX])?;
-
+    let code = dxbc::instructions(&t, &dxbc::ALU)?;
 
     // Per component of a temp register: (temp, component).
     type Slot = (u32, u32);
@@ -168,6 +184,8 @@ pub fn patch_container(c: &mut [u8]) -> Result<Option<usize>> {
     // The matching mads: (instruction index, components written, components squared since).
     let mut mads: Vec<(usize, u32, u32)> = Vec::new();
     let mut muls: Vec<usize> = Vec::new();
+    // The dp3s of the lights.
+    let mut light_dp3: Vec<usize> = Vec::new();
     // The component a source operand gives to destination component `c`.
     let read = |o: &dxbc::Operand, c: u32| -> Option<Slot> {
         if o.neg || o.abs {
@@ -230,6 +248,7 @@ pub fn patch_container(c: &mut [u8]) -> Result<Option<usize>> {
             && i.operands[1..].iter().any(|o| o.cbuffer().is_some_and(|(slot, reg)| slot == 0 && lights.contains(&reg)))
         {
             ndotl.push((r, c));
+            light_dp3.push(k);
         }
     }
     // One light per component of a matched mad. Most variants square it (half-Lambert squared);
@@ -239,7 +258,7 @@ pub fn patch_container(c: &mut [u8]) -> Result<Option<usize>> {
         if std::env::var_os("DEMASTER_SHADER_DEBUG").is_some() {
             eprintln!("lights {lights:?} mads {mads:?} muls {muls:?} half {half:?} ndotl {ndotl:?}");
         }
-        return Ok(Some(0));
+        return Ok(Some(Lit { lights: 0, unnormalised: 0 }));
     }
     for &(mad, ..) in &mads {
         let m = &code[mad];
@@ -255,10 +274,87 @@ pub fn patch_container(c: &mut [u8]) -> Result<Option<usize>> {
         let q = code[mul].at;
         t[q] = (t[q] & !0x7ff) | dxbc::OP_MAX;
     }
+    // Gouraud: N.L with the interpolated normal as it is, not renormalised.
+    let mut rsqs: Vec<usize> = light_dp3.iter().filter_map(|&k| normalisation(&code, k)).collect();
+    rsqs.sort_unstable();
+    rsqs.dedup();
+    if rsqs.is_empty() && std::env::var_os("DEMASTER_SHADER_DEBUG").is_some() {
+        eprintln!("lights {lights:?}: no normalisation found");
+    }
+    for &k in &rsqs {
+        let src = code[k].operands[1].at;
+        t[src] = dxbc::IMMEDIATE32_SCALAR;
+        t[src + 1] = 1.0f32.to_bits();
+    }
     for (k, w) in t.iter().enumerate() {
         c[at + 4 * k..at + 4 * k + 4].copy_from_slice(&w.to_le_bytes());
     }
-    Ok(Some(found))
+    Ok(Some(Lit { lights: found, unnormalised: rsqs.len() }))
+}
+
+/// The last instruction before `k` that writes any of `comps` of temp `r`;
+/// `None` across flow control (the writer would depend on the path).
+fn last_writer(code: &[dxbc::Instruction], k: usize, r: u32, comps: u32) -> Option<usize> {
+    for j in (0..k).rev() {
+        let i = &code[j];
+        if dxbc::FLOW.contains(&i.opcode) {
+            return None;
+        }
+        if i.operands.first().is_some_and(|d| d.temp() == Some(r) && d.dst_mask() & comps != 0) {
+            return Some(j);
+        }
+    }
+    None
+}
+
+/// The `rsq` that renormalises the interpolated normal a light's `dp3`
+/// (instruction `k`) reads:
+///
+/// ```text
+/// dp3 rK.c, vM.xyz, vM.xyz
+/// rsq rK.c, rK.c
+/// mul rN.xyz, rK.cccc, vM.xyz      (either order; or rN.yzw)
+/// dp3 rA.c, cb0[Light_i.m_direction].xyz, rN.xyz
+/// ```
+///
+fn normalisation(code: &[dxbc::Instruction], k: usize) -> Option<usize> {
+    let normal = code[k].operands[1..].iter().find(|o| o.temp().is_some())?;
+    let n = normal.temp()?;
+    // The components the dp3 reads (its swizzle's first three).
+    let read = match (normal.comps, normal.mode) {
+        (2, 1) => (0..3).fold(0, |m, c| m | 1 << ((normal.sel >> (2 * c)) & 3)),
+        _ => return None,
+    };
+    let mul = last_writer(code, k, n, read)?;
+    let m = &code[mul];
+    if m.opcode != dxbc::OP_MUL || m.saturate || m.operands.len() != 3 || m.operands[0].dst_mask() & read != read {
+        return None;
+    }
+    let (scale, vin) = match (&m.operands[1], &m.operands[2]) {
+        (a, b) if a.input().is_some() => (b, a.input()?),
+        (a, b) => (a, b.input()?),
+    };
+    let rk = scale.temp()?;
+    let c = scale.src_component()?;
+    if scale.neg || scale.abs {
+        return None;
+    }
+    let rsq = last_writer(code, mul, rk, 1 << c)?;
+    let q = &code[rsq];
+    if q.opcode != dxbc::OP_RSQ || q.saturate || q.operands.len() != 2 || q.operands[0].dst_component() != Some(c) {
+        return None;
+    }
+    let src = &q.operands[1];
+    if src.temp() != Some(rk) || src.src_component() != Some(c) || src.neg || src.abs || src.len != 2 {
+        return None;
+    }
+    let dp = last_writer(code, rsq, rk, 1 << c)?;
+    let d = &code[dp];
+    (d.opcode == dxbc::OP_DP3
+        && d.operands.len() == 3
+        && d.operands[0].dst_component() == Some(c)
+        && d.operands[1..].iter().all(|o| o.input() == Some(vin) && !o.neg && !o.abs))
+        .then_some(rsq)
 }
 
 
@@ -304,5 +400,7 @@ mod tests {
         assert_eq!(total.skipped, 0, "{total:?}");
         assert_eq!(total.patched, 1854, "{total:?}");
         assert_eq!(total.lights, 1854 + 1236 + 618, "{total:?}");
+        eprintln!("{total:?}");
+        assert_eq!(total.unnormalised, 1854, "{total:?}");
     }
 }

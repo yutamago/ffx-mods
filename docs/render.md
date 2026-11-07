@@ -210,6 +210,17 @@ at x 1/128.
   padding; the test checks it against all 12,600 containers of the 793 shader
   files and that every lit shader takes one patch per light: 1854 shaders,
   3708 lights). 199 files, written to `efl/x/ffx_data/gamedata/ps3data/shaders/d3d11/`.
+- **Gouraud** (job version 2): the vertex shaders output a unit normal
+  (`TEXCOORD2`), and each lit pixel shader renormalised the interpolated one
+  (`dp3 rK.c, vN.xyz, vN.xyz; rsq rK.c, rK.c; mul rM.xyz, rK.cccc, vN.xyz`)
+  before the lights' `dp3`. That `rsq` now reads `l(1.0)` (same length:
+  a temp source and a scalar immediate are both 2 tokens), so N.L is linear
+  across the triangle: the same value as interpolating each vertex's N.L
+  like the PS2 does, except on triangles that cross a terminator (the PS2
+  clamps each vertex at 0 before interpolating) and past the PS2's 255
+  vertex clamp. The chain is followed back from each light's `dp3`
+  (`shaderjob::normalisation`); the test checks that all 1854 lit shaders
+  have it once.
 
 ### Tests
 
@@ -239,8 +250,8 @@ at x 1/128.
   lit side; the PS2's normal-light matrix builder was not found in the PS2
   ELF, FFX.exe's port only copies the rows). The opening's close-ups (below,
   "Compared with the PS2") show the same lit side as the PS2.
-- Per pixel instead of per vertex (Gouraud on the PS2): smoother and with
-  sharper terminators on coarse meshes.
+- Per pixel instead of per vertex: since job version 2 the interpolation
+  is Gouraud-like (above); terminator triangles still clamp per pixel.
 - The PS2 clamps the vertex colour at 255 (x 1.99) before the texture
   multiply; ours does not, which only shows where texture < 0.5 and lit >
   1.99 (very bright lights).
@@ -287,10 +298,52 @@ install (`C:\_workspaces\fh-demaster-test`, 3440 x 1440, all mod files):
    | the party at the fire ("Field Programmers", mask catches ground too) | 97.8 / 37.9 / 54 / 92 / 151 | 90.4 / 31.6 / 52 / 88 / 130 |
 
    Mean skin brightness matches; ours spreads a little more (sd +6 on the
-   close-ups), consistent with per-pixel max(0, N.L) giving sharper
-   terminators than the PS2's Gouraud. The lighting (level 254/128, no
-   fill light, max(0, N.L)) stays as it is; nothing was changed, so the
-   daylight scenes are as before.
+   close-ups). The lighting (level 254/128, no fill light, max(0, N.L))
+   stayed as it was.
+
+### Brighter highlights in the opening's close-ups (2026-11-07)
+
+The user saw brighter highlights on Tidus's face than on the PS2. The
+colour mask above is biased: skin and blond hair overlap in hue, and the
+brightest skin clips red (R 254-255 on both), turns yellow and drops out of
+the mask. Measured again on pose-matched frames (`scratch/light/match.py`:
+the frame of our run most like the PS2 frame, 4:3 crop at 640 x 480) inside
+a hand-placed face ellipse (`scratch/light/face.py`, `regions.sh`), main of
+2026-11-07 (with `render.texture_quality`) before and after the Gouraud
+change:
+
+| Region | L mean / sd / p5 / p50 / p95 | G p5/50/95 | B p5/50/95 |
+|---|---|---|---|
+| Yuna face, PS2 `s094` | 97.3 / 43.2 / 26 / 94 / 179 | 20/80/162 | 20/57/82 |
+| Yuna, before | 98.8 / 50.2 / 23 / 89 / 191 | 17/72/179 | 19/54/92 |
+| Yuna, after | 97.7 / 49.9 / 22 / 88 / 191 | 17/71/178 | 19/54/92 |
+| Tidus face, PS2 `s153` | 147.5 / 40.6 / 54 / 163 / 186 | 42/138/173 | 24/62/78 |
+| Tidus, before | 158.2 / 41.5 / 62 / 171 / 200 | 49/149/194 | 26/67/89 |
+| Tidus, after | 156.0 / 44.9 / 51 / 173 / 200 | 42/151/193 | 23/68/90 |
+| Tidus's jacket (yellow), PS2 | 197.7 / 11.1 / 179 / 198 / 213 | 176/204/228 | 20/24/36 |
+| jacket, before / after | 215.9 / 211.6 (L mean) | 207/231/255, 186/223/255 | 23/27/42, 24/30/42 |
+
+R clips at 255 on the lit skin of both. The shadows match (p5), the
+highlights do not: lit skin and the lit jacket are 10-13% brighter in G and
+B than the PS2's, the darkest parts the same. The Gouraud change is right
+for the PS2 but moves these numbers by 1-2 (renormalising changes little on
+the PS2 meshes' fairly dense faces), so it is not the cause. Ruled out too:
+the PS2's 255 vertex clamp (the face's vertex colours peak at 244 in
+`d143`), sRGB (the PC has no sRGB texture formats; the shader multiplies
+`texture x COLOR0 x MaterialColour x lit` in the stored values like the
+GS), the vertex shader's height gradient (`VertexColorOrigin/Modify`, 1)
+and the extra light (`max(TEXCOORD4, 1)`, 1 without `setAddLight`). The
+excess grows with the light (none at the ambient, ~12% where light 0
+hits), which points at the directional lights' level or colour, not at
+the falloff: the next check is the lit vertex colour of a PS2 vertex
+(`vcol.py`, `d143`) against `m_colorIntensity` x N.L read from our game at
+the same shot, light by light (the PC's glow balance, `+0x1e0`, and the
+`Ch_DrawMain` light value are the suspects). The sky behind is darker in
+ours (L 60 against 96), a separate (map/sky) difference.
+
+Pictures: `C:\shots\fix-alpha\light\cmp-final.png` (PS2, before, after;
+Yuna then Tidus, with the measured ellipses), the runs in `final-before\`,
+`final-after\`.
 
 Pictures (never in git): `C:\shots\fix-alpha\runtime\` `ps2\s*.png`
 (PS2 boot to title, every 2 s; `d143.gs.zst`, the GS dump of the Tidus close-up), `diag3\t*.png` (ours,
