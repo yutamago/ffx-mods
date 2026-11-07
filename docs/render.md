@@ -347,7 +347,74 @@ A chain has a cost at the game's lower texture qualities: the loader drops
 the top level at `TQ_MEDIUM` and the top two at `TQ_LOW` (the `VQ_LOW`
 preset, the user's setting) of every texture with that many levels, never
 of a one-level texture (ffx-rust `docs/formats/phyre.md`, "How the game
-loads a texture"). So at `VQ_LOW` every PS2 texture with a chain is drawn
-at a quarter of its size. The remodelled characters' atlases are written
-in one level again (`phyretex::argb8_one_level`, models job version 4,
-`docs/models.md` "Conversion"); the other jobs still write chains.
+loads a texture"). So at `VQ_LOW` every PS2 texture with a chain was drawn
+at a quarter of its size. Now: `render.texture_quality` (next section)
+keeps the chains and loads them whole; the textures that never need one
+have one level.
+
+## Texture quality (`render.texture_quality`)
+
+**What the game does.** `Settings_SetValue` (`0x00401930`) reads
+`TextureQuality` of `GameSetting.ini` (the one in the user's
+`Documents\Square Enix\FINAL FANTASY X&X-2 HD Remaster\`; the presets set
+it: `VQ_LOW` = `TQ_LOW`) into `g_Settings +0x34` as 0 (`TQ_HIGH`), 1
+(`TQ_MEDIUM`) or 2 (`TQ_LOW`); `Phyre_PFramework_PApplication_onInit`
+hands it to `Phyre_PRenderInterface_setTextureQuality` (`0x0058e000`,
+render interface `0x00c94f00` `+0x1340`). `Phyre_PBinary_loadClusterTextures`
+(`0x00465ab0`, inside `loadCluster`, on the loading thread) asks
+`Phyre_PRenderInterface_getTextureQuality` (`0x005947d0`) once per
+cluster and drops that many top mip levels of every 2D texture with more
+levels than that: none at `TQ_HIGH`, the top one at `TQ_MEDIUM` (half the
+size), the top two at `TQ_LOW` (a quarter). The drop backs off while the
+remaining top level would be under 4 texels wide or high (a 16 x 16
+texture keeps 4 x 4, an 8 x 8 one loses only one level), and a texture
+with only one level is never reduced (ffx-rust `docs/formats/phyre.md`,
+"How the game loads a texture"; ffx.sym).
+
+**Choices measured.**
+
+| Way | Look at `TQ_LOW` | Look at `TQ_HIGH` | Size |
+|---|---|---|---|
+| chains as before | a quarter of the PS2 size: the pyreflies' sparkle a smeared band, map and effect texels 4x as big | PS2 texels | full build: 3.7 GB of chained PS2 textures (top levels 2.7 GB; `maps.field` 1.5 GB, `fx.textures` 1.35 GB, `maps.battle` 0.34 GB, `chr.*` 0.42 GB) |
+| top two levels as x4 / x2 upscales of the PS2 image | the PS2 texels (level 2) | the upscale, the same picture (nearest: blockier than the PS2's bilinear) | each chain 16x: **about +54 GB** on disk, 16x the VRAM at `TQ_HIGH`; rejected |
+| one level everywhere | PS2 texels | PS2 texels; far surfaces shimmer (why chains were added) | -0.9 GB |
+| **hook: our files at quality 0** (chosen) | PS2 texels, chains kept | PS2 texels | nothing |
+
+**Patch** (`RenderPatches.texture_quality`, default `"ps2"`): at start the
+mod lists every `*.phyre` under its `efl/x` (32,473 in the test install);
+the shared `loadCluster` hook keeps the path of the cluster being loaded
+per thread (`/FFX_Data/GameData/PS3Data/...`), and a hook on
+`getTextureQuality` (7 bytes, `mov eax, [ecx+0x1340]; ret`) returns 0
+while that path, or what follows one of its `/`, is one of the mod's
+files. The game's own textures keep the user's quality, so `VQ_LOW` still
+saves its VRAM on the HD textures. `"hd"` installs nothing. Not covered: a
+texture quality change while the game runs reloads every texture through
+`Phyre_PBinary_reloadClusterTextures` outside `loadCluster` (from
+`Phyre_PFramework_PApplication_frame` when the application asks for it;
+the PC game sets the option in its launcher), which would drop our levels
+until the next load of that file.
+
+**One level where nothing is minified.** The menus, portraits, title,
+loading screen, button glyphs, font pages and the world map picture
+(`ui.*` job version 9) and the 2D rooms' paintings (`maps.backgrounds`
+version 3) are drawn on the screen at the PS2 size or larger (the 4:3
+picture is 1440 lines tall at 1440p, 2.8 times the PS2's 512 x 416 frame),
+so a chain is never sampled below its top level: they have one level
+again (`phyretex::argb8_one_level`), which no quality reduces even with
+`render.texture_quality = "hd"`, and are a quarter smaller. The sphere
+grid's pages zoom out and keep their chains. Maps, effects and the
+kept-mesh characters (`chr.*`) keep their chains (far surfaces), the
+remodelled characters' atlases stay one level (`docs/models.md`).
+
+**Checked in the game** (Fahrenheit test install, the boot intro and the
+title; PS2 frames from PCSX2 in `/mnt/c/shots/fix-alpha/`; game frames in
+`/mnt/c/shots/fix-alpha/tex/`): `low-off-*` the user's `VQ_LOW` with the
+patch off (before), `low-on-*` / `low-on3-*` `VQ_LOW` with the patch, `max-on-*`
+every option at maximum. The log names each cluster with its decision: in
+the intro the map's 13 `fp/tex` and 30 `texswap` textures, the character
+atlases, the weapons, the fire effect (`magic_0662`), the loading and menu
+textures load whole; the map's 59 HD textures, the HD menus and fonts keep
+`TQ_LOW`. The pyreflies streaming over the ruins have the PS2's fine
+sparkle with the patch and at max settings, a smeared band without
+(`/mnt/c/shots/fix-alpha/tex/cmp/pyreflies.png`: PS2, before, after, max). At `TQ_HIGH` the hook
+returns at once (quality 0).

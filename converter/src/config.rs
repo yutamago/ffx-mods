@@ -120,6 +120,7 @@ pub struct Render {
     pub shadows: Look,
     pub aspect: Look,
     pub texture_filter: Filter,
+    pub texture_quality: Look,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -233,6 +234,7 @@ pub const SETTINGS: &[(&str, AppliedBy)] = {
         ("render.shadows", Mod),
         ("render.aspect", Mod),
         ("render.texture_filter", Mod),
+        ("render.texture_quality", Mod),
         ("ui.menus", Both),
         ("ui.portraits", Converter),
         ("ui.font", Converter),

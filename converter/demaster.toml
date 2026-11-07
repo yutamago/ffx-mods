@@ -72,6 +72,9 @@ shadows = "ps2"
 aspect = "ps2"
 # "game": the game's own texture filter. "nearest": unfiltered pixels.
 texture_filter = "game"
+# "ps2": the PS2 textures load at their full size whatever the game's texture
+# quality. "hd": the game's texture quality shrinks them too.
+texture_quality = "ps2"
 
 [ui]
 # Menus, cursor and windows drawn the PS2 way (the PC-only screens such as

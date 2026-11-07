@@ -63,6 +63,7 @@ every file.
 | `render.lighting` | 10 | characters lit by the PS2 formula: the PS2 light colours and directions at the PS2's level (254/128), `max(0, N.L)` falloff, no HD fill light | the HD light levels and soft falloff | mod and converter (`render.lighting`: the patched character shaders) | done (`docs/render.md`); per-pixel instead of per-vertex, no 2x clamp of the PS2 vertex colour |
 | `render.shadows` | 11 | ground shadows only, no shadow maps | shadow maps | mod | done (`docs/render.md`) |
 | `render.aspect` | 14 | 4:3 with black bars and the PS2 projection; the PS2-placed menus, windows and battle HUD where the PS2 had them; the Flash screens (Esc menu, settings, save/load) squeezed into the 4:3; event sprites (the opening's staff credits) at the PS2 size | 16:9 | mod (and the `movies` and `maps.backgrounds` jobs) | done; mouse on the PS2 menus not checked (`docs/screen.md`) |
+| `render.texture_quality` | 19 | the PS2 textures (maps, effects, characters, menus) load at their full size at every texture quality of the game's graphics options; the HD ones follow the option | the option's `TQ_MEDIUM` and `TQ_LOW` (the `VQ_LOW` preset) drop the top one or two mip levels of the PS2 textures too: a quarter of the PS2 size at `TQ_LOW` | mod | done (`docs/render.md`, "Texture quality") |
 | `ui.menus` | 12 | the PS2 message windows (dialogue choices, yes/no questions: the PS2 plain window with its colours and pieces), the PS2 battle command windows (one blue-to-violet gradient box at the PS2 place and size, PS2 row layout; the change and gil windows stay HD), the PS2 main menu screen (blue-to-khaki background, brush-plate party rows, purple option plates, help bar, gil/time/location footer; the PS2 `meswin` written as `ps2win`), the PS2 Items and Abilities screens (two columns of gold/purple brush plates with count discs, the black sub-command bar, the target window, the ability screen's party plate), the PS2 hand-and-ball cursor where the game draws cursor kind 0, the PS2 item icons on their coloured tiles, the PS2 battle words (OVERKILL, IMMUNE, MISS, MP) at the PS2 size, the battle sequence's Overdrive tab, BEFEHL footer, glow and lines, the PS2 battle help bar, turn order (CTB) list and party list, the command windows' numbers in the 16x12 font, the PS2 `strtex` labels, the PAL disc's menu layout (`jppc/menu/menu_script.bin`), and the PS2 pieces of the menu and battle atlases (`ps2win`, `ps2btl`; Equip, Status, Overdrive, Customize, Config and the Flash screens stay HD, `docs/ui.md`) | HD | converter (`ui.menus`) and mod | message windows done; battle windows, Overdrive tab, main menu, Items and Abilities checked through injected game calls, not in play; the other sub-menus not started |
 | `ui.portraits` | 12 | PS2 portraits: menu faces, aeons, CTB list | HD | converter (`ui.menus`) | done (`docs/ui.md`) |
 | `ui.font` | 13 | the PS2 font and its letter widths in English, French, Italian, German and Spanish (dialogue, menus, battle text, help), and the PS2 damage digits; Japanese, Chinese and Korean keep the HD font | the HD typeface | converter (`ui.font`; the damage digits of the battle atlas by `ui.menus`) | done (`docs/font.md`) |
@@ -91,11 +92,14 @@ which plays them in the game while "Original" is chosen. Switching between
 `"ps2"` and `"live"` renders the bank again once (its build key holds the
 value).
 
-Every converted PS2 texture whose HD texture has mip levels gets a full mip
-chain (`phyretex::mip_chain`), so surfaces seen from afar do not shimmer;
-except the remodelled characters' atlases (`models.*`), which have one
-level, so that the game's texture quality setting (`TQ_LOW` drops the top
-two levels of a chain) cannot shrink them (`docs/models.md`, "Conversion").
+PS2 textures of the 3D scene (maps, effects, kept-mesh characters, sphere
+grid) whose HD texture has mip levels get a full mip chain
+(`phyretex::mip_chain`), so surfaces seen from afar do not shimmer; the
+game's texture quality (`TQ_LOW` drops the top two levels of every chain)
+would shrink them, which `render.texture_quality` stops. Textures that are
+never minified (menus, font, the 2D rooms' paintings) and the remodelled
+characters' atlases (`models.*`) have one level, which no texture quality
+shrinks (`docs/render.md`, "Texture quality").
 
 ## Timing (default `"hd"`: the PC's speed)
 

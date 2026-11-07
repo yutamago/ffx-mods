@@ -244,16 +244,7 @@ internal static unsafe class RenderPatches {
     /// </summary>
     public static bool texture_filter(DemasterModule m, string value) {
         _log = m.log;
-        _load_cluster = (stream, cluster, path, key) => {
-            string? outer = _cluster;
-            _cluster = path == 0 ? "" : Marshal.PtrToStringAnsi(path) ?? "";
-            try {
-                return at<LoadCluster>(LOAD_CLUSTER).chain_from(_load_cluster!).fnptr!(stream, cluster, path, key);
-            }
-            finally {
-                _cluster = outer;
-            }
-        };
+        if (!cluster_hook(m)) return false;
         _create_sampler = sampler => {
             byte* s = (byte*)sampler;
             bool point = _cluster is { } path && (s[0x1c] & 0x40) == 0 && scene_cluster(path);
@@ -273,9 +264,96 @@ internal static unsafe class RenderPatches {
         _map_filter = (min, mag, comparison) => _point
             ? FILTER_POINT_MIP_LINEAR
             : at<MapSamplerFilter>(MAP_SAMPLER_FILTER).chain_from(_map_filter!).fnptr!(min, mag, comparison);
-        return at<LoadCluster>(LOAD_CLUSTER).hook(m, _load_cluster)
-            && at<CreateSampler>(CREATE_SAMPLER).hook(m, _create_sampler)
+        return at<CreateSampler>(CREATE_SAMPLER).hook(m, _create_sampler)
             && at<MapSamplerFilter>(MAP_SAMPLER_FILTER).hook(m, _map_filter);
+    }
+
+    /// <summary>
+    /// The loadCluster hook that keeps the path of the cluster being loaded in <see cref="_cluster"/>
+    /// (per thread; loads nest), shared by render.texture_filter and render.texture_quality and
+    /// installed once.
+    /// </summary>
+    private static bool cluster_hook(DemasterModule m) {
+        if (_load_cluster is not null) return true;
+        _load_cluster = (stream, cluster, path, key) => {
+            string? outer = _cluster;
+            bool? outer_ours = _ours;
+            _cluster = path == 0 ? "" : Marshal.PtrToStringAnsi(path) ?? "";
+            _ours = null;
+            try {
+                return at<LoadCluster>(LOAD_CLUSTER).chain_from(_load_cluster!).fnptr!(stream, cluster, path, key);
+            }
+            finally {
+                _cluster = outer;
+                _ours = outer_ours;
+            }
+        };
+        return at<LoadCluster>(LOAD_CLUSTER).hook(m, _load_cluster);
+    }
+
+    // ---- render.texture_quality ----------------------------------------------------------------
+
+    /// <summary>
+    /// Phyre_PRenderInterface_getTextureQuality: thiscall(render interface 0x00c94f00) -> +0x1340,
+    /// the TextureQuality of GameSetting.ini (0 TQ_HIGH, 1 TQ_MEDIUM, 2 TQ_LOW). Its callers,
+    /// Phyre_PBinary_loadClusterTextures (inside loadCluster) and
+    /// Phyre_PBinary_reloadClusterTextures, drop that many top mip levels of every texture with a
+    /// chain (ffx-rust docs/formats/phyre.md, "How the game loads a texture"). 7 bytes:
+    /// mov eax, [ecx+0x1340]; ret.
+    /// </summary>
+    [UnmanagedFunctionPointer(CallingConvention.ThisCall)]
+    public delegate int GetTextureQuality(nint render);
+
+    private const uint GET_TEXTURE_QUALITY = 0x005947d0;
+    private static GetTextureQuality? _quality;
+    /// <summary>The mod's files, as paths under efl/x, lower case with '/'.</summary>
+    private static HashSet<string> _replaced = [];
+    /// <summary>Whether the cluster being loaded on this thread is one of the mod's files (null: not looked up yet).</summary>
+    [ThreadStatic] private static bool? _ours;
+    private static int _kept_full;
+    /// <summary>Clusters logged with their decision (the first ones of a session).</summary>
+    private const int DEBUG_LINES = 40;
+
+    private static string norm(string path) => path.Replace('\\', '/').ToLowerInvariant();
+
+    /// <summary>
+    /// Whether <paramref name="path"/> (as loadCluster gets it) is a file the mod replaces: it, or
+    /// what follows one of its '/', is a path under efl/x.
+    /// </summary>
+    private static bool replaced(string path) {
+        string p = norm(path);
+        if (_replaced.Contains(p)) return true;
+        for (int i = p.IndexOf('/'); i >= 0; i = p.IndexOf('/', i + 1))
+            if (_replaced.Contains(p[(i + 1)..])) return true;
+        return false;
+    }
+
+    /// <summary>
+    /// The PS2 textures load at their full size at every texture quality: while a file of the
+    /// mod's is loading, the texture quality reads as TQ_HIGH (no mip level dropped); the game's
+    /// own files keep the quality of the graphics options.
+    /// </summary>
+    public static bool texture_quality(DemasterModule m, string value) {
+        _log = m.log;
+        string root = Path.Combine(m.mod_dir, "efl", "x");
+        HashSet<string> files = [];
+        if (Directory.Exists(root))
+            foreach (string f in Directory.EnumerateFiles(root, "*.phyre", SearchOption.AllDirectories))
+                files.Add(norm(Path.GetRelativePath(root, f)));
+        _replaced = files;
+        _log.Info($"render.texture_quality: {files.Count} phyre files of the mod load at full size");
+        if (!cluster_hook(m)) return false;
+        _quality = render => {
+            int q = at<GetTextureQuality>(GET_TEXTURE_QUALITY).chain_from(_quality!).fnptr!(render);
+            if (q == 0 || _cluster is not { } path) return q;
+            if (_ours is null) {
+                _ours = replaced(path);
+                if (Interlocked.Increment(ref _kept_full) <= DEBUG_LINES)
+                    _log?.Info($"render.texture_quality: '{path}' {(_ours == true ? "at full size (texture quality " + q + " -> 0)" : "kept at texture quality " + q)}");
+            }
+            return _ours == true ? 0 : q;
+        };
+        return at<GetTextureQuality>(GET_TEXTURE_QUALITY).hook(m, _quality);
     }
 
     // ---- render.aspect -------------------------------------------------------------------------
