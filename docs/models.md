@@ -8,7 +8,8 @@ remodelled character the jobs write, under
 
 - `mdl/d3d11/<name>.dae.phyre`: the HD model with the PS2 mesh in it;
 - `tex/d3d11/p<name[1..]>.dds.phyre` (`c001` → `p001`): the PS2 textures
-  as one ARGB8 atlas at PS2 size, a new texture (see "Textures");
+  as one ARGB8 atlas at PS2 size, one mip level, a new texture (see
+  "Conversion" 4);
 - `<name>.ahwin32`: the asset list with that texture added.
 
 For tests, `demaster models <iso> <FFX_Data.vbf> <out> all|<kind/name>...`
@@ -104,14 +105,26 @@ The party has up to 8 bones per vertex, m112 up to 14.
    shelf-packed into one atlas, 2 texels of edge repeated around each
    page. UVs map into the atlas (the PS2 UVs stay inside their page, so no
    wrapping is lost). The atlas is a new texture made from the template's
-   HD texture (`phyretex::argb8_as`), in the model's own folder (c906 uses
+   HD texture (`phyretex::argb8_one_level`), in the model's own folder
+   (c906 uses
    c106's texture), so that HD segments still drawn (cloth) keep theirs.
    The texture's asset id (`m_id`, `PS3Data/chr/pc/c001/tex/c001.dds`)
    sits in the cluster's array data, so the new id has the same length and
    is patched in place: `p001.dds`, or `p238_ps2x.dds` for `n238_hair.dds`.
    The materials of the written segments point to it
    (`ClusterEdit::set_texture`), and it is added to the `.ahwin32`
-   (`ffx_phyre::assets::add_files`).
+   (`ffx_phyre::assets::add_files`). The atlas and the face animation
+   frames have **one mip level**: the game's texture quality drops the
+   top levels of a texture with a chain (two at `TQ_LOW`, which the
+   `VQ_LOW` preset sets; ffx-rust `docs/formats/phyre.md`, "How the game
+   loads a texture") and never touches a one-level texture. With the mip
+   chain (job versions 2-3) the user's game (`VQ_LOW`) drew every PS2
+   character at a quarter of the PS2's texels: Tidus's 516x2340 atlas at
+   129x585, the face smeared, the hair strands and their alpha averaged
+   into flat chunky cards, the chain and earring faded out
+   (`/mnt/c/shots/fix-alpha/models/cmp/tidus.png`, "before"; reproduced
+   offline by drawing the glb with the atlas shrunk 4x). The PS2 drew
+   characters without mip maps too.
 5. Where the geometry goes:
    - skinned PS2 models (every party model, most others): into the HD
      skinned instance whose skeleton names most of the model's bones (the
@@ -170,18 +183,41 @@ How the PC draws cloth:
   binding mode. The HD cloth segments use (255, 255, 255) or (255, 0, 0)
   on free vertices and (26, 26, 26) on anchored ones.
 
+The PS2 cloth entry (`0x24` bytes) says which of a piece's vertices are
+simulated: `u16` free count `+0`, `u16` fixed count `+2`, total `+0x1c`
+(= free + fixed in all 355 cloth entries of the disc's `.chr` files); the
+vertex list `+8` holds the free vertices, then the fixed ones, each run
+sorted. The fixed ones are where the piece hangs from the body: the base
+of Wakka's crest (piece (0, 3): 255 free, 50 fixed), the ankle ends of his
+shins ((0, 0): 28 free, 4 fixed).
+
 So every PS2 cloth piece (of a skinned model) goes into the segment tagged
 with it: the HD's segment of that piece if there is one, else a copy of
 the instance's largest HD cloth segment, tagged after the import. The PS2
-triangles lie exactly on the simulated ones. Each vertex gets the colour
-of the nearest vertex of the HD segment of its piece; pieces the HD never
-drew get the HD cloth segments' most common free colour, and their
-vertices shared with non-cloth triangles (where the piece hangs from the
-body) keep the skin colour. Characters without HD cloth segments (no cloth
+triangles lie exactly on the simulated ones. A fixed vertex gets the skin
+colour; a free one the colour of the nearest free vertex of the HD
+segment of its piece (the HD's binding mode), or the HD cloth segments'
+most common free colour. Characters without HD cloth segments (no cloth
 shader to copy) keep their cloth skinned. 55 characters draw their PS2
 cloth this way.
 
-The first try kept the old colour (26, 26, 26) on every cloth vertex:
+**Pieces the HD has another shape for stay skinned.** When no vertex of
+the PS2 piece lies within 0.1 units of the HD's segment of that piece
+(`models::SHARED`), every vertex gets the skin colour: the PC's
+simulation of the piece is set up for the HD's shape. Wakka's PS2 piece
+(0, 0) is both shins (the bare lower legs between trousers and sandals),
+the HD's is two small flaps at the ankles (0.24 apart at the nearest);
+simulated, his left shin folded into a thin sliver in the intro (a gap
+between knee and foot), with either colour rule; skinned it is whole,
+as on the PS2 (`/mnt/c/shots/fix-alpha/models/cmp/party-wakka.png`).
+The pieces the HD kept share vertices with it (0.03 apart at most among
+the party). Kept skinned (build of 2026-11-07): c004 (0, 4), c005 (0, 0),
+c006 (3, 4), c103 (1, 3), c104 (2, 9) and (2, 13), c105 (2, 0), m112
+(0, 4), m248 (0, 3), n217 (2, 0), n222 (0, 3).
+
+Before the PS2's fixed list was read, the colours came from the nearest HD
+vertex alone, and pieces the HD never drew kept the vertices shared with
+non-cloth triangles skinned. The first try kept the old colour (26, 26, 26) on every cloth vertex:
 nothing was bound, and Rikku's sashes stood up in their bind pose. The
 rule before that left PS2 pieces out where an HD cloth segment lay within
 0.5 units of 60 % of their vertices; it matched Wakka's crest to a small
@@ -274,7 +310,18 @@ The blend is `ALPHA_2` = `0x44`, (Cs − Cd) × As + Cd, written as register
 `0x43` from the texture-list entry's bytes `+8`, `+9` (`0x44 00` in every
 `.chr`; `FUN_008438b0`), with the texture's alpha (TEX0 TCC set by
 `Ch_TextureSetRegs`). So a texel with GS alpha under `0x80` is
-see-through: hair strands and fur and feather fringes fade out.
+see-through: hair strands and fur and feather fringes fade out. The alpha
+test is `TEST_2` ATE on, ATST `NOTEQUAL`, AREF 0 (a PCSX2 GS register
+dump of the boot intro: context 2, ALPHA `0x44`, MODULATE with vertex
+alpha 0x80): only texels of alpha 0 are dropped.
+
+Texture alpha is per CLUT: a texture-list entry is an image and a CLUT,
+and a model reads one 8-bit image through several CLUTs, each right for
+its own part of the image. Tidus's close-up c101 has 9 entries over 2
+images and 6 CLUTs: CLUTs 0, 2, 4 and 5 have alpha 0 or 0x80 only, CLUTs 1
+and 3 (93 and 54 alpha values) are those of the hair (entry 1, 3,283
+triangles) and of the chain and earring (entry 4); outside their parts
+their alpha is noise, which no triangle samples.
 
 **How the PC draws it.** A `PMaterial` names an effect variant
 (`m_effectVariant`, a user fixup indexing the `PAssetReferenceImport`s:
@@ -295,7 +342,31 @@ into the HD cloth segments with their HD materials (Kimahri's fur and mane:
 kept-mesh models the PS2 texels went into HD pages whose material may not
 use alpha at all.
 
-**What the converter does.**
+**What the converter does.** Two ways, by job:
+
+- **Remodelled models (`models.*`): the blended twin** (`chralpha::Draw::Blend`,
+  job version 4). Segments with see-through texels get the
+  `ALPHA_ENABLED` twin of their material's variant (same switches,
+  `UATFOPQ` off; the lookup below) and `AlphaThreshold` 1/128, the PS2's
+  `NOTEQUAL 0` (`chralpha::PS2_ALPHA_TEST`); HD materials that blend
+  already (the cloth ones) keep their variant with that threshold. Drawn in
+  the `Transparent` pass, after the opaque body, depth tested and written,
+  in the PS2 strip order within the segment: what the PS2 did.
+  **Why not the `UATFOPQ` twin any more:** alpha to coverage needs MSAA,
+  and the `VQ_LOW` preset (the user's own `GameSetting.ini`, and the
+  Fahrenheit test install, which reads it) has `MSAA=0`; then `UATFOPQ` is
+  a plain alpha test at its threshold. The copied template materials had
+  threshold 0 (`current.min(0.1)` of an opaque material), so every texel
+  passed and Tidus's and Rikku's hair were solid cards with hard
+  straight edges (`/mnt/c/shots/fix-alpha/models/cmp/tidus.png`). With the
+  blended twin and one-level textures the close-up has the PS2's fine
+  strands, the chain and the earring (same image, "after"). The battle
+  problem that kept the blended twin out before (parts over the body not
+  drawn) was not reproduced with the converter of 2026-11-04 (below);
+  battles were not run again with this build.
+- **Kept-mesh models (`chr.*`): the `UATFOPQ` twin** (`Draw::Coverage`),
+  as described next; unchanged, so at `VQ_LOW` they show alpha-tested
+  (hard) fringes at threshold 0.1.
 
 - **The variant: the `UATFOPQ` twin.** The variant of the same effect with
   the same switches and `UATFOPQ` on (`ALPHA_ENABLED` off), whose own
@@ -308,7 +379,8 @@ use alpha at all.
   `AlphaThreshold` becomes at most 0.1. A variant the model did not use
   before is added to the character's `.ahwin32` (the list loads the shader
   variants; `chralpha::list_entries`).
-- **Not the blended twin.** `ALPHA_ENABLED` twins were tried first. In cut
+- **Not the blended twin** (kept meshes; the history of the remodelled
+  ones too, until job version 4). `ALPHA_ENABLED` twins were tried first. In cut
   scenes they look right (Tidus's hair, Wakka's crest), but in battle the
   blended parts that lie over the character's own body were not drawn:
   Lulu's necklace and the lower half of her collar, Kimahri's leg wraps
@@ -336,18 +408,21 @@ use alpha at all.
   (`graphicCharacterInstanceSetMeshAlpha`) remaps a material's
   `Transparent` to `FakeTransparent` while its alpha is under 1. None of
   it lets the body behind cover a nearer blended segment; that would take
-  a draw against another depth buffer, which was not found.
-  `DM_BLEND_TWIN` stays for the next try.
+  a draw against another depth buffer, which was not found. (The
+  `DM_BLEND_TWIN` switch of that test is gone: the remodelled models
+  blend always, `Draw::Blend`.)
 - Remodelled models (`models.*`): each PS2 triangle of the template that
   samples a texel with alpha under 240 (PS2 `0x78`; texel centres inside
   its UV triangle, its centroid texel for tiny ones; not the corner texels,
   which sit on the island's edge) goes into segments of its own with a
   copy of the template material (`ClusterEdit::add_material`) given the
-  twin. A PS2 cloth segment with any see-through texel, and the face
-  segment with 1 % or more, get a twin copy of their material whole (cloth
-  segments keep their tag; cloth variants have `UATFOPQ` twins). A copied
-  material that blends or tests already (Tidus's hair, Wakka's crest, the
-  HD cloth materials) keeps its variant and only gets the lower threshold.
+  twin (the blended one since job version 4). A PS2 cloth segment with
+  any see-through texel, and the face segment with 1 % or more, get a twin
+  copy of their material whole (cloth segments keep their tag; cloth
+  variants have twins). A copied material that blends already (Wakka's
+  crest, most HD cloth materials) keeps its variant and only gets the
+  PS2 threshold; one that alpha tests (`UATFOPQ`: c101's cloth piece
+  (2, 3)) gets its blended twin.
   Copies join the material set of the copied segment's mesh, so segments
   of other meshes (monsters with several skinned instances) get copies of
   their own. Rigid objects whose meshes have no material set of their own
@@ -358,8 +433,8 @@ use alpha at all.
   blending with the threshold lowered to 0.1. The job writes the model's
   `.dae.phyre` (and `.ahwin32` when a variant is new) next to the painted
   pages, not for remodelled models (the `models.*` job's).
-- **The threshold.** The PS2's alpha test for characters (`TEST_2`) was
-  not found. For blended HD materials, 0.03 let the faint fringe texels
+- **The threshold** (kept meshes; the remodelled ones use the PS2's
+  `NOTEQUAL 0`, 1/128, see above). For blended HD materials, 0.03 let the faint fringe texels
   write depth over feathers the same draw puts behind them (pale outlines
   on the Condor's wings); 0.1 keeps the soft fringe with outlines as faint
   as the HD's 0.3.
@@ -394,6 +469,24 @@ crops in `~/ffx-work/demaster/shots/cmp/alpha-*.png`):
   fringes soft (`alpha-condor-wing.png`), Water Flan (m016) translucent,
   Dingo (m009) unchanged (`alpha-flan-dingo.png`).
 
+**Boot intro against the PS2** (2026-11-07, job version 4, the campfire
+scene with the staff credits that plays after the logo; the Fahrenheit
+test install with the user's `VQ_LOW` settings: `TQ_LOW`, no MSAA;
+PS2 frames from PCSX2, German PAL disc). PS2 / before / after, the 4:3
+centre, in `/mnt/c/shots/fix-alpha/models/cmp/`:
+
+| Image | What | Result |
+|---|---|---|
+| `tidus.png` | c101 close-up ("CG supervisor") | before: flat chunky hair cards with hard edges, no chain, no earring, smeared face (quarter-size texture, `UATFOPQ` at threshold 0 without MSAA); after: fine strands, the chain with its pendant, the earring, the face's texels, as on the PS2 |
+| `party-wakka.png` | Wakka, Rikku, Lulu at the fire | Wakka's left shin was a sliver (simulated piece (0, 0)); whole now. Rikku's hair strands soft, no longer see-through cards |
+| `kimahri.png` | Kimahri from behind | mane and fur fringes soft; before, a flat grey card |
+| `yuna.png` | Yuna close-up | face, hair and necklace at the PS2's texel size (before: blurred); the blue hair ornament (cloth) hangs further out than on the PS2 |
+
+Frames of the runs: `/mnt/c/shots/fix-alpha/models/e1` (one-level
+atlas, blended twins), `e2` (plus PS2 cloth anchors: shin still a
+sliver), `e3` (shin piece skinned by hand: whole), `e4` (all of job
+version 4). Still different from the PS2: see "Gaps".
+
 ## Checked in the game
 
 Replays through `tools/shotrun` (max graphics settings) with the mod
@@ -425,6 +518,19 @@ Second pass (texture animation, cloth, NPCs, monsters), comparisons in
 
 ## Gaps
 
+- **Wakka's crest** (PS2 piece (0, 3), simulated) lies back as a short
+  tuft in the intro where the PS2 shows it standing tall (as in the bind
+  pose); the same with the colours of the nearest HD vertex (job version
+  3) and with the PS2's fixed list. Skinning it would stand it up without
+  its sway; not done.
+- **Tidus's chain** (c101): where the two strands meet the pendant a small
+  dark arrowhead shows on his chest (the strands' dark pointed ends, which
+  the bind pose keeps behind the pendant); the PS2 frames show none. Maybe
+  the 4-bone limit (up to 15 % of a c101 vertex's weight dropped).
+- **Kept meshes** (`chr.*`) still use the `UATFOPQ` twin and HD-template
+  mip chains: at `VQ_LOW` their PS2 pages load at a quarter size and
+  their fringes are alpha tested. The other texture jobs (maps, effects,
+  UI, backgrounds) write mip chains too and are quartered the same way.
 - **Texture animation**: no shot shows a texture blink of c001 or c002
   close enough to see (their close-ups use the c1xx models, which blink
   with bones). Wakka's mouth frames are the in-game evidence for the

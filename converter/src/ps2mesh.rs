@@ -10,7 +10,9 @@
 //!   base bone `+0`, vertex count `+4`, group count `+6`, vertices `+8`
 //!   (`i16` x, y, z, in the base bone's frame), normals `+0xc` (count
 //!   `+0x16`), groups `+0x10` (12 bytes each), cloth count `+0x18`, cloth
-//!   table `+0x1c` (`0x24` bytes each).
+//!   table `+0x1c` (`0x24` bytes each: `u16` free vertex count `+0`, fixed
+//!   count `+2`, vertex list `+8`, total `+0x1c` = free + fixed; the list
+//!   holds the free vertices, then the fixed ones, each run sorted).
 //! - Group: `u8` flags `+0` (bit 0 strips), `u8` `+1` (MAT), `u8` texture
 //!   list index `+2`, `u16` count `+4`, data `+8`. Points are 4 `u16`
 //!   (vertex, normal, u, v); a vertex or normal with bit 15 set repeats an
@@ -71,8 +73,18 @@ pub struct Tri {
 
 #[derive(Debug, Clone, Default)]
 pub struct Cloth {
-    /// Model vertices the cloth moves.
+    /// Model vertices the cloth moves: the first `free` are simulated, the
+    /// rest are fixed (they follow the skin and hold the piece: the base of
+    /// Wakka's crest, the ankle ends of his shins).
     pub vertices: Vec<u16>,
+    pub free: usize,
+}
+
+impl Cloth {
+    /// The vertices that follow the skin.
+    pub fn fixed(&self) -> &[u16] {
+        &self.vertices[self.free.min(self.vertices.len())..]
+    }
 }
 
 #[derive(Debug, Clone, Default)]
@@ -219,9 +231,12 @@ impl Mesh {
                 for c in 0..nc {
                     let ce = ct + 0x24 * c;
                     let n = usize::from(u16_(b, ce + 0x1c)?);
+                    let (free, fixed) = (usize::from(u16_(b, ce)?), usize::from(u16_(b, ce + 2)?));
+                    ensure!(free + fixed == n, "chr: cloth {c} of {free} free and {fixed} fixed vertices, {n} in all");
                     let lp = h + u32_(b, ce + 8)?;
                     model.cloths.push(Cloth {
                         vertices: (0..n).map(|k| u16_(b, lp + 2 * k)).collect::<Result<_>>()?,
+                        free,
                     });
                 }
             }

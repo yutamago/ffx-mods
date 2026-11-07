@@ -92,7 +92,10 @@ which plays them in the game while "Original" is chosen. Switching between
 value).
 
 Every converted PS2 texture whose HD texture has mip levels gets a full mip
-chain (`phyretex::mip_chain`), so surfaces seen from afar do not shimmer.
+chain (`phyretex::mip_chain`), so surfaces seen from afar do not shimmer;
+except the remodelled characters' atlases (`models.*`), which have one
+level, so that the game's texture quality setting (`TQ_LOW` drops the top
+two levels of a chain) cannot shrink them (`docs/models.md`, "Conversion").
 
 ## Timing (default `"hd"`: the PC's speed)
 

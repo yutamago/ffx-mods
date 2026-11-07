@@ -294,3 +294,12 @@ exactly), and for cut-outs (alpha nearly only 0 or 255) the alpha of each
 level scaled so as many texels pass the alpha test (0.5) as at the top, so
 hair and leaves do not thin out with distance. The texture jobs are at
 version 2, so builds redo them.
+
+A chain has a cost at the game's lower texture qualities: the loader drops
+the top level at `TQ_MEDIUM` and the top two at `TQ_LOW` (the `VQ_LOW`
+preset, the user's setting) of every texture with that many levels, never
+of a one-level texture (ffx-rust `docs/formats/phyre.md`, "How the game
+loads a texture"). So at `VQ_LOW` every PS2 texture with a chain is drawn
+at a quarter of its size. The remodelled characters' atlases are written
+in one level again (`phyretex::argb8_one_level`, models job version 4,
+`docs/models.md` "Conversion"); the other jobs still write chains.

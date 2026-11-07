@@ -179,9 +179,11 @@ pub fn jobs() -> Vec<Box<dyn Job>> {
 
 impl Job for ModelsJob {
     /// 2: textures with mip chains (phyretex::mip_chain). 3: the body in a
-    /// template material that does not blend.
+    /// template material that does not blend. 4: textures in one level (no
+    /// quality drop), see-through parts blended with the PS2's alpha test,
+    /// PS2 cloth anchors, pieces the HD has another shape for skinned.
     fn version(&self) -> u32 {
-        3
+        4
     }
     fn name(&self) -> &'static str {
         self.name
@@ -313,7 +315,20 @@ struct ClothTarget {
     tag: (u32, u32),
     segment: Option<usize>,
     material: usize,
+    /// Kept skinned, not simulated: the HD's segment of the piece is
+    /// another shape (see [`SHARED`]).
+    skinned: bool,
 }
+
+/// A PS2 cloth piece whose HD segment has no vertex within this distance
+/// (HD units) of any of its vertices is another shape: the PC's simulation
+/// of the piece is set up for the HD's shape, and the PS2's folded away.
+/// Wakka's shins (PS2 piece (0, 0), whole lower legs) against the HD's two
+/// small ankle flaps of that piece (0.24 apart at the nearest): the left
+/// shin was drawn as a sliver while simulated, whole when skinned like the
+/// PS2 shows it. The pieces the HD kept share vertices with it (0.03 apart
+/// at most among the party's).
+const SHARED: f64 = 0.1;
 
 /// Per segment, its cloth piece (`m_clothmodelIndex`, `m_clothIndex`;
 /// `None` for -1).
@@ -625,7 +640,7 @@ pub fn convert_bytes(
     };
     // Per target instance, the template segment: one whose material has no
     // cloth and no texture animation, preferably one that does not blend (the
-    // body is drawn opaque, see-through texels go to `UATFOPQ` twins),
+    // body is drawn opaque, see-through texels go to blended twins),
     // skinned to several bones (c101's palette-1 segments are hair with its
     // own shader) and alpha tested, the largest.
     struct Slot {
@@ -921,8 +936,17 @@ pub fn convert_bytes(
                 .max_by_key(|&s| (model.segments[s].indices.len(), std::cmp::Reverse(s)));
             let seg = own.unwrap_or(template);
             let Some(material) = model.segments[seg].material else { continue };
+            let skinned = own.is_some_and(|s| {
+                let hd = &model.segments[s].positions;
+                !c.vertices.iter().filter_map(|&v| verts[mi].get(usize::from(v))).any(|x| {
+                    hd.iter().any(|p| (0..3).map(|k| (f64::from(p[k]) - x.pos[k]).powi(2)).sum::<f64>() <= SHARED * SHARED)
+                })
+            });
+            if skinned {
+                report += &format!("  PS2 cloth piece {tag:?} kept skinned: the HD's segment {} of it is another shape\n", seg);
+            }
             let t = cloth_targets.len();
-            cloth_targets.push(ClothTarget { tag, segment: own, material });
+            cloth_targets.push(ClothTarget { tag, segment: own, material, skinned });
             for &v in &c.vertices {
                 piece_of[mi].entry(v).or_insert(t);
             }
@@ -941,47 +965,73 @@ pub fn convert_bytes(
                 d.get(d.len() / 2).copied().unwrap_or(-1.0)
             };
             eprintln!("HD cloth segment {s} ({m}, {c}): median distance to PS2 raw {:.3}, to bind pose {:.3}", med(&raw), med(&bind));
+            // the other way: each PS2 vertex to its nearest HD vertex
+            let mut d: Vec<f64> = bind
+                .iter()
+                .map(|q| {
+                    model.segments[s]
+                        .positions
+                        .iter()
+                        .map(|p| (0..3).map(|k| (f64::from(p[k]) - q[k]).powi(2)).sum::<f64>().sqrt())
+                        .fold(f64::MAX, f64::min)
+                })
+                .collect();
+            d.sort_by(f64::total_cmp);
+            let q = |f: f64| d.get(((d.len() as f64 - 1.0) * f) as usize).copied().unwrap_or(-1.0);
+            eprintln!(
+                "  PS2 piece vertices ({}) to the HD segment: min {:.3} median {:.3} 90% {:.3} max {:.3}",
+                d.len(),
+                q(0.0),
+                q(0.5),
+                q(0.9),
+                q(1.0)
+            );
         }
     }
     // Cloth vertex colours steer the PC's binding (`Ch_PreCalcActiveClothMesh`):
     // all channels at most 0.3 keep the vertex skinned, larger ones bind it
-    // to the simulated triangles. A piece with an HD segment takes the
-    // colour of its nearest vertex; others the HD's usual free colour, with
-    // vertices shared with non-cloth triangles kept skinned.
+    // to the simulated triangles. The PS2 piece says which of its vertices
+    // are fixed (they follow the skin: skin colour) and which it simulates
+    // (bound: a free colour, the one of the nearest free vertex of the HD
+    // segment of the piece, else the HD's usual free colour). The colours
+    // of the nearest HD vertex alone took Wakka's shins (PS2 piece (0, 0),
+    // anchored at the ankles) from the HD's small flaps of that piece and
+    // bound half of each shin to the simulation, half to the skin: the
+    // left shin folded into a sliver.
+    let skin_like = |c: &[u8; 4]| c[..3].iter().all(|&v| v <= 77);
     let free_color = {
         let mut c: BTreeMap<[u8; 4], usize> = BTreeMap::new();
         for s in (0..model.segments.len()).filter(|&s| hd_cloth(s)) {
             for x in &model.segments[s].colors {
-                if x[..3].iter().any(|&v| v > 77) {
+                if !skin_like(x) {
                     *c.entry(*x).or_default() += 1;
                 }
             }
         }
         c.into_iter().max_by_key(|e| e.1).map_or([255; 4], |e| e.0)
     };
-    let mut anchored: Vec<BTreeSet<u16>> = vec![BTreeSet::new(); mesh.models.len()];
-    for (mi, m) in mesh.models.iter().enumerate() {
-        for t in &m.tris {
-            let c = t.corners.map(|c| piece_of[mi].get(&c.vertex).copied());
-            if !(c[0].is_some() && c.iter().all(|x| *x == c[0])) {
-                anchored[mi].extend(t.corners.iter().map(|c| c.vertex));
-            }
-        }
-    }
+    // per model: vertices fixed in a piece and simulated in none
+    let fixed: Vec<BTreeSet<u16>> = mesh
+        .models
+        .iter()
+        .map(|m| {
+            let free: BTreeSet<u16> = m.cloths.iter().flat_map(|c| c.vertices[..c.free.min(c.vertices.len())].iter().copied()).collect();
+            m.cloths.iter().flat_map(|c| c.fixed().iter().copied()).filter(|v| !free.contains(v)).collect()
+        })
+        .collect();
     let cloth_color = |mi: usize, v: u16, pos: [f64; 3], target: &ClothTarget, skin: [u8; 4]| -> [u8; 4] {
-        match target.segment {
-            Some(s) => {
-                let seg = &model.segments[s];
-                seg.positions
-                    .iter()
-                    .zip(&seg.colors)
-                    .map(|(p, c)| ((0..3).map(|k| (f64::from(p[k]) - pos[k]).powi(2)).sum::<f64>(), *c))
-                    .min_by(|a, b| a.0.total_cmp(&b.0))
-                    .map_or(free_color, |x| x.1)
-            }
-            None if anchored[mi].contains(&v) => skin,
-            None => free_color,
+        if fixed[mi].contains(&v) || target.skinned {
+            return skin;
         }
+        let Some(s) = target.segment else { return free_color };
+        let seg = &model.segments[s];
+        seg.positions
+            .iter()
+            .zip(&seg.colors)
+            .filter(|(_, c)| !skin_like(c))
+            .map(|(p, c)| ((0..3).map(|k| (f64::from(p[k]) - pos[k]).powi(2)).sum::<f64>(), *c))
+            .min_by(|a, b| a.0.total_cmp(&b.0))
+            .map_or(free_color, |x| x.1)
     };
     let mut degenerate = 0;
     for (mi, k) in order {
@@ -1227,7 +1277,7 @@ pub fn convert_bytes(
     }
     // Segments with see-through texels draw blended like the PS2 (after the
     // face's rectangle is set: a copied material keeps it).
-    report += &chralpha::blend_segments(&mut edit, &blended, variants)?;
+    report += &chralpha::blend_segments(&mut edit, &blended, variants, chralpha::Draw::Blend)?;
     let shader_entries = chralpha::list_entries(&edit)?;
     let bytes = edit.write().context("writing")?;
     let check = ffx_phyre::Model::parse(&bytes).context("re-reading")?;
@@ -1239,7 +1289,7 @@ pub fn convert_bytes(
 
     let mut files = vec![(hd_path.to_owned(), bytes)];
     let template_tex = read(&first.texture)?.with_context(|| format!("no {}", first.texture))?;
-    files.push((new_path, phyretex::argb8_as(&template_tex, &atlas, Some((&old_id, &new_id)))?));
+    files.push((new_path, phyretex::argb8_one_level(&template_tex, &atlas, Some((&old_id, &new_id)))?));
     let list_path = format!("{dir}/{name}.ahwin32");
     let list = read(&list_path)?.with_context(|| format!("no {list_path}"))?;
     let atlas_entry = ffx_phyre::assets::texture_entry(&new_id);
@@ -1258,7 +1308,7 @@ pub fn convert_bytes(
                 let id = template_id.replace(&format!("_anim_{}.", f.anim_tag), &format!("_anim_{tag}."));
                 ensure!(id.len() == template_id.len(), "animation texture id {id}");
                 let rename = (id != *template_id).then_some((template_id.as_str(), id.as_str()));
-                files.push((texanim::archive_path(&id), phyretex::argb8_as(&template, image, rename)?));
+                files.push((texanim::archive_path(&id), phyretex::argb8_one_level(&template, image, rename)?));
                 entries.push(ffx_phyre::assets::texture_entry(&id));
                 anim.push((tag, image.clone()));
             }
@@ -1314,6 +1364,65 @@ pub fn debug(chr: &[u8], hd: &[u8]) -> Result<()> {
             m.cloths.iter().map(|c| c.vertices.len()).collect::<Vec<_>>()
         );
     }
+    // Per model and texture entry: UV box (texels), position box and the
+    // bones that skin the triangles (most weight first).
+    // (triangles, UV box, position box, weight per bone)
+    type Group = (usize, [u16; 4], [i16; 6], BTreeMap<u16, f32>);
+    for (mi, m) in mesh.models.iter().enumerate() {
+        let mut groups: BTreeMap<u8, Group> = BTreeMap::new();
+        for t in &m.tris {
+            let g = groups.entry(t.texture).or_insert((0, [u16::MAX, u16::MAX, 0, 0], [i16::MAX, i16::MAX, i16::MAX, i16::MIN, i16::MIN, i16::MIN], BTreeMap::new()));
+            g.0 += 1;
+            for c in &t.corners {
+                let uv = c.uv.map(|x| x / 16);
+                g.1 = [g.1[0].min(uv[0]), g.1[1].min(uv[1]), g.1[2].max(uv[0]), g.1[3].max(uv[1])];
+                if let Some(p) = m.vertices.get(usize::from(c.vertex)) {
+                    for (k, &x) in p.iter().enumerate() {
+                        g.2[k] = g.2[k].min(x);
+                        g.2[k + 3] = g.2[k + 3].max(x);
+                    }
+                }
+                for &(b, w, _) in m.influences.get(usize::from(c.vertex)).map_or(&[][..], Vec::as_slice) {
+                    *g.3.entry(b).or_default() += w;
+                }
+            }
+        }
+        for (t, (n, uv, pos, bones)) in groups {
+            let mut b: Vec<(u16, f32)> = bones.into_iter().collect();
+            b.sort_by(|x, y| y.1.total_cmp(&x.1));
+            let b: Vec<String> = b.iter().take(12).map(|(b, w)| format!("{b}:{w:.0}")).collect();
+            println!("model {mi} texture {t}: {n} tris, uv {uv:?}, pos {pos:?}, bones {}", b.join(" "));
+        }
+    }
+    // DM_BONES=110,116: per bone its parent chain and the triangles it skins
+    // (any corner), by texture with their UV box.
+    for b in std::env::var("DM_BONES").unwrap_or_default().split(',').filter_map(|x| x.parse::<u16>().ok()) {
+        let mut chain = vec![b];
+        while let Some(p) = mesh.bones.get(usize::from(*chain.last().unwrap_or(&b))).map(|x| x.parent) {
+            if chain.contains(&p) || chain.len() > 64 {
+                break;
+            }
+            chain.push(p);
+        }
+        let hd: Vec<bool> = chain.iter().map(|x| model.nodes.iter().any(|n| n.name == format!("SkeletonNode_{x}"))).collect();
+        println!("bone {b}: parents {chain:?}, HD node {hd:?}");
+        for (mi, m) in mesh.models.iter().enumerate() {
+            let mut g: BTreeMap<u8, (usize, [u16; 4])> = BTreeMap::new();
+            for t in &m.tris {
+                if t.corners.iter().any(|c| m.influences.get(usize::from(c.vertex)).is_some_and(|i| i.iter().any(|x| x.0 == b))) {
+                    let e = g.entry(t.texture).or_insert((0, [u16::MAX, u16::MAX, 0, 0]));
+                    e.0 += 1;
+                    for c in &t.corners {
+                        let uv = c.uv.map(|x| x / 16);
+                        e.1 = [e.1[0].min(uv[0]), e.1[1].min(uv[1]), e.1[2].max(uv[0]), e.1[3].max(uv[1])];
+                    }
+                }
+            }
+            for (t, (n, uv)) in g {
+                println!("  model {mi} texture {t}: {n} tris, uv {uv:?}");
+            }
+        }
+    }
     for (mi, m) in mesh.models.iter().enumerate() {
         for (ci, c) in m.cloths.iter().enumerate() {
             let mut bones: BTreeMap<u16, usize> = BTreeMap::new();
@@ -1327,7 +1436,15 @@ pub fn debug(chr: &[u8], hd: &[u8]) -> Result<()> {
                     *bones.entry(b).or_default() += 1;
                 }
             }
-            println!("model {mi} cloth {ci}: {} vertices, unskinned {none}, bones {bones:?}", c.vertices.len());
+            let set: BTreeSet<u16> = c.vertices.iter().copied().collect();
+            let mut tex: BTreeMap<u8, usize> = BTreeMap::new();
+            for t in m.tris.iter().filter(|t| t.corners.iter().all(|c| set.contains(&c.vertex))) {
+                *tex.entry(t.texture).or_default() += 1;
+            }
+            println!(
+                "model {mi} cloth {ci}: {} vertices, unskinned {none}, bones {bones:?}, triangles by texture {tex:?}",
+                c.vertices.len()
+            );
         }
     }
     for (i, inst) in model.instances.iter().enumerate() {
@@ -1359,6 +1476,12 @@ pub fn debug(chr: &[u8], hd: &[u8]) -> Result<()> {
             mat.is_some_and(|m| m.parameter("ClothWorld").is_some()),
             seg.colors.first()
         );
+        // DM_SEGS=1,2: the segment's vertices (position, colour)
+        if std::env::var("DM_SEGS").unwrap_or_default().split(',').any(|x| x.parse() == Ok(s)) {
+            for (p, c) in seg.positions.iter().zip(seg.colors.iter().map(Some).chain(std::iter::repeat(None))) {
+                println!("  {:8.3} {:8.3} {:8.3}  {:?}", p[0], p[1], p[2], c);
+            }
+        }
     }
     Ok(())
 }

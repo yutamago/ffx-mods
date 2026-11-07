@@ -17,18 +17,15 @@
 //! (`0x44 00` in every file), written as register `0x43` by the packet
 //! builder (FFX.exe `FUN_008438b0`, from `FUN_008423c0`). So a texel with
 //! GS alpha under `0x80` is see-through on the PS2: fur and hair fringes
-//! fade out. The PC draws the same texels with the HD material's variant,
-//! which may be opaque (alpha ignored: solid quads) or alpha tested at 0.5
-//! (hard, ragged cut-outs). Materials that sample such texels are switched
-//! to their `UATFOPQ` twin (the variant with the same switches and
-//! `UATFOPQ` on) with `AlphaThreshold` lowered to [`THRESHOLD`]: with MSAA,
-//! alpha to coverage turns texture alpha into partial coverage, so the
-//! fringes fade out in the opaque pass. The blended (`ALPHA_ENABLED`)
-//! twins were tried first: they look the same in cut scenes, but in battle
-//! the parts that lie over the character's own body (Lulu's necklace and
-//! collar, Kimahri's leg wraps, Tidus's wristband) were not drawn.
-//! HD materials that blend already keep blending on kept meshes, with the
-//! lower threshold.
+//! fade out; the alpha test (`TEST_2`, `NOTEQUAL 0`) drops only alpha 0.
+//! The PC draws the same texels with the HD material's variant, which may
+//! be opaque (alpha ignored: solid quads) or alpha tested at 0.5 (hard,
+//! ragged cut-outs). Materials that sample such texels get a twin (the
+//! variant with the same switches and one switch changed), as [`Draw`]
+//! says: the remodelled models' PS2 meshes the blended (`ALPHA_ENABLED`)
+//! twin with the PS2's alpha test, like the PS2; the kept HD meshes the
+//! `UATFOPQ` twin (alpha to coverage) at [`THRESHOLD`], which is soft only
+//! with MSAA (the `VQ_LOW` preset has none: then a plain alpha test).
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::OnceLock;
@@ -268,17 +265,16 @@ impl Variants {
     }
 
     /// The see-through twin of variant `id` (an import id): the same effect
-    /// and switches with `UATFOPQ` on (alpha to coverage and the alpha test,
-    /// drawn in the opaque pass). `id` itself when it has `UATFOPQ`, or
-    /// `ALPHA_ENABLED` and `keep_blend`; else a blended variant becomes its
-    /// `UATFOPQ` twin too (`ALPHA_ENABLED` off).
-    pub fn blended(&self, id: &str, keep_blend: bool) -> Option<(String, &Variant)> {
+    /// and switches with the switch of `draw` on and the other off. `id`
+    /// itself when it has that switch, and for [`Draw::Coverage`] when it
+    /// blends already.
+    pub fn twin(&self, id: &str, draw: Draw) -> Option<(String, &Variant)> {
         let v = self.of(id)?;
-        // DM_BLEND_TWIN: the `ALPHA_ENABLED` twin instead, for comparisons
-        // in the game (docs/models.md, "Alpha": its parts vanish in battle)
-        let blend_twin = std::env::var_os("DM_BLEND_TWIN").is_some();
-        let (on, off) = if blend_twin { ("ALPHA_ENABLED", "UATFOPQ") } else { ("UATFOPQ", "ALPHA_ENABLED") };
-        if v.on(on) || (keep_blend && !blend_twin && v.on(off)) {
+        let (on, off) = match draw {
+            Draw::Blend => ("ALPHA_ENABLED", "UATFOPQ"),
+            Draw::Coverage => ("UATFOPQ", "ALPHA_ENABLED"),
+        };
+        if v.on(on) || (draw == Draw::Coverage && v.on(off)) {
             return Some((id.to_owned(), v));
         }
         let mut want = v.on_set();
@@ -309,7 +305,27 @@ impl Variants {
     }
 }
 
-/// `AlphaThreshold` of the see-through materials (at most; a lower one
+/// How see-through texels are drawn.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Draw {
+    /// Blended by texture alpha like the PS2: the `ALPHA_ENABLED` twin
+    /// (`Transparent` pass), `AlphaThreshold` [`PS2_ALPHA_TEST`]. The PS2
+    /// meshes of the remodelled characters.
+    Blend,
+    /// Alpha to coverage: the `UATFOPQ` twin in the opaque pass,
+    /// `AlphaThreshold` at most [`THRESHOLD`]; HD materials that blend
+    /// already keep blending. Soft only with MSAA: without it, a plain alpha
+    /// test at the threshold. The kept HD meshes with PS2 pages.
+    Coverage,
+}
+
+/// `AlphaThreshold` of [`Draw::Blend`]: the PS2's alpha test for characters
+/// (`TEST_2`: ATE on, ATST `NOTEQUAL`, AREF 0, from a GS register dump of
+/// the intro), which drops only texels of alpha 0, here the GS's alpha step
+/// (1 of 0x80).
+pub const PS2_ALPHA_TEST: f32 = 1.0 / 128.0;
+
+/// `AlphaThreshold` of the [`Draw::Coverage`] materials (at most; a lower one
 /// stays): texels under it are dropped. For blended materials, lower lets
 /// the faint fringe texels write depth over what the same draw puts behind
 /// them later (pale outlines where a bird's wing feathers overlap); higher
@@ -404,33 +420,36 @@ pub enum Change {
     Switched(String),
     /// Blended already; its threshold lowered from the value.
     Lowered(f32),
-    /// Blended already with a threshold at or under [`THRESHOLD`].
+    /// See-through already with the threshold wanted.
     None,
 }
 
-/// Makes material `m` blend by texture alpha like the PS2: its variant's
-/// blended twin, `AlphaThreshold` at most [`THRESHOLD`]. Returns what
-/// changed, or why it could not.
+/// Makes material `m` draw texture alpha the way `draw` says: its variant's
+/// twin and the threshold. Returns what changed, or why it could not.
 pub fn blend(
     edit: &mut ClusterEdit,
     m: u32,
     variants: &Variants,
-    keep_blend: bool,
+    draw: Draw,
 ) -> Result<std::result::Result<Change, String>> {
     // for before/after comparisons in the game
     if std::env::var_os("DM_NO_BLEND").is_some() {
         return Ok(Err("DM_NO_BLEND set".into()));
     }
     let id = material_variants(edit)?.get(m as usize).cloned().context("material")?;
-    let Some((twin, v)) = variants.blended(&id, keep_blend) else {
-        return Ok(Err(format!("no blended twin of {id}")));
+    let Some((twin, v)) = variants.twin(&id, draw) else {
+        return Ok(Err(format!("no see-through twin of {id}")));
     };
     let current = parameter(edit, m, "AlphaThreshold")?.first().copied().unwrap_or(0.0);
+    let threshold = match draw {
+        Draw::Blend => PS2_ALPHA_TEST,
+        Draw::Coverage => current.min(THRESHOLD),
+    };
     if twin == id {
-        if current <= THRESHOLD {
+        if current == threshold {
             return Ok(Ok(Change::None));
         }
-        set_parameter(edit, m, "AlphaThreshold", &[THRESHOLD])?;
+        set_parameter(edit, m, "AlphaThreshold", &[threshold])?;
         return Ok(Ok(Change::Lowered(current)));
     }
     let layout = buffer_layout(edit, m)?;
@@ -438,13 +457,13 @@ pub fn blend(
         return Ok(Err(format!("{twin} has another parameter layout than {id}")));
     }
     set_material_variant(edit, m, &twin)?;
-    set_parameter(edit, m, "AlphaThreshold", &[current.min(THRESHOLD)])?;
+    set_parameter(edit, m, "AlphaThreshold", &[threshold])?;
     Ok(Ok(Change::Switched(twin)))
 }
 
 /// Gives segments `segs` blended copies of their materials (one copy per
 /// material) and returns a report line.
-pub fn blend_segments(edit: &mut ClusterEdit, segs: &[u32], variants: &Variants) -> Result<String> {
+pub fn blend_segments(edit: &mut ClusterEdit, segs: &[u32], variants: &Variants, draw: Draw) -> Result<String> {
     if segs.is_empty() {
         return Ok(String::new());
     }
@@ -503,7 +522,7 @@ pub fn blend_segments(edit: &mut ClusterEdit, segs: &[u32], variants: &Variants)
                 m
             }
         };
-        match blend(edit, copy, variants, true)? {
+        match blend(edit, copy, variants, draw)? {
             Ok(c) => {
                 let what = match c {
                     Change::Switched(id) => id.rsplit('#').next().unwrap_or(&id).to_owned(),
@@ -547,7 +566,7 @@ pub fn blend_in_place(edit: &mut ClusterEdit, segs: &[u32], variants: &Variants)
     }
     let mut out = Blended { switched: 0, lowered: 0, text: String::new() };
     for m in materials {
-        match blend(edit, m, variants, true)? {
+        match blend(edit, m, variants, Draw::Coverage)? {
             Ok(Change::None) => {}
             Ok(Change::Lowered(t)) => {
                 out.lowered += 1;
