@@ -482,10 +482,11 @@ centre, in `/mnt/c/shots/fix-alpha/models/cmp/`:
 | `kimahri.png` | Kimahri from behind | mane and fur fringes soft; before, a flat grey card |
 | `yuna.png` | Yuna close-up | face, hair and necklace at the PS2's texel size (before: blurred); the blue hair ornament (cloth) hangs further out than on the PS2 |
 
-Frames of the runs: `/mnt/c/shots/fix-alpha/models/e1` (one-level
-atlas, blended twins), `e2` (plus PS2 cloth anchors: shin still a
-sliver), `e3` (shin piece skinned by hand: whole), `e4` (all of job
-version 4). Still different from the PS2: see "Gaps".
+Key frames of the runs (3440x1440) in `/mnt/c/shots/fix-alpha/models/`:
+`e1/s-110.png` (one-level atlas, blended twins), `e2/s-046.png` (plus
+PS2 cloth anchors: the shin still a sliver), `e3/s-046.png` (the shin
+piece skinned by hand: whole), `e4/` (all of job version 4). Still
+different from the PS2: see "Gaps".
 
 ## Checked in the game
 
