@@ -336,8 +336,64 @@ internal static unsafe class RenderPatches {
             at<SetCameraAspectRatio>(SET_CAMERA_ASPECT).chain_from(_camera_aspect!).fnptr!(scene, scene3d ? a * 0.75f : a);
         };
         if (!at<SetCameraAspectRatio>(SET_CAMERA_ASPECT).hook(m, _camera_aspect)) return false;
+        if (!at<UpdateAtelShp>(UPDATE_ATEL_SHP).hook(m, _atel_shp = atel_shp)) return false;
 
         *output = 4f / 3f;
         return true;
+    }
+
+    /// <summary>
+    /// updateVFXRenderDataAtelShp: cdecl(id lo, id hi, shapes, record, frame) -> 1/0. Fills the
+    /// six render data (id + 10000 k) of one event sprite (g_EventSprites, AtelExecDrawShape;
+    /// InitVFXRenderDataAtelShp calls it too). Corners in 1/15 PS2 pixel x h/416, the record's
+    /// matrix (identity, the sprite's x/y scale, its PS2 position) with the position x w/512 and
+    /// y h/416 (graphicFontGetScreenWH: 1920 x 1080).
+    /// </summary>
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    public delegate int UpdateAtelShp(uint lo, int hi, nint shapes, nint record, ushort frame);
+
+    /// <summary>graphicVFXGetRenderDataByInstance: cdecl(id lo, id hi) -> render data or 0.</summary>
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    public delegate nint GetRenderDataByInstance(uint lo, int hi);
+
+    private const uint UPDATE_ATEL_SHP = 0x007196f0;
+    private const uint GET_RENDER_DATA = 0x006453d0;
+    /// <summary>
+    /// The PS2 x unit over the corners' y unit in the 1920 x 1080 frame: (1920 / 512) / (1080 / 416)
+    /// = 13/9. The HD sizes the sprites in square pixels (h/416 both ways) but spreads their
+    /// positions over the 16:9 width (w/512); the anamorphic frame needs w/512 for both.
+    /// </summary>
+    private const float ATEL_X_SCALE = 1920f / 512f / (1080f / 416f);
+    /// <summary>
+    /// The corners are in GS units, 1/16 pixel, as the PS2 draws them; the HD divides by 15, so
+    /// every event sprite is 16/15 too large around its position (measured on the credits).
+    /// </summary>
+    private const float ATEL_UNIT = 15f / 16f;
+
+    private static UpdateAtelShp? _atel_shp;
+
+    /// <summary>
+    /// The event sprites (the opening's staff credits, the 2D pictures of events) in PS2 shape: after
+    /// the game filled each render data matrix, its x output column x 13/9 (widths in the PS2 x
+    /// unit, w/512, like the positions; the squeeze makes them the PS2's) and both columns x 15/16
+    /// (the PS2's 1/16 corner unit). Translation stays. The game copies the matrix afresh on every
+    /// call that returns 1 (docs/screen.md, "Event sprites").
+    /// </summary>
+    private static int atel_shp(uint lo, int hi, nint shapes, nint record, ushort frame) {
+        int r = at<UpdateAtelShp>(UPDATE_ATEL_SHP).chain_from(_atel_shp!).fnptr!(lo, hi, shapes, record, frame);
+        if (r == 0 || record == 0) return r; // 0: returned before copying the matrices
+        first(32, "render.aspect: event sprites in the PS2 size");
+        var get = at<GetRenderDataByInstance>(GET_RENDER_DATA).fnptr!;
+        ulong id = ((ulong)(uint)hi << 32) | lo;
+        for (ulong k = 0; k < 6; k++) {
+            ulong i = id + k * 10000;
+            float* rd = (float*)get((uint)i, (int)(i >> 32));
+            if (rd == null) continue;
+            for (int row = 0; row < 3; row++) {
+                rd[4 * row]     *= ATEL_X_SCALE * ATEL_UNIT;
+                rd[4 * row + 1] *= ATEL_UNIT;
+            }
+        }
+        return r;
     }
 }

@@ -65,7 +65,7 @@ handling of 4:3 and 21:9 monitors.
 
 The mod keeps the 16:9 targets and draws the frame **anamorphic**:
 everything in it is 4/3 too wide, and the last copy squeezes it into the
-middle 4:3 of the window. Three changes (`mod/RenderPatches.cs`,
+middle 4:3 of the window. Four changes (`mod/RenderPatches.cs`,
 `aspect`):
 
 1. **Output aspect.** `0x00c34154` = 4/3. The copy pillarboxes the frame
@@ -84,6 +84,9 @@ middle 4:3 of the window. Three changes (`mod/RenderPatches.cs`,
    `[0x00b41cf0]` (16/9; the same constant gives the UI camera its 16/9,
    so it is not changed): the `fld` at `0x00652a7a` is pointed at a 4/3 of
    the mod's. Not looked at in the game.
+4. **Event sprites** (the opening's staff credits): hook on
+   `updateVFXRenderDataAtelShp`, their widths in the PS2 x unit and the
+   PS2's 1/16 corner unit (below, "Event sprites").
 
 What follows from the squeeze, with no further change:
 
@@ -139,46 +142,68 @@ every HD placement as it is and costs a filtered horizontal downscale.
 - **Not seen in the game**: the sphere grid, the 3D-scene movies, a
   window that is not 16:9 or 21:9, a split-screen camera (`+0x10d8c`).
 
-## The opening's credits: 3/4 as wide (open)
+## Event sprites: the opening's credits (done)
 
-Measured (PS2 `fix-alpha/ps2-13.png` against ours `fix-alpha/fh/fh-25.png`,
-"SATOSHI TSUKAMOTO", white pixels): PS2 x 11.5 %..51.2 % of the 4:3
-picture (39.6 % wide), ours 17.6 %..47.0 % (29.5 %): **0.745 as wide, the
-same centre (31.4 % / 32.3 %), the same letter height** (2.6 % of the
-height both). Every credit line does the same ("HIROSHI KUWABARA" centred
-at 73.5 % / 73 %). So the positions are right and only the glyphs' widths
-are 3/4: the HD expands each glyph in square pixels of the 16:9 target,
-and the squeeze makes that 3/4.
+Before (PS2 `fix-alpha/ps2-13.png` against ours, "SATOSHI TSUKAMOTO",
+white pixels): PS2 x 11.5 %..51.4 % of the 4:3 picture (39.8 % wide),
+ours 17.4 %..47.0 % (29.6 %): 0.745 as wide, the same centre, the same
+letter height.
 
-What draws them (2026-11-07):
+What draws them: **event sprites** (`g_EventSprites`, set by the event
+script), not the Tk text and not the `pppDrawShape*` effects.
+`graphicFontDraw`, `graphicDrawUIElement` and `TOMakePktFont1612Font`
+count 0 calls through the opening (Fahrenheit counters); the PS2 draws
+the credits as about 450 GS sprites a frame of one PSMT8 font texture
+(GS dump: context 1, TBP `0x1a00`, ALPHA `0x44`). On the PC
+`AtelExecDrawShape` (`0x00874420`) hands each sprite to
+`updateVFXRenderDataAtelShp` (`0x007196f0`, also called from
+`InitVFXRenderDataAtelShp`), with a matrix that is the identity with the
+sprite's x/y scale and its PS2 position. That function (ffx-rust
+`symbols/ffx.sym`; 1920 x 1080 from `graphicFontGetScreenWH`):
 
-- **Not the Tk text.** Fahrenheit hooks with call counters on
-  `graphicFontDraw` (`0x00640660`), `graphicDrawUIElement` (`0x0063eee0`)
-  and `TOMakePktFont1612Font` (`0x008fcad0`) count 0 calls from boot
-  through the opening's credits. So `ps2_sized`-style changes to the font
-  words (`docs/ui.md`) cannot reach them. The menus and dialogue
-  (`Ps2Menu`, the message windows) are untouched by this.
-- **An effect.** The PS2 draws them as sprites of one PSMT8 font texture
-  (GS dump of the Tidus close-up: context 1, TBP `0x1a00`, ALPHA `0x44`,
-  vertex colour 128, about 450 sprites a frame, bounding box (29, 24) ..
-  (504, 402)): the event's 2D effect. On the PC that is the VFX path
-  (`pppDrawShape*` -> `updateVFXRenderDataShp`: corners
-  `(x, y, 0, 1)` through the part's matrix, ffx-rust `vfx.md`). Where
-  its screen-facing quads get their x extent was not found yet; the
-  candidates are the part matrix (`g_pppScreenMatrix` /
-  `g_ScreenMatrix`, `MsScreenMatrix` from `g_Screens +0x10` = fx) and the
-  VFX render data's own matrix.
-- If the expansion is shared by all screen-facing effect sprites, every
-  such particle (sparks, the pyreflies) is 3/4 as wide under
-  `render.aspect = "ps2"` too; not measured.
+- corners: i16 / 15 x **h/416** for x and y (square pixels);
+- position: matrix x **w/512** - w/2, y h/416 - h/2.
 
-Next step: count calls of `pppDrawShape0` (`0x00740a70`) and the other
-`pppDrawShape*` draws during the credits, then log the part matrix of
-the credit sprites (x row against y row) to see where the 16:9 enters,
-and widen the x extent by 4/3 there for 3D scenes (as the camera hook
-does). A change through `g_Screens +0x10` (fx x 4/3, the harness's
-method) would also move every PS2-projected 2D position (damage numbers,
-cursors); not tried.
+So the HD spreads the sprite positions over the 16:9 width but keeps the
+glyphs square: in the anamorphic frame a glyph is (h/416) / (w/512) =
+9/13 = 0.692 of the PS2 width, x 16/15 (below) = 0.738 (measured 0.745).
+Corner units: the PS2's are
+GS 1/16 pixel; the HD's / 15 makes every event sprite 16/15 too large
+around its position (with only the x unit fixed the line measured 42.8 %
+against 39.8 %, 1.073, and the letters 3.26 % against 3.12 % high).
+
+The fix (`mod/RenderPatches.cs`, `atel_shp`, part of
+`render.aspect = "ps2"`): a hook on `updateVFXRenderDataAtelShp` that,
+after the game filled the six render data (`id + 10000 k`, through
+`graphicVFXGetRenderDataByInstance`), multiplies the matrix's x output
+column (`[0]`, `[4]`, `[8]`) by (w/512)/(h/416) = 13/9 and both x and y
+columns by 15/16. Translation stays. The game copies the matrix afresh on
+every call that returns 1 (the early return 0 copies nothing, so the hook
+leaves those alone and never scales twice). The 85 % keep-on-screen move
+inside (screens 720 high or more, unscaled matrix) is computed before and
+does not reach x at 1920.
+
+After (Fahrenheit, 3440 x 1440, 2026-11-07): "SATOSHI TSUKAMOTO" 11.2 %
+..51.3 % (40.1 %, centre 31.3 %; PS2 39.8 %, 31.4 %), letters 3.06 % high
+(PS2 3.12 %); "HIROSHI KUWABARA", "CG SUPERVISOR" and the Directors block
+(names and the small "(EVENT)" words) line up with the PS2 to a pixel or
+two by eye. Pictures (never in git): `C:\shots\fix-alpha\credits\`
+`cmp-cg.png` (PS2 / before / after) and `cmp-directors.png` (PS2 /
+after).
+
+Unchanged and already right:
+
+- The boot logo ("FINAL FANTASY X PROJECT") and the title's "FINAL
+  FANTASY X" logo and its letters: the same with and without the hook,
+  so another path; the title logo has the PS2's size and place. The boot
+  logo is the HD's redrawn art (smaller, lower than the PS2's), not an
+  aspect matter.
+- Sparks and pyreflies of the opening are 3D effects (`pppDrawShape*`:
+  corners through the part matrix and the camera), so the camera aspect
+  hook already gives them the PS2 proportions; not measured (they are a
+  few pixels).
+- With `render.aspect = "hd"` the event sprites keep the HD's square
+  glyphs and the 16/15 size.
 
 ## Checked
 
