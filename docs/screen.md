@@ -139,6 +139,47 @@ every HD placement as it is and costs a filtered horizontal downscale.
 - **Not seen in the game**: the sphere grid, the 3D-scene movies, a
   window that is not 16:9 or 21:9, a split-screen camera (`+0x10d8c`).
 
+## The opening's credits: 3/4 as wide (open)
+
+Measured (PS2 `fix-alpha/ps2-13.png` against ours `fix-alpha/fh/fh-25.png`,
+"SATOSHI TSUKAMOTO", white pixels): PS2 x 11.5 %..51.2 % of the 4:3
+picture (39.6 % wide), ours 17.6 %..47.0 % (29.5 %): **0.745 as wide, the
+same centre (31.4 % / 32.3 %), the same letter height** (2.6 % of the
+height both). Every credit line does the same ("HIROSHI KUWABARA" centred
+at 73.5 % / 73 %). So the positions are right and only the glyphs' widths
+are 3/4: the HD expands each glyph in square pixels of the 16:9 target,
+and the squeeze makes that 3/4.
+
+What draws them (2026-11-07):
+
+- **Not the Tk text.** Fahrenheit hooks with call counters on
+  `graphicFontDraw` (`0x00640660`), `graphicDrawUIElement` (`0x0063eee0`)
+  and `TOMakePktFont1612Font` (`0x008fcad0`) count 0 calls from boot
+  through the opening's credits. So `ps2_sized`-style changes to the font
+  words (`docs/ui.md`) cannot reach them. The menus and dialogue
+  (`Ps2Menu`, the message windows) are untouched by this.
+- **An effect.** The PS2 draws them as sprites of one PSMT8 font texture
+  (GS dump of the Tidus close-up: context 1, TBP `0x1a00`, ALPHA `0x44`,
+  vertex colour 128, about 450 sprites a frame, bounding box (29, 24) ..
+  (504, 402)): the event's 2D effect. On the PC that is the VFX path
+  (`pppDrawShape*` -> `updateVFXRenderDataShp`: corners
+  `(x, y, 0, 1)` through the part's matrix, ffx-rust `vfx.md`). Where
+  its screen-facing quads get their x extent was not found yet; the
+  candidates are the part matrix (`g_pppScreenMatrix` /
+  `g_ScreenMatrix`, `MsScreenMatrix` from `g_Screens +0x10` = fx) and the
+  VFX render data's own matrix.
+- If the expansion is shared by all screen-facing effect sprites, every
+  such particle (sparks, the pyreflies) is 3/4 as wide under
+  `render.aspect = "ps2"` too; not measured.
+
+Next step: count calls of `pppDrawShape0` (`0x00740a70`) and the other
+`pppDrawShape*` draws during the credits, then log the part matrix of
+the credit sprites (x row against y row) to see where the 16:9 enters,
+and widen the x extent by 4/3 there for 3D scenes (as the camera hook
+does). A change through `g_Screens +0x10` (fx x 4/3, the harness's
+method) would also move every PS2-projected 2D position (damage numbers,
+cursors); not tried.
+
 ## Checked
 
 - **Fahrenheit** (`C:\_workspaces\fh-demaster-test`, 3440 x 1440

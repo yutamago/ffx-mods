@@ -235,10 +235,10 @@ at x 1/128.
 
 ### Uncertain
 
-- No PS2 capture was compared. The formula and the level come from the VU
-  code and the EE packet code; the sign of the light directions is the HD's
-  (the patch keeps the HD's lit side; the PS2's normal-light matrix builder
-  was not found in the PS2 ELF, FFX.exe's port only copies the rows).
+- The sign of the light directions is the HD's (the patch keeps the HD's
+  lit side; the PS2's normal-light matrix builder was not found in the PS2
+  ELF, FFX.exe's port only copies the rows). The opening's close-ups (below,
+  "Compared with the PS2") show the same lit side as the PS2.
 - Per pixel instead of per vertex (Gouraud on the PS2): smoother and with
   sharper terminators on coarse meshes.
 - The PS2 clamps the vertex colour at 255 (x 1.99) before the texture
@@ -249,6 +249,54 @@ at x 1/128.
   `0x2fa`, map `0xc1`), HDAO (a graphics option), and the extra
   `LgtMatVec` light (`setAddLight`, effects; half-Lambert, applied as
   `max(light, 1)`).
+
+### Compared with the PS2 (the opening, 2026-11-07)
+
+The user saw the opening's characters flat next to the PS2: the PS2's
+Tidus close-up has strong facial shading, ours (shots of 18:39) an evenly
+lit face. Compared now against PCSX2 (software renderer, boot to the
+opening, shot every 2 s and a GS dump every 4 s) and the Fahrenheit
+install (`C:\_workspaces\fh-demaster-test`, 3440 x 1440, all mod files):
+
+1. **The PS2's lit colours.** `~/ffx-work/demaster/scratch/runtime/vcol.py`
+   walks a GS dump and rasterises the Gouraud vertex colours of the
+   character draws (context 2, PSMT8, with the depth test): the PS2's lit
+   value per pixel, 128 = 1.0. Tidus's close-up (`d143`): the face lies at
+   190-240 (lit 1.5-1.9: forehead 239/215/163, cheeks 190-197, chin 230,
+   neck 210), the darkest vertex (19, 21, 48). The light colours the mod
+   reads at the same shot (light 0 (1, 0.88, 0.58), light 1
+   (0.52, 0.41, 0.16), light 2 (0.07, 0.03, 0.03), ambient
+   (0.063, 0.071, 0.153) x 254/128 = (16, 18, 39) of 128) give the same
+   range by the formula above. So the PS2 lights the face almost evenly;
+   its shading (eye sockets, cheeks, neck under the chin) is painted into
+   the c101 face texture (texture = pixel x 128 / lit: forehead 136,
+   neck 90).
+2. **The model, not the light.** The flat face of the 18:39 shots
+   (`fix-alpha/fh/fh-25.png`) is a different mesh: a smooth head, no
+   necklace, card hair. The opening loads `c101` (Tidus) and `c102` (Yuna)
+   for the close-ups (cluster loads logged); with the install's current
+   `models.party` output (the PS2 mesh and the PS2 atlas, after the alpha
+   fix of 9917b6c) the close-up is the PS2 face with its painted shading.
+3. **Measured** (skin pixels, orange hue, of the same credit shot, both
+   scaled to 512 x 416; `scratch/runtime/skin.py`):
+
+   | Shot | PS2 L mean / sd / p10 / p50 / p90 | Ours |
+   |---|---|---|
+   | Tidus close-up ("Chief Storyboard Designer") | 130.3 / 38.8 / 77 / 131 / 181 | 130.9 / 45.9 / 71 / 129 / 191 |
+   | Yuna close-up ("Real-time Graphics Director") | 134.3 / 38.2 / 84 / 134 / 187 | 134.3 / 44.0 / 79 / 130 / 197 |
+   | the party at the fire ("Field Programmers", mask catches ground too) | 97.8 / 37.9 / 54 / 92 / 151 | 90.4 / 31.6 / 52 / 88 / 130 |
+
+   Mean skin brightness matches; ours spreads a little more (sd +6 on the
+   close-ups), consistent with per-pixel max(0, N.L) giving sharper
+   terminators than the PS2's Gouraud. The lighting (level 254/128, no
+   fill light, max(0, N.L)) stays as it is; nothing was changed, so the
+   daylight scenes are as before.
+
+Pictures (never in git): `C:\shots\fix-alpha\runtime\` `ps2\s*.png`
+(PS2 boot to title, every 2 s; `d143.gs.zst`, the GS dump of the Tidus close-up), `diag3\t*.png` (ours,
+every 10 s), `cmp-tidus.png`, `cmp-yuna.png`, `cmp-party.png` (PS2 left,
+ours right), `vcol-tidus.png` (the PS2's lit vertex colours, left, and
+the PS2 frame).
 
 ## `render.texture_filter = "nearest"`
 
