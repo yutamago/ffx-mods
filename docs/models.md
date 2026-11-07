@@ -388,9 +388,23 @@ use alpha at all.
   problem that kept the blended twin out before (parts over the body not
   drawn) was not reproduced with the converter of 2026-11-04 (below);
   battles were not run again with this build.
-- **Kept-mesh models (`chr.*`): the `UATFOPQ` twin** (`Draw::Coverage`),
-  as described next; unchanged, so at `VQ_LOW` they show alpha-tested
-  (hard) fringes at threshold 0.1.
+- **Kept-mesh models (`chr.*`): the blended twin at 0.1**
+  (`Draw::BlendKept`, chr job version 3): the same twin as the remodelled
+  models, `AlphaThreshold` 0.1 (`chralpha::THRESHOLD`; 1/128 brings back
+  the pale outlines on the Condor's overlapping feathers, below). Until
+  version 3 the `UATFOPQ` twin (`Draw::Coverage`, described next).
+  `tools/replays/battle-besaid.txt` in the harness without MSAA (as
+  `VQ_LOW`, textures at `TQ_HIGH`, as `render.texture_quality` loads them)
+  and at max settings, `/mnt/c/shots/fix-alpha/tex/cmp/kept-besaid.png`
+  (rows Dingo, Water Flan, Condor; columns `UATFOPQ` twin, blended at
+  1/128, blended at 0.1; `kept-besaid-max.png`: Flan and Condor, `UATFOPQ`
+  and blended at 0.1 without MSAA, then the same at max): the Dingo is the same in all three; the Water
+  Flan's shell (m016 material 7, alpha tested at 0.1 or less by the
+  `UATFOPQ` twin, so nearly solid) is translucent over its core with the
+  blended twin, the same with and without MSAA; the Condor's feathers are
+  the same at 0.1 and outlined at 1/128. No PS2 frame of this battle was
+  taken; the reason is the PS2's own draw (every character polygon
+  blended by texture alpha, `TEST_2` `NOTEQUAL 0`).
 
 - **The variant: the `UATFOPQ` twin.** The variant of the same effect with
   the same switches and `UATFOPQ` on (`ALPHA_ENABLED` off), whose own
@@ -452,9 +466,10 @@ use alpha at all.
   their own. Rigid objects whose meshes have no material set of their own
   keep their material when other segments share it.
 - Kept-mesh models (`chr.*`): an HD segment whose PS2 twins sample 1 % or
-  more see-through texels gets its material changed in place: opaque ones
-  to the `UATFOPQ` twin, blended HD materials (fur, feathers, flans) keep
-  blending with the threshold lowered to 0.1. The job writes the model's
+  more see-through texels gets its material changed in place: opaque and
+  alpha-tested ones to the blended twin, blended HD materials (fur,
+  feathers, flans) keep blending; all at threshold 0.1 (until job version
+  3: the `UATFOPQ` twin, and thresholds only lowered to 0.1). The job writes the model's
   `.dae.phyre` (and `.ahwin32` when a variant is new) next to the painted
   pages, not for remodelled models (the `models.*` job's).
 - **The threshold** (kept meshes; the remodelled ones use the PS2's
@@ -558,10 +573,11 @@ Second pass (texture animation, cloth, NPCs, monsters), comparisons in
 
 ## Gaps
 
-- **Kept meshes** (`chr.*`) still use the `UATFOPQ` twin and HD-template
-  mip chains: at `VQ_LOW` their PS2 pages load at a quarter size and
-  their fringes are alpha tested. The other texture jobs (maps, effects,
-  UI, backgrounds) write mip chains too and are quartered the same way.
+- **Kept meshes** (`chr.*`) keep HD-template mip chains; at `VQ_LOW`
+  they load whole only through the mod's `render.texture_quality`
+  (`docs/render.md`, "Texture quality"). Their blended twin (job version
+  3) was checked in one battle only (Besaid: Dingo, Water Flan, Condor),
+  against no PS2 frame of it.
 - **Texture animation**: no shot shows a texture blink of c001 or c002
   close enough to see (their close-ups use the c1xx models, which blink
   with bones). Wakka's mouth frames are the in-game evidence for the

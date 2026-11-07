@@ -395,9 +395,12 @@ pub fn jobs() -> Vec<Box<dyn Job>> {
 }
 
 impl Job for ChrJob {
-    /// 2: textures with mip chains (phyretex::mip_chain).
+    /// 2: textures with mip chains (phyretex::mip_chain). 3: see-through
+    /// materials get the blended twin (`chralpha::Draw::BlendKept`) instead
+    /// of the alpha-to-coverage one, which is a plain alpha test without
+    /// MSAA.
     fn version(&self) -> u32 {
-        2
+        3
     }
     fn name(&self) -> &'static str {
         self.name

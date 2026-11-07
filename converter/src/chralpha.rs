@@ -24,8 +24,9 @@
 //! variant with the same switches and one switch changed), as [`Draw`]
 //! says: the remodelled models' PS2 meshes the blended (`ALPHA_ENABLED`)
 //! twin with the PS2's alpha test, like the PS2; the kept HD meshes the
-//! `UATFOPQ` twin (alpha to coverage) at [`THRESHOLD`], which is soft only
-//! with MSAA (the `VQ_LOW` preset has none: then a plain alpha test).
+//! blended twin too, at [`THRESHOLD`]. (The `UATFOPQ` twin, alpha to
+//! coverage, is soft only with MSAA; the `VQ_LOW` preset has none, and then
+//! it is a plain alpha test.)
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::OnceLock;
@@ -271,7 +272,7 @@ impl Variants {
     pub fn twin(&self, id: &str, draw: Draw) -> Option<(String, &Variant)> {
         let v = self.of(id)?;
         let (on, off) = match draw {
-            Draw::Blend => ("ALPHA_ENABLED", "UATFOPQ"),
+            Draw::Blend | Draw::BlendKept => ("ALPHA_ENABLED", "UATFOPQ"),
             Draw::Coverage => ("UATFOPQ", "ALPHA_ENABLED"),
         };
         if v.on(on) || (draw == Draw::Coverage && v.on(off)) {
@@ -312,10 +313,17 @@ pub enum Draw {
     /// (`Transparent` pass), `AlphaThreshold` [`PS2_ALPHA_TEST`]. The PS2
     /// meshes of the remodelled characters.
     Blend,
+    /// The blended twin as [`Draw::Blend`], `AlphaThreshold` [`THRESHOLD`]:
+    /// the kept HD meshes with PS2 pages (`chr.*`, job version 3). A whole
+    /// HD material is switched there, feathers and fur included, and under
+    /// 0.1 their faint fringe texels write depth over the feathers drawn
+    /// after them (pale outlines on the Condor's wings).
+    BlendKept,
     /// Alpha to coverage: the `UATFOPQ` twin in the opaque pass,
     /// `AlphaThreshold` at most [`THRESHOLD`]; HD materials that blend
     /// already keep blending. Soft only with MSAA: without it, a plain alpha
-    /// test at the threshold. The kept HD meshes with PS2 pages.
+    /// test at the threshold. The kept HD meshes with PS2 pages until `chr.*`
+    /// job version 3 (now [`Draw::BlendKept`]).
     Coverage,
 }
 
@@ -325,8 +333,8 @@ pub enum Draw {
 /// (1 of 0x80).
 pub const PS2_ALPHA_TEST: f32 = 1.0 / 128.0;
 
-/// `AlphaThreshold` of the [`Draw::Coverage`] materials (at most; a lower one
-/// stays): texels under it are dropped. For blended materials, lower lets
+/// `AlphaThreshold` of the [`Draw::BlendKept`] materials (and at most of the
+/// [`Draw::Coverage`] ones): texels under it are dropped. For blended materials, lower lets
 /// the faint fringe texels write depth over what the same draw puts behind
 /// them later (pale outlines where a bird's wing feathers overlap); higher
 /// cuts the fringe like the HD's 0.3-0.5.
@@ -443,6 +451,7 @@ pub fn blend(
     let current = parameter(edit, m, "AlphaThreshold")?.first().copied().unwrap_or(0.0);
     let threshold = match draw {
         Draw::Blend => PS2_ALPHA_TEST,
+        Draw::BlendKept => THRESHOLD,
         Draw::Coverage => current.min(THRESHOLD),
     };
     if twin == id {
@@ -566,7 +575,7 @@ pub fn blend_in_place(edit: &mut ClusterEdit, segs: &[u32], variants: &Variants)
     }
     let mut out = Blended { switched: 0, lowered: 0, text: String::new() };
     for m in materials {
-        match blend(edit, m, variants, Draw::Coverage)? {
+        match blend(edit, m, variants, Draw::BlendKept)? {
             Ok(Change::None) => {}
             Ok(Change::Lowered(t)) => {
                 out.lowered += 1;
