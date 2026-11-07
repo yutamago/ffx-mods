@@ -222,6 +222,28 @@ PS2 split. On the German disc this moves 2,832 of 7,357 textures to white
 367 more to colour + brightness in alpha (189 magic, 178 field-map; the
 report's `convention` column says `white` or `bright`).
 
+### Inverted textures
+
+`magic_0662` (the opening's logo) `12544_19_0_0_512_512` is the shadow of
+the forming logo, in two blends. The PS2's is a light grey logo on an
+opaque white field (rows 0..374), a multiply: white leaves the scene as it
+is. The HD's is an alpha blend: dark colour with the darkness in alpha
+(colour about 255 - 1.2 x alpha, alpha up to 213, 0 off the logo). Written
+from the PS2 (correlation -0.17), the PC drew the opaque field as a
+lavender-white rectangle over three quarters of the picture while the logo
+formed (it faded with the effect). `fxjob::inverted` recognises such a pair
+(negative correlation upright, 0.8 or more with the PS2 image inverted;
+0.85 here) and writes the HD's file: the same picture, already in the PC's
+blend (job version 4). Of the 7357 converted textures only this one
+qualifies (the other two below -0.1, `magic_0105` `13312` and `kami00`
+`14080`, are no negatives). Checked in the game: the logo forms over the
+scene without a rectangle (`C:\shots\fix-alpha\title\cmp-logo.png`: PS2
+x2, before, after x2).
+
+`blank` HD textures (black or transparent everywhere) are written as the
+HD's file too: `magic_0662` `12544_19_0_0_256_64` holds "INTERNATIONAL" on
+the PS2 and is transparent in the HD; the PAL PS2 does not show it either.
+
 ### Languages
 
 Text textures (overdrive names, "Luck", "Magic") exist in `tex/` and in

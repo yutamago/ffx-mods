@@ -147,7 +147,10 @@ pub struct Done {
     pub orientation: &'static str,
     /// The brightness moved into alpha (`brightness_to_alpha`): "white"
     /// (the HD texture is white + alpha), "bright" (it keeps its colour and
-    /// has the brightness in alpha, `alpha_follows_brightness`), or "".
+    /// has the brightness in alpha, `alpha_follows_brightness`),
+    /// "inverted" (the HD holds the PS2 image's negative, `inverted`) or
+    /// "blank" (the HD texture draws nothing, `blank`), both written as the
+    /// HD's file, or "".
     pub convention: &'static str,
     /// The PS2 side-by-side preview (HD left, PS2 right).
     pub preview: Rgba,
@@ -522,9 +525,58 @@ pub fn brightness_to_alpha(image: &Rgba) -> Rgba {
     out
 }
 
+/// An HD texture that draws nothing: black or transparent everywhere.
+/// `magic_0662` `12544_19_0_0_256_64`, the "INTERNATIONAL" under the
+/// opening's logo (transparent in the HD), which the PAL PS2 does not show.
+fn blank(hd: &Rgba) -> bool {
+    hd.pixels.chunks(4).all(|p| p[3] == 0 || p[0].max(p[1]).max(p[2]) == 0)
+}
+
+/// A PS2 image the HD holds as its negative in another blend: the HD
+/// matches the inverted PS2 image (correlation at least `INVERTED_MIN`) and
+/// not the image itself. `magic_0662` `12544_19_0_0_512_512`, the shadow
+/// of the opening's logo: the PS2's is a light grey logo on an opaque white
+/// field (a multiply, white leaves the scene as it is), the HD's dark
+/// colour with the darkness in alpha (an alpha blend). Written as it was,
+/// the PC drew the white field as an opaque lavender-white rectangle over
+/// the scene while the logo formed (`docs/effects.md`, "Inverted
+/// textures"). The HD file is kept: the same picture in the PC's blend.
+fn inverted(hd: &Rgba, ps2: &Rgba) -> bool {
+    let Some((c, _)) = difference(hd, ps2) else { return false };
+    let mut neg = ps2.clone();
+    for p in neg.pixels.chunks_mut(4) {
+        for c in &mut p[..3] {
+            *c = 255 - *c;
+        }
+    }
+    c < 0.0 && difference(hd, &neg).is_some_and(|(ci, _)| ci >= INVERTED_MIN)
+}
+const INVERTED_MIN: f32 = 0.8;
+
 fn write_one(path: &str, template: &[u8], hd: &Rgba, image: &Rgba, f: &Fit) -> Result<Done> {
     let k = f.orientation();
-    let mut image = turn(image, k);
+    let image = turn(image, k);
+    let keep = if blank(hd) {
+        Some("blank")
+    } else if inverted(hd, &image) {
+        Some("inverted")
+    } else {
+        None
+    };
+    if let Some(convention) = keep {
+        // written as the HD's file
+        return Ok(Done {
+            path: path.to_string(),
+            file: template.to_vec(),
+            hd: (hd.width, hd.height),
+            diff: f.diff(),
+            orientation: "",
+            convention,
+            preview: side_by_side(hd, hd),
+            image: hd.clone(),
+        });
+    }
+    let mut image = image;
     let white = white_share(hd) >= WHITE_SHARE;
     let bright = !white && alpha_follows_brightness(hd, &image);
     if white || bright {
@@ -672,8 +724,10 @@ impl crate::jobs::Job for FxJob {
     /// 2: textures with mip chains (phyretex::mip_chain).
     /// 3: brightness into alpha also where the HD keeps colour
     /// (`alpha_follows_brightness`: the intro's campfire).
+    /// 4: the HD's file where it holds the PS2 image's negative
+    /// (`inverted`: the opening logo's shadow) or draws nothing (`blank`).
     fn version(&self) -> u32 {
-        3
+        4
     }
     fn name(&self) -> &'static str {
         "fx.textures"
@@ -754,6 +808,24 @@ mod white_tests {
         assert!(!alpha_follows_brightness(&hd, &see_through));
         let smoke = px(&[[0, 0, 0, 200], [80, 30, 0, 40], [200, 120, 20, 10], [10, 4, 0, 255]]);
         assert!(!alpha_follows_brightness(&smoke, &ps2));
+    }
+
+    /// The opening logo's shadow: the PS2 a light shape on white, the HD
+    /// the darkness in alpha. An image that matches upright is no negative.
+    #[test]
+    fn inverted_negative() {
+        let px = |c: &[[u8; 4]]| Rgba {
+            width: c.len() as u32,
+            height: 1,
+            pixels: c.concat(),
+        };
+        let hd = px(&[[0, 0, 0, 0], [60, 60, 60, 160], [30, 30, 30, 60], [0, 0, 0, 0]]);
+        let ps2 = px(&[[255, 255, 255, 255], [80, 80, 80, 255], [200, 200, 200, 255], [255, 255, 255, 255]]);
+        assert!(inverted(&hd, &ps2));
+        let upright = px(&[[0, 0, 0, 255], [60, 60, 60, 255], [30, 30, 30, 255], [0, 0, 0, 255]]);
+        assert!(!inverted(&hd, &upright));
+        assert!(blank(&px(&[[0, 0, 0, 255], [9, 9, 9, 0]])));
+        assert!(!blank(&hd));
     }
 
     #[test]
