@@ -461,7 +461,7 @@ fn fx(iso: &str, vbf: &str, out: &Path, specs: &[String]) -> Result<()> {
                 .diff
                 .map_or("-\t-".into(), |(c, a)| format!("{c:.3}\t{a:.1}"));
             let flipped = t.orientation;
-            let white = if t.white { "white" } else { "" };
+            let white = t.convention;
             writeln!(
                 tsv,
                 "{}\t{}x{}\t{}x{}\t{diff}\t{flipped}\t{white}",

@@ -145,8 +145,10 @@ pub struct Done {
     pub diff: Option<(f32, f32)>,
     /// How it was turned to match the HD texture (`ORIENTATIONS`).
     pub orientation: &'static str,
-    /// Written as white + alpha, as the HD texture is (`brightness_to_alpha`).
-    pub white: bool,
+    /// The brightness moved into alpha (`brightness_to_alpha`): "white"
+    /// (the HD texture is white + alpha), "bright" (it keeps its colour and
+    /// has the brightness in alpha, `alpha_follows_brightness`), or "".
+    pub convention: &'static str,
     /// The PS2 side-by-side preview (HD left, PS2 right).
     pub preview: Rgba,
 }
@@ -465,6 +467,39 @@ const WHITE_LEVEL: u8 = 235;
 /// From this share of white an HD texture counts as white + alpha.
 const WHITE_SHARE: f32 = 0.9;
 
+/// An HD texture that keeps its colour but has its brightness in alpha
+/// (alpha follows the brightest channel), where the PS2 image is opaque:
+/// fire atlases such as `znkd06` `14336` (the intro's campfire), alpha about
+/// 1.5 x the brightest channel. Drawn additively, the PS2 image would get
+/// none of the vertex alpha's headroom above `0x80` on the PC, and the
+/// flame stays small and dim (`docs/effects.md`, "Alpha and brightness").
+fn alpha_follows_brightness(hd: &Rgba, ps2: &Rgba) -> bool {
+    let opaque = ps2.pixels.chunks(4).filter(|p| p[3] >= 0xfe).count();
+    if opaque * 100 < ps2.pixels.len() / 4 * 99 {
+        return false;
+    }
+    let n = (hd.pixels.len() / 4) as f64;
+    let (mut sm, mut sa, mut smm, mut saa, mut sma) = (0f64, 0f64, 0f64, 0f64, 0f64);
+    for p in hd.pixels.chunks(4) {
+        let m = f64::from(p[0].max(p[1]).max(p[2]));
+        let a = f64::from(p[3]);
+        sm += m;
+        sa += a;
+        smm += m * m;
+        saa += a * a;
+        sma += m * a;
+    }
+    // Mostly opaque HD textures are coverage, not brightness.
+    if sa / n > MAX_MEAN_ALPHA {
+        return false;
+    }
+    let cov = sma / n - sm / n * (sa / n);
+    let var = (smm / n - (sm / n).powi(2)) * (saa / n - (sa / n).powi(2));
+    var > 0.0 && cov / var.sqrt() >= MIN_BRIGHTNESS_CORRELATION
+}
+const MIN_BRIGHTNESS_CORRELATION: f64 = 0.9;
+const MAX_MEAN_ALPHA: f64 = 160.0;
+
 /// The PC's effect shaders clamp the texture x vertex colour and the
 /// texture x vertex alpha to 1 each, where the PS2 let alpha reach 2.0
 /// (GS `0x80` = 1.0). Moving the brightness into alpha (colour scaled to
@@ -491,7 +526,8 @@ fn write_one(path: &str, template: &[u8], hd: &Rgba, image: &Rgba, f: &Fit) -> R
     let k = f.orientation();
     let mut image = turn(image, k);
     let white = white_share(hd) >= WHITE_SHARE;
-    if white {
+    let bright = !white && alpha_follows_brightness(hd, &image);
+    if white || bright {
         image = brightness_to_alpha(&image);
     }
     let file = phyretex::argb8_from(template, &image)?;
@@ -501,7 +537,13 @@ fn write_one(path: &str, template: &[u8], hd: &Rgba, image: &Rgba, f: &Fit) -> R
         hd: (hd.width, hd.height),
         diff: f.diff(),
         orientation: ORIENTATIONS[k],
-        white,
+        convention: if white {
+            "white"
+        } else if bright {
+            "bright"
+        } else {
+            ""
+        },
         preview: side_by_side(hd, &image),
         image,
     })
@@ -628,8 +670,10 @@ struct FxJob;
 
 impl crate::jobs::Job for FxJob {
     /// 2: textures with mip chains (phyretex::mip_chain).
+    /// 3: brightness into alpha also where the HD keeps colour
+    /// (`alpha_follows_brightness`: the intro's campfire).
     fn version(&self) -> u32 {
-        2
+        3
     }
     fn name(&self) -> &'static str {
         "fx.textures"
@@ -690,6 +734,26 @@ mod white_tests {
         assert_eq!(&out.pixels[0..4], &[255, 255, 255, 100]);
         assert_eq!(&out.pixels[4..8], &[255, 128, 0, 100]);
         assert_eq!(out.pixels[11], 0);
+    }
+
+    /// A fire atlas: the HD keeps the colour with alpha following the
+    /// brightness, the PS2 image is opaque. Real coverage alpha, or a PS2
+    /// image with its own alpha, does not count.
+    #[test]
+    fn fire_alpha_follows_brightness() {
+        let px = |c: &[[u8; 4]]| Rgba {
+            width: c.len() as u32,
+            height: 1,
+            pixels: c.concat(),
+        };
+        let hd = px(&[[0, 0, 0, 0], [80, 30, 0, 117], [200, 120, 20, 255], [10, 4, 0, 15]]);
+        let ps2 = px(&[[0, 0, 0, 255], [80, 30, 0, 255], [200, 120, 20, 255], [10, 4, 0, 255]]);
+        assert!(alpha_follows_brightness(&hd, &ps2));
+        let mut see_through = ps2.clone();
+        see_through.pixels[3] = 0;
+        assert!(!alpha_follows_brightness(&hd, &see_through));
+        let smoke = px(&[[0, 0, 0, 200], [80, 30, 0, 40], [200, 120, 20, 10], [10, 4, 0, 255]]);
+        assert!(!alpha_follows_brightness(&smoke, &ps2));
     }
 
     #[test]

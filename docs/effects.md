@@ -205,11 +205,22 @@ texture uses it (at least 90% of its alpha on pixels with every channel
 at 235 or more): alpha = alpha x the brightest channel, colour = colour /
 the brightest channel. Colour x alpha (what an additive draw adds) stays
 the PS2's, the hue stays the PS2's, and greyscale textures become white +
-alpha like the HD ones. Textures the HD keeps with real colour and alpha
-(smoke, fire atlases, rock, text) may be drawn with normal alpha blending,
-where alpha is coverage; they keep the PS2 split. On the German disc this
-moves 2,832 of 7,357 textures (2,291 magic, 520 field-map, 21 battle-map,
-no monster ones).
+alpha like the HD ones. The same goes for textures the HD keeps in colour but with the
+brightness in alpha: fire and torch atlases, coloured glows and sparks
+(the HD alpha correlates with the brightest channel at 0.9 or more, mean
+alpha at most 160, and the PS2 image is opaque). The intro's campfire is
+one: `map/znkd/znkd06` `14336_19_0_0_256_128`, an 8 x 4 flame atlas the HD
+stores with the PS2's colours and alpha about 1.46 x the brightest channel.
+The PS2 image has alpha `0x80` everywhere, so in the PS2 split the flame
+got none of the vertex alpha's headroom on the PC and burnt as a few
+embers over the logs (the HD's flame is as small); with the brightness in
+alpha it burns bright, as on the PS2 (`fx.textures` version 3). Textures
+the HD keeps with real colour and real alpha (smoke, rock, text) may be
+drawn with normal alpha blending, where alpha is coverage; they keep the
+PS2 split. On the German disc this moves 2,832 of 7,357 textures to white
++ alpha (2,291 magic, 520 field-map, 21 battle-map, no monster ones) and
+367 more to colour + brightness in alpha (189 magic, 178 field-map; the
+report's `convention` column says `white` or `bright`).
 
 ### Languages
 
@@ -255,12 +266,23 @@ at the same frame, at PS2 resolution. Runs can reach the spell at
 different updates (the battle start varies), in which case random
 particles land elsewhere.
 
+## The intro's campfire (2026-11-07)
+
+The boot intro (map `0x15d`, the campfire under the staff credits) draws
+its flame from `map/znkd/znkd06/fp/tex/d3d11/14336_19_0_0_256_128`.
+Under Fahrenheit (max settings) the PS2 split burnt only embers on the
+logs, about as small as the HD version's own flame. With the brightness in
+alpha (`bright` above) the flame burns bright with a glow, closer to the
+PS2 (`ps2b-14..16`), whose orange glow around the flame is still
+somewhat larger. Random flicker and the music-timed scene make frames
+differ between runs.
+
 ## Open
 
 - The PS2 images that no HD texture is named after (most are partial
   uploads whose `TEX0` image went in instead).
 - In-game check of field-map particles (only the Thunder Plains battle
   map was looked at).
-- Textures the HD did not turn white keep the PS2 split; a draw of one of
+- Textures the HD keeps in colour and real alpha keep the PS2 split; a draw of one of
   them with vertex alpha above `0x80` still lacks the PS2's headroom (no
   case seen).
