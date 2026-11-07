@@ -226,6 +226,51 @@ pictures in the HD too (correlation 1.0) and are written as PS2; the other
 `titl01` layers ("Fine" at the end) have a different HD layout and stay
 HD.
 
+### Boot logo ("SQUARESOFT® presents", `ui.boot_logo`)
+
+The PAL PS2 shows "SQUARESOFT® presents" (black logo, red triangle, on
+white) before the FINAL FANTASY X PROJECT logo. It is not a movie and not
+drawn by code: it is `titl02` layer 4 (layer 0 for the Japanese/Asian
+language group: the same picture; 7 is one without ®, unused), each a
+whole 512 x 448 screen (logo, "presents" and the white backdrop in one
+picture). The boot event `memochek` (map `0x15c`, on `titl02`) runs it,
+worker 0 entry 1:
+
+- `MapPartShow(0)` if `Native_LangGroupNotJpAsia` (`0x0253`) is 0, else
+  `MapPartShow(4)`;
+- `REQEW` worker 2 entry 3 (`pushimm 1, 2, 3; reqe0`): `FadeIn(15)`, 60
+  frames, up to 90 more (Start, `PadHeld & 0x800`, ends them), `FadeOut(15)`,
+  15 frames of black;
+- `MapPartHide(0)`, `MapPartShow(1)` / `(5)` (the project logo), `REQEW`
+  entry 4 (fade in 15, the same 60 + 90 hold), then `MapChange(0x15d)`
+  with a 15-frame map fade (the opening).
+
+The PC's `memochek` (2560 bytes against the PS2's 4480) is the same script
+without that request (and without the publisher screen's `REQEW` 2, part
+3, not shown on the PAL disc), plus `MapPartHide(7)`: it shows the logo
+part and moves on in the same frame. Its worker 2 entry 3 is still there,
+unused. The HD put "SQUARE ENIX" into layers 0, 4, 7 (correlation 0.03,
+so `ui.title` keeps them HD). The splash-video hook (`OpeningScreen.swf`)
+plays before the game's first map and does not touch it.
+
+`ui.boot_logo = "ps2"` (off, `"hd"`, by default: an extra 6.5 s at every
+start) writes the disc's layers 0, 4, 7 at the PS2 place
+(`title_placed`, as the project logo) and the PC's `memochek` with the
+request put back (`uijob::memochek_with_logo`, through ffx-rust's script
+assembler: worker 0 grows by 5 instructions and moves to the end of the
+code block). Timing is the PS2 script's frame counts: 15 + 60..150 + 15 +
+15 frames, 6.5 s at the PC's 29.97 logic frames (as the NTSC PS2); the
+PAL disc runs the same frames at 25 a second (7.8 s, PCSX2: white from
+~16.2 s to ~22.8 s after power-on), like the rest of the game
+(`docs/timing.md`).
+
+Checked in the game (Fahrenheit, `C:\shots\fix-alpha\sqlogo\`):
+`compare-ps2-vs-ours.png` (PS2 PCSX2 frame left, ours right; the logo's
+box within 0.1 % of the 4:3 picture: x 0.19..0.81, y 0.41..0.57), `on2-*`
+(on: black, SQUARESOFT presents, its fade out, the project logo, the
+opening's credits) and `off2-*` (off: black, then the project logo, as
+before).
+
 `magic_0662/tex/d3d11/logo_hdremaster` is the "HD Remaster" strip under
 the logo in the opening: written transparent (the effects job leaves it
 HD).

@@ -113,6 +113,7 @@ dependencies = [
  "anyhow",
  "ffx-dxbc",
  "ffx-phyre",
+ "ffx-script",
  "ffx-vbf",
  "flate2",
  "rayon",
@@ -165,6 +166,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "00d174d5400e5e8fd687ad1049e2f578285fa914201b1af7e8b112a4546bd826"
 
 [[package]]
+name = "ffx-bridge"
+version = "0.1.0"
+source = "git+https://github.com/yutamago/ffx-rust.git?rev=681cb391957099939fc181fae122fabca3d4917b#681cb391957099939fc181fae122fabca3d4917b"
+dependencies = [
+ "lz4_flex",
+]
+
+[[package]]
 name = "ffx-dxbc"
 version = "0.1.0"
 source = "git+https://github.com/yutamago/ffx-rust.git?rev=681cb391957099939fc181fae122fabca3d4917b#681cb391957099939fc181fae122fabca3d4917b"
@@ -180,6 +189,15 @@ source = "git+https://github.com/yutamago/ffx-rust.git?rev=681cb391957099939fc18
 dependencies = [
  "flate2",
  "serde_json",
+ "thiserror",
+]
+
+[[package]]
+name = "ffx-script"
+version = "0.1.0"
+source = "git+https://github.com/yutamago/ffx-rust.git?rev=681cb391957099939fc181fae122fabca3d4917b#681cb391957099939fc181fae122fabca3d4917b"
+dependencies = [
+ "ffx-bridge",
  "thiserror",
 ]
 
@@ -250,6 +268,12 @@ name = "libc"
 version = "0.2.191"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "65cd87c9a6d60536580b316ad985726104730a5151c99845f2490428ef91240a"
+
+[[package]]
+name = "lz4_flex"
+version = "0.11.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "373f5eceeeab7925e0c1098212f2fbc4d416adec9d35051a6ab251e824c1854a"
 
 [[package]]
 name = "md-5"

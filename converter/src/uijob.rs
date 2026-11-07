@@ -43,6 +43,8 @@ pub struct Parts {
     pub font: bool,
     /// The PS2 font's pages and widths (`fontjob.rs`).
     pub font_files: bool,
+    /// The "SQUARESOFT presents" screen at boot (`ui.boot_logo`).
+    pub boot_logo: bool,
 }
 
 impl Parts {
@@ -55,8 +57,100 @@ impl Parts {
             glyphs: true,
             font: true,
             font_files: true,
+            boot_logo: true,
         }
     }
+}
+
+// ---------------------------------------------------------------- boot logo
+
+/// `titl02` (map of the boot event `memochek`) layers that hold the
+/// "SQUARESOFT® presents" screen on the PS2 (0 and 4 with ®, 7 without);
+/// the HD put its "SQUARE ENIX" logo in the same layers. `memochek` shows
+/// part 0 (Japanese/Asian language group) or 4 (the others).
+const BOOT_LOGO_LAYERS: [usize; 3] = [0, 4, 7];
+
+/// The PC's boot event, which shows the logo part but no longer waits on it.
+const MEMOCHEK: &str = "ffx_ps2/ffx/master/jppc/event/obj/me/memochek/memochek.ebp";
+
+/// The PS2's "SQUARESOFT® presents" screen at boot (`docs/ui.md`, "Boot
+/// logo"): the three `titl02` layers from the disc, laid out like the title
+/// (`title_placed`), and `memochek` with the request the PC removed.
+fn boot_logo(disc: &mut Disc, pc: &ffx_vbf::Archive, done: &mut Vec<Done>, notes: &mut Vec<String>) -> Result<()> {
+    let Some(vpa) = disc.read("jppc/map/titl/titl02/bin/mapout.vpa")? else {
+        notes.push("boot logo: no titl02 on the disc".into());
+        return Ok(());
+    };
+    let Some(e) = pc.find(MEMOCHEK) else {
+        notes.push(format!("boot logo: no {MEMOCHEK}"));
+        return Ok(());
+    };
+    let layers = bg_layers(&vpa);
+    let mut preview = None;
+    for k in BOOT_LOGO_LAYERS {
+        let path = format!("{PS3}/map/titl/titl02/2d/tex/d3d11/0_{k}_512_448_0.dds.phyre");
+        let (Some((template, hd)), Some(img)) = (load_hd(pc, &path)?, layers.get(k)) else {
+            notes.push(format!("{path}: no HD layer or PS2 layer {k}"));
+            continue;
+        };
+        // the PS2 screen is black on white: a white corner tells it from the
+        // project logo and the other black screens of titl02
+        if img.width != 512 || img.height != 448 || img.get(4, 4)[..3] != [255, 255, 255] {
+            notes.push(format!("{path}: PS2 layer {k} is not the white logo screen, kept HD"));
+            continue;
+        }
+        let img = title_placed(&mapjob::opaque_like(img.clone(), &hd));
+        if k == 4 {
+            preview = Some(img.clone());
+        }
+        done.push(Done {
+            file: phyretex::argb8_one_level(&template, &img, None)?,
+            preview: side_by_side(&hd, &img),
+            note: format!("{path}: PS2 layer {k} (boot logo)"),
+            path,
+        });
+    }
+    let Some(preview) = preview else {
+        notes.push("boot logo: no picture, memochek left as is".into());
+        return Ok(());
+    };
+    done.push(Done {
+        file: memochek_with_logo(pc.read(e)?)?,
+        preview,
+        note: format!("{MEMOCHEK}: waits on the logo part again"),
+        path: MEMOCHEK.into(),
+    });
+    Ok(())
+}
+
+/// The PC's `memochek` with the PS2's wait on the logo: after it shows the
+/// logo part (0 or 4) worker 0 requests worker 2's entry 3 and waits for its
+/// end (`REQEW`): fade in 15 frames, hold 60 frames, up to 90 more (Start
+/// ends them), fade out 15, 15 black; then the project logo. The PC's script
+/// shows the part and hides it in the same frame (that request is the only
+/// difference to the PS2 there; entry 3 is still in it, unused).
+pub fn memochek_with_logo(ebp: Vec<u8>) -> Result<Vec<u8>> {
+    let c = ffx_script::Container::parse(ebp).context("memochek")?;
+    let text = ffx_script::disassemble(&c.script).context("memochek")?;
+    let w0_end = text.find("\nworker 1 ").context("memochek: no worker 1")?;
+    let w2 = text.find("\nworker 2 ").context("memochek: no worker 2")?;
+    // worker 0 entry 1: after `MapPartShow(0)` / `MapPartShow(4)` both
+    // branches meet at l3, where the PS2 sends the request
+    let anchor = "l3:\n    pushv v1\n";
+    let at = text[..w0_end].find(anchor).context("memochek: worker 0 has no l3 after the logo")?;
+    anyhow::ensure!(
+        text[..w0_end].matches(anchor).count() == 1 && text[at - 200.min(at)..at].contains("func_facc 0x800f"),
+        "memochek: unexpected worker 0"
+    );
+    anyhow::ensure!(
+        text[w2..].contains("e3:\n    pushimm 15\n    func_facc 0x4004"),
+        "memochek: worker 2 entry 3 is not the logo's fade"
+    );
+    let insert = "    pushimm 1\n    pushimm 2\n    pushimm 3\n    reqe0\n    popfacc\n";
+    let at = at + "l3:\n".len();
+    let new = format!("{}{insert}{}", &text[..at], &text[at..]);
+    let script = ffx_script::assemble(&c.script, &new).context("memochek: assembling")?;
+    Ok(c.replace_script(&script).context("memochek")?.bytes().to_vec())
 }
 
 // ---------------------------------------------------------------- helpers
@@ -1220,6 +1314,10 @@ pub fn convert(disc: &mut Disc, pc: &ffx_vbf::Archive, parts: Parts) -> Result<(
         }
     }
 
+    if parts.boot_logo {
+        boot_logo(disc, pc, &mut done, &mut notes)?;
+    }
+
     if parts.loading {
         let mut paths: Vec<String> = (0..25).map(|i| format!("{PS3}/menu/loading/d3d11/ld{i:02}.dds.phyre")).collect();
         paths.push(format!("{PS3}/menu/loading/d3d11/loadingbg.dds.phyre"));
@@ -1299,6 +1397,10 @@ pub fn jobs() -> Vec<Box<dyn Job>> {
             name: "ui.font",
             settings: &["ui.font"],
         }),
+        Box::new(UiJob {
+            name: "ui.boot_logo",
+            settings: &["ui.boot_logo"],
+        }),
     ]
 }
 
@@ -1328,6 +1430,10 @@ impl UiJob {
             },
             "ui.font" => Parts {
                 font_files: ui.font.ps2(),
+                ..Parts::default()
+            },
+            "ui.boot_logo" => Parts {
+                boot_logo: ui.boot_logo.ps2(),
                 ..Parts::default()
             },
             _ => Parts {
@@ -1362,7 +1468,7 @@ impl Job for UiJob {
     }
     fn enabled(&self, config: &Config) -> bool {
         let p = self.parts(config);
-        p.menus || p.portraits || p.title || p.loading || p.glyphs || p.font || p.font_files
+        p.menus || p.portraits || p.title || p.loading || p.glyphs || p.font || p.font_files || p.boot_logo
     }
     fn run(&self, ctx: &Ctx, out: &Output) -> Result<String> {
         let parts = self.parts(ctx.config);

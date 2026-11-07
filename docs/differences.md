@@ -32,7 +32,7 @@ converter step that doesn't exist yet; **L** needs engine or shader work.
 | 13 | Font | PS2 font | New typeface; 962 per-event/per-battle font pages with their own glyph tables | Rebuild the font pages and glyph tables from the PS2 font | `ui.font` | M |
 | 14 | Aspect ratio | 4:3 | 16:9 only | Pillarbox output and restore the PS2 projection; no mod has done this yet | `render.aspect` | L |
 | 15 | FMVs | 4:3, PS2 MPEG quality | Cropped to 16:9, clearer | Convert the PS2 movies into the PC video format (with black bars, or with 14) | `movies` | M |
-| 16 | Title logo, loading screen, splash videos | Plain logo, no loading screen | "HD Remaster" logo, Abes loading screen, Square Enix/Virtuos/CRI splashes | Swap logo; hide loading screen; skip splashes | `ui.title`, `ui.loading` | S |
+| 16 | Title logo, loading screen, splash videos | Plain logo, no loading screen; "SQUARESOFT® presents" at boot before the project logo | "HD Remaster" logo, Abes loading screen, Square Enix/Virtuos/CRI splashes; no Squaresoft screen (the boot event no longer waits on it) | Swap logo; hide loading screen; skip splashes; optional boot screen | `ui.title`, `ui.loading`, `ui.boot_logo` | S |
 | 17 | Battle dialogue subtitles | Shown (International) | Not shown | Turn the PS2 subtitles back on | `ui.battle_subtitles` | dropped (plan.md) |
 | 18 | Battle menu input delay | None | 0.2-0.45 s delays | Remove the delays | `ui.battle_menu_delay` | S |
 | 19 | Texture filtering | Bilinear at PS2 resolution | Anisotropic at HD resolution | Leave to the game's filter; option for nearest | `render.texture_filter` | S |

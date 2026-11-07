@@ -40,6 +40,7 @@ internal sealed class DemasterSettings {
         new("ui.battle_subtitles",   AppliedBy.Mod,       "ps2"),
         new("ui.battle_menu_delay",  AppliedBy.Mod,       "ps2"),
         new("ui.button_glyphs",      AppliedBy.Converter, "ps2"),
+        new("ui.boot_logo",          AppliedBy.Converter, "hd"),
         new("audio.soundtrack",      AppliedBy.Mod,       "ps2"),
         new("audio.music_engine",    AppliedBy.Both,      "ps2"),
         new("timing.run_speed",      AppliedBy.Mod,       "ps2"),

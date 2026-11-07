@@ -95,6 +95,9 @@ battle_subtitles = "ps2"
 battle_menu_delay = "ps2"
 # PS2 button glyphs instead of the Xbox-style ones.
 button_glyphs = "ps2"
+# "ps2": the PS2's "SQUARESOFT presents" screen at boot, before the project
+# logo (6.5 s; Start shortens it). Off by default.
+boot_logo = "hd"
 
 [audio]
 # "ps2": the original soundtrack. "hd": the arranged one.

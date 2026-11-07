@@ -29,7 +29,7 @@ Numbers refer to the rows of [`differences.md`](differences.md). Status:
 | Item | Rows | Status |
 |---|---|---|
 | PS2 font | 13 | done | EFIGS share one font: PS2 glyphs + widths, PS2 damage digits (`docs/font.md`); German umlauts seen in preview only |
-| Title logo, loading screen, splash videos | 16 | done | title picture and menu at the PS2 place (`docs/ui.md`); splash: OpeningScreen.swf skipped by hook; not seen on screen |
+| Title logo, loading screen, splash videos | 16 | done | title picture and menu at the PS2 place (`docs/ui.md`); splash: OpeningScreen.swf skipped by hook; not seen on screen; the PS2's "SQUARESOFT presents" boot screen back with `ui.boot_logo` (off by default; checked in the game against PCSX2) |
 | Battle dialogue subtitles | 17 | dropped | the PC already subtitles scripted battle dialogue; no case found where the PS2 did and the PC doesn't (user, 2026-11-02). `ui.battle_subtitles` only forces the save's subtitle bit on |
 | Battle menu input delay | 18 | done (static) | 8 delay branches removed (`docs/patches.md`); not timed in game |
 

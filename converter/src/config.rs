@@ -123,7 +123,7 @@ pub struct Render {
     pub texture_quality: Look,
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Ui {
     pub menus: Look,
@@ -134,6 +134,25 @@ pub struct Ui {
     pub battle_subtitles: Look,
     pub battle_menu_delay: Look,
     pub button_glyphs: Look,
+    /// `"ps2"`: the PS2's "SQUARESOFT® presents" screen at boot. Off
+    /// (`"hd"`) by default: it adds 6.5 s before the project logo.
+    pub boot_logo: Look,
+}
+
+impl Default for Ui {
+    fn default() -> Self {
+        Ui {
+            menus: Look::Ps2,
+            portraits: Look::Ps2,
+            font: Look::Ps2,
+            title: Look::Ps2,
+            loading: Look::Ps2,
+            battle_subtitles: Look::Ps2,
+            battle_menu_delay: Look::Ps2,
+            button_glyphs: Look::Ps2,
+            boot_logo: Look::Hd,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -243,6 +262,7 @@ pub const SETTINGS: &[(&str, AppliedBy)] = {
         ("ui.battle_subtitles", Mod),
         ("ui.battle_menu_delay", Mod),
         ("ui.button_glyphs", Converter),
+        ("ui.boot_logo", Converter),
         ("audio.soundtrack", Mod),
         ("audio.music_engine", Both),
         ("movies", Converter),
@@ -386,6 +406,9 @@ mod tests {
                 v == "true"
             } else if k == "render.texture_filter" {
                 v == "game"
+            } else if k == "ui.boot_logo" {
+                // an extra screen at every start: off unless asked for
+                v == "hd"
             } else {
                 v == "ps2"
             };
