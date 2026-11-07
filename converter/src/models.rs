@@ -178,9 +178,10 @@ pub fn jobs() -> Vec<Box<dyn Job>> {
 }
 
 impl Job for ModelsJob {
-    /// 2: textures with mip chains (phyretex::mip_chain).
+    /// 2: textures with mip chains (phyretex::mip_chain). 3: the body in a
+    /// template material that does not blend.
     fn version(&self) -> u32 {
-        2
+        3
     }
     fn name(&self) -> &'static str {
         self.name
@@ -593,16 +594,40 @@ pub fn convert_bytes(
         let mat = &model.materials[m];
         mat.parameter("ClothWorld").is_none() && mat.texture("AnimSampler").is_none() && mat.base_color().is_some()
     };
+    // Materials that blend (`ALPHA_ENABLED`: the `Transparent` pass only).
+    // The HD draws bodies opaque and only hair and fringes blended; a body
+    // in a blended material fades with the character's mesh alpha
+    // (`FakeTransparent`, cut scenes and battle fades) where the HD's stays
+    // solid, and its alpha threshold (Wakka's hair: 0.8) cuts it away.
+    // Per segment (the cluster's material list is not `model.materials`'
+    // order: `segment_material` resolves it).
+    let blended: Vec<bool> = {
+        let edit = ffx_phyre::edit::ClusterEdit::parse(original).context("HD model")?;
+        let ids = chralpha::material_variants(&edit)?;
+        (0..model.segments.len())
+            .map(|s| {
+                let m = u32::try_from(s).ok().and_then(|s| edit.segment_material(s).ok());
+                m.and_then(|m| ids.get(m as usize)).and_then(|id| variants.of(id)).is_some_and(|v| v.on("ALPHA_ENABLED"))
+            })
+            .collect()
+    };
     let score = |s: usize| {
         let seg = &model.segments[s];
         let m = seg.material.unwrap_or(usize::MAX);
         let alpha = model.materials.get(m).and_then(|x| x.parameter("AlphaThreshold")).map_or(0.0, |v| v[0]);
-        (u8::from(m < model.materials.len() && plain(m)), u8::from(seg.bones.len() > 1), u8::from(alpha > 0.0), seg.indices.len())
+        (
+            u8::from(m < model.materials.len() && plain(m)),
+            u8::from(!blended.get(s).copied().unwrap_or(false)),
+            u8::from(seg.bones.len() > 1),
+            u8::from(alpha > 0.0),
+            seg.indices.len(),
+        )
     };
     // Per target instance, the template segment: one whose material has no
-    // cloth and no texture animation, preferably skinned to several bones
-    // (c101's palette-1 segments are hair with its own shader) and alpha
-    // tested, the largest.
+    // cloth and no texture animation, preferably one that does not blend (the
+    // body is drawn opaque, see-through texels go to `UATFOPQ` twins),
+    // skinned to several bones (c101's palette-1 segments are hair with its
+    // own shader) and alpha tested, the largest.
     struct Slot {
         template: usize,
         material: usize,
