@@ -53,8 +53,7 @@ public sealed class BuildStatus {
     public static BuildStatus check(string mod_dir, ModSettings settings, string mod_version) {
         BuildStatus s = new();
         string stamp_path = Path.Combine(mod_dir, "build", "stamp.json");
-        string efl = Path.Combine(mod_dir, "efl", "x");
-        s.FilesFound = Directory.Exists(efl) ? Directory.EnumerateFiles(efl, "*", SearchOption.AllDirectories).Count() : 0;
+        s.FilesFound = files_found(mod_dir);
         if (!File.Exists(stamp_path)) {
             s.State   = BuildState.NotBuilt;
             s.Summary = s.FilesFound == 0
@@ -108,6 +107,26 @@ public sealed class BuildStatus {
                       + (s.NoDisc.Count > 0 ? $" Built without the PS2 disc: {string.Join(", ", s.NoDisc)} not built, that part stays HD." : "");
         }
         return s;
+    }
+
+    /// <summary>
+    /// How many of the files the last build lists (build/files.json: efl/x, and music/ for the
+    /// music engine) are there; before any build, the files in efl/x.
+    /// </summary>
+    private static int files_found(string mod_dir) {
+        string list = Path.Combine(mod_dir, "build", "files.json");
+        try {
+            using JsonDocument doc = JsonDocument.Parse(File.ReadAllText(list));
+            int n = 0;
+            foreach (JsonProperty job in doc.RootElement.GetProperty("jobs").EnumerateObject())
+                foreach (JsonElement f in job.Value.GetProperty("files").EnumerateArray())
+                    if (File.Exists(Path.Combine(mod_dir, f[0].GetString() ?? ""))) n++;
+            return n;
+        }
+        catch (Exception) {
+            string efl = Path.Combine(mod_dir, "efl", "x");
+            return Directory.Exists(efl) ? Directory.EnumerateFiles(efl, "*", SearchOption.AllDirectories).Count() : 0;
+        }
     }
 
     /// <summary>Versions without build metadata ("0.1.0-alpha+abc" and "0.1.0-alpha" are the same).</summary>

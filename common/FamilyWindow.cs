@@ -78,7 +78,7 @@ public static class FamilyWindow {
             coloured(colour, s.Summary);
             ImGui.PopTextWrapPos();
             if (s.BuiltAt is DateTime at)
-                ImGui.TextDisabled($"built {at:yyyy-MM-dd HH:mm} by converter {s.ConverterVersion}, {s.FilesFound} files in efl\\x");
+                ImGui.TextDisabled($"built {at:yyyy-MM-dd HH:mm} by converter {s.ConverterVersion}, {s.FilesFound} files");
             foreach (var c in s.Changed) text($"  {c.Key}: built as {c.Built}, now {c.Now}");
             if (s.State != BuildState.Ok) {
                 wrapped("Quit the game, run this, then start the game again:");
