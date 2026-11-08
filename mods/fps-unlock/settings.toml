@@ -1,5 +1,5 @@
-# FPS unlock settings. Every one of them can also be changed in the game: F9 opens
-# them in the F8 window, where a change applies at once and is saved back into this
+# FPS unlock settings. Every one of them can also be changed in the game, in the
+# F8 window, where a change applies at once and is saved back into this
 # file (only the values that changed; these comments stay). A change made here while
 # the game runs is read at the next start.
 

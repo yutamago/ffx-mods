@@ -37,7 +37,7 @@ public static class FamilyWindow {
 
     /// <summary>
     /// Opens the window with <paramref name="h"/>'s section open and in view, or closes the window
-    /// when it is open: a mod's own key for its part of the window (FPS unlock's F9). Render thread.
+    /// when it is open. Render thread. (No mod binds a key to it: F8 is the family's only window key.)
     /// </summary>
     public static void toggle(ModHost h) {
         if (_open) {

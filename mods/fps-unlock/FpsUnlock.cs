@@ -53,12 +53,12 @@ internal static class FpsUnlock {
         bool ok = hooks.Install(host);
         if (!ok) {
             _hook_problem = "Some hooks failed (see the log); the mod may not work.";
-            log.Error("FPS unlock: not every hook went in; the frame timing may be wrong. Switch the mod off in the F8 window (F9) or remove it from the load order.");
+            log.Error("FPS unlock: not every hook went in; the frame timing may be wrong. Switch the mod off in the F8 window or remove it from the load order.");
         }
         hooks.PatchLimiter();
         FrameSettings s = Settings;
         log.Info($"FPS unlock: {(s.Enabled ? "on" : "off")}, target {s.Target}{(s.Target == FpsTarget.Fixed ? $" {s.FixedFps}" : "")}, vsync {s.Vsync}, "
-            + $"time scale ×{s.TimeScale}, draw-only frames {s.DrawOnly}, interpolation {(s.Interpolate ? "on" : "off")}. F9 opens its settings in the F8 window.");
+            + $"time scale ×{s.TimeScale}, draw-only frames {s.DrawOnly}, interpolation {(s.Interpolate ? "on" : "off")}. Its settings are in the F8 window.");
         return ok;
     }
 
@@ -130,7 +130,6 @@ internal static class FpsUnlock {
             else if (io.KeyCtrl) set(s with { TimeScale = TimeScaleSteps.Toggle(s.TimeScale, s.FastScale) });
             else if (io.KeyShift) set(s with { TimeScale = TimeScaleSteps.Toggle(s.TimeScale, s.SlowScale) });
             else if (io.KeyAlt) set(s with { Vsync = s.Vsync == VsyncMode.On ? VsyncMode.Off : VsyncMode.On });
-            else FamilyWindow.toggle(host);
         }
         if (io.KeyCtrl && ImGui.IsKeyPressed(ImGuiKey.PageUp, true)) set(Settings with { TimeScale = TimeScaleSteps.Up(Settings.TimeScale) });
         if (io.KeyCtrl && ImGui.IsKeyPressed(ImGuiKey.PageDown, true)) set(Settings with { TimeScale = TimeScaleSteps.Down(Settings.TimeScale) });
@@ -151,7 +150,7 @@ internal static class FpsUnlock {
             ImGui.TextColored(Grey, $"vsync {vsync} (Alt+F9)   ×{h.LastScale:0.##}{(s.Enabled ? "" : "   mod off")}");
             if (s.Enabled && s.TimeScale > h.Guard.Limit) ImGui.TextColored(Grey, $"starting up: ×{h.Guard.Limit:0.#} of ×{s.TimeScale:0.##}");
             else if (s.Enabled && reached(h) is double r) ImGui.TextColored(Yellow, $"reached ×{r:0.#} of ×{h.LastScale:0.##} (CPU)");
-            ImGui.TextColored(Grey, "F9 settings");
+            ImGui.TextColored(Grey, "F8 settings");
         }
         ImGui.End();
     }
@@ -307,6 +306,6 @@ internal static class FpsUnlock {
             if (ImGui.Button("Defaults")) set(new FrameSettings { Enabled = s.Enabled });
             ImGui.TreePop();
         }
-        ImGui.TextColored(Grey, "Changes apply at once and are saved into settings.toml. F9 or F8 closes this window.");
+        ImGui.TextColored(Grey, "Changes apply at once and are saved into settings.toml. F8 closes this window.");
     }
 }

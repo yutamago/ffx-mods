@@ -23,7 +23,7 @@ scene's clock" below; not yet run in the game).
 
 ## Use
 
-- **F9** opens the mod's settings: its part of the family's F8 window (F9 or F8 closes it). Every
+- **F8** opens the mod's settings: its part of the family's F8 window (F8 closes it again). Every
   change applies at once and is written into the mod's `settings.toml` half a second later (only
   the lines that changed; the comments stay).
 - **Alt+F9** switches vsync on and off. **Ctrl+F9** switches between the fast-forward scale (×10 by

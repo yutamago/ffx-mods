@@ -195,8 +195,8 @@ between ticks. A time scale gives slow motion and fast-forward (×0.05 to
 ×100) without drawing more frames. Voice-synced scenes, movies and loads
 stay at their own speed.
 
-- **F9** opens its settings in the F8 window (a change applies at once and
-  is saved into its `settings.toml`); **Alt+F9** switches vsync on and off;
+- Its settings are in the F8 window (a change applies at once and is saved
+  into its `settings.toml`); **Alt+F9** switches vsync on and off;
   **Ctrl+F9** switches between fast-forward (×10) and ×1, **Shift+F9**
   between slow motion (×0.25) and ×1, **Ctrl+Shift+F9** back to ×1,
   **Ctrl+PgUp/PgDn** step the scale. A counter in the top-right corner shows

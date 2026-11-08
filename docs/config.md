@@ -170,7 +170,7 @@ FPS unlock (`yuta.fps-unlock`) is not a part of the PS2 game: it draws the
 game at the monitor's rate (or a fixed rate, or uncapped) while the world
 keeps its 30 ticks a second, draws the camera and the characters between
 ticks, and scales game time ([`fps-unlock.md`](fps-unlock.md)). Every
-setting is applied by the mod and read **live**: F9 opens them in the F8
+setting is applied by the mod and read **live**: they are in the F8
 window, a change applies at once and is written back into the mod's
 `settings.toml` half a second later (only the lines that changed; a time
 scale above 1.0 only after 5 s at it). The defaults are the mod's, not the

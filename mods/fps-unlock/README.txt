@@ -56,8 +56,8 @@ Install
 Keys
 ----
 
-  F9              its settings (in the F8 window of the mod family);
-                  F9 or F8 closes it
+  F8              its settings (in the window of the mod family);
+                  F8 closes it again
   Alt+F9          vsync on / off
   Ctrl+F9         fast-forward (x10) / x1
   Shift+F9        slow motion (x0.25) / x1
@@ -72,7 +72,7 @@ Settings
 --------
 
 settings.toml in the mod folder, with a comment above each setting. Every
-setting can also be changed in the game (F9): it applies at once and is
+setting can also be changed in the game (F8): it applies at once and is
 written back into settings.toml (only the lines that changed). A change
 made in the file while the game runs is read at the next start.
 

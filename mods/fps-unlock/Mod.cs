@@ -9,7 +9,7 @@ namespace Yuta.FfxMods.FpsUnlock;
 /// (docs/fps-unlock.md). The settings and their defaults are those of settings.toml in this
 /// folder and of FrameSettings (a test checks both); the converter's list of this mod
 /// (converter/src/mods.rs) must agree (a converter test checks). Every setting is read live: the
-/// mod's part of the F8 window (F9 opens it there) changes them while the game runs and writes
+/// mod's part of the F8 window changes them while the game runs and writes
 /// them back into settings.toml.
 /// </summary>
 [FhLoad(FhGameId.FFX)]
@@ -49,8 +49,8 @@ public sealed class FpsUnlockModule : FhModule {
     ];
 
     // The first installs every hook; the mod reads all settings live, so none is ever "off" here
-    // (frames.enabled = false keeps the hooks in and passes everything through, so F9 can turn
-    // the mod on again). The lines show each setting as the game started.
+    // (frames.enabled = false keeps the hooks in and passes everything through, so the F8 window
+    // can turn the mod on again). The lines show each setting as the game started.
     public static readonly CodePatch[] PATCHES = [
         new("frames.enabled",                 "", "the frame timing hooks (the frame limiter, the ticks, the draw between ticks)", FpsUnlock.install),
         new("frames.target",                  "", "frame rate target", FpsUnlock.live),
