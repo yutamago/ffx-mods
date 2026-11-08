@@ -7,9 +7,8 @@ the FFX mods (https://github.com/yutamago/ffx-mods): yuta.round-minimap.
 What it changes
 ---------------
 
-Not a part of the PS2 game: the field minimap becomes round, always
-centred on you and turned with the camera, so that up on the map is where
-the camera looks.
+The field minimap becomes round, always centred on you and turned with
+the camera, so that up on the map is where the camera looks.
 - your character is an arrow showing where they face;
 - the walkable area sits over a grid fixed to the world, in the game's
   minimap colours on a small CRT screen;
