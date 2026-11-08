@@ -59,6 +59,28 @@ internal static unsafe class Native {
         return true;
     }
 
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern nint VirtualAlloc(nint address, nuint size, uint type, uint protect);
+
+    /// <summary>
+    /// Allocates <paramref name="size"/> bytes of executable memory, fills them with
+    /// <paramref name="build"/>(their address) and returns the address (0 on failure). For stubs
+    /// that a code patch jumps to: they run without managed code, so they are safe on the game's
+    /// job threads. Never freed (they live as long as the game).
+    /// </summary>
+    public static uint alloc_code(int size, Func<uint, byte[]> build) {
+        nint p = VirtualAlloc(0, (nuint)size, 0x3000 /* MEM_COMMIT | MEM_RESERVE */, PAGE_EXECUTE_READWRITE);
+        if (p == 0) return 0;
+        byte[] code = build((uint)p);
+        if (code.Length != size) throw new ArgumentException($"stub is {code.Length} bytes, not {size}");
+        code.CopyTo(new Span<byte>((void*)p, size));
+        FlushInstructionCache(GetCurrentProcess(), p, (nuint)size);
+        return (uint)p;
+    }
+
+    /// <summary>The rel32 of a jmp/jcc whose 4-byte operand ends at <paramref name="next"/> (absolute addresses).</summary>
+    public static byte[] rel32(uint next, uint target) => BitConverter.GetBytes((int)(target - next));
+
     /// <summary>A hookable or callable function at an ffx.sym VA.</summary>
     public static FhCallHandle<T> fn<T>(uint va) where T : Delegate => new(new FhCallLocation("FFX.exe", off(va)));
 }
