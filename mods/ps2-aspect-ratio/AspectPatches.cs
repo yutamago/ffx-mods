@@ -83,8 +83,66 @@ internal static unsafe class AspectPatches {
         if (!at<SetCameraAspectRatio>(SET_CAMERA_ASPECT).hook(m, _camera_aspect)) return false;
         if (!at<UpdateAtelShp>(UPDATE_ATEL_SHP).hook(m, _atel_shp = atel_shp)) return false;
 
+        if (!movie_hooks(m)) m.log.Warning("render.aspect: HD movies stay squeezed into the 4:3 picture");
         *output = 4f / 3f;
+        _on = true;
         return true;
+    }
+
+    // ---- HD movies at 16:9 ---------------------------------------------------------------------
+
+    /// <summary>
+    /// mkvparser::VideoTrack::GetWidth / GetHeight: thiscall(track) -> long long (edx:eax),
+    /// mov eax, [ecx+0x90 / 0x98]; mov edx, [ecx+0x94 / 0x9c]; ret. The movie player asks them
+    /// when it opens a movie.
+    /// </summary>
+    [UnmanagedFunctionPointer(CallingConvention.ThisCall)]
+    public delegate long TrackDimension(nint track);
+
+    /// <summary>graphicIsVideoPlaying: cdecl() -> the FMV player's playing byte (+0x6d0).</summary>
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    public delegate byte IsVideoPlaying();
+
+    private const uint TRACK_WIDTH = 0x00428db0;
+    private const uint TRACK_HEIGHT = 0x00428dc0;
+    private const uint IS_VIDEO_PLAYING = 0x00641cf0;
+    /// <summary>g_MoviePictureOn: a movie picture (MovieStartPicture) with the 3D scene drawn over it.</summary>
+    private const uint MOVIE_PICTURE_ON = 0x0112a00c;
+
+    private static TrackDimension? _width, _height;
+    private static IsVideoPlaying? _playing;
+    private static long _movie_w, _movie_h;
+    private static bool _on, _wide_now;
+
+    /// <summary>
+    /// The HD movies are 16:9 (the PS2's, cut at the top and bottom). Drawn over the whole frame,
+    /// the 4:3 squeeze would make them narrow; FFX Demaster's PS2 movies (movies = "ps2") are 4:3
+    /// and fit it. So while a full-screen movie plays whose picture isn't 4:3, the output aspect
+    /// is the HD's 16:9 again (<see cref="per_frame"/>). Movie pictures with the 3D scene over
+    /// them (MovieStartPicture: the Farplane, mst, far, ggm, sns) keep the 4:3, so that the 3D
+    /// stays right.
+    /// </summary>
+    private static bool movie_hooks(ModHost m) {
+        _width  = track => _movie_w = at<TrackDimension>(TRACK_WIDTH).chain_from(_width!).fnptr!(track);
+        _height = track => _movie_h = at<TrackDimension>(TRACK_HEIGHT).chain_from(_height!).fnptr!(track);
+        return at<TrackDimension>(TRACK_WIDTH).hook(m, _width)
+            && at<TrackDimension>(TRACK_HEIGHT).hook(m, _height);
+    }
+
+    /// <summary>
+    /// Once a frame (the module's render_imgui, from Fahrenheit's Present hook): 16:9 while an HD
+    /// movie plays full screen, else the PS2's 4:3. setNon16By9Viewport reads the aspect at the
+    /// frame's last copy.
+    /// </summary>
+    public static void per_frame() {
+        if (!_on) return;
+        _playing ??= at<IsVideoPlaying>(IS_VIDEO_PLAYING).fnptr!;
+        bool wide = _playing() != 0 && Native.u32(MOVIE_PICTURE_ON) == 0
+                 && _movie_h > 0 && _movie_w * 3 > _movie_h * 4 + 8;
+        if (wide == _wide_now) return;
+        _wide_now = wide;
+        *(float*)Native.ptr(OUTPUT_ASPECT) = wide ? 16f / 9f : 4f / 3f;
+        _log?.Info($"render.aspect: {(wide ? $"a {_movie_w} x {_movie_h} movie plays: 16:9 while it lasts" : "back to 4:3")}");
     }
 
     /// <summary>

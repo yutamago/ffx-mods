@@ -1,7 +1,7 @@
 # Render patches (`render.*`)
 
 The code patches behind `render.glow`, `render.lighting`, `render.shadows`
-and `render.texture_filter`: hooks in `mod/RenderPatches.cs`, and for
+and `render.texture_filter`: hooks in `mods/ps2-lighting/LightingPatches.cs` and `mods/ps2-characters/TexturePatches.cs`, and for
 `render.lighting` also patched character shaders (converter job
 `render.lighting`, `converter/src/shaderjob.rs`) and the PS2's light
 colours in the event scripts (job `render.lighting.events`,

@@ -20,7 +20,7 @@ runs:
       TOKEN: ${{ inputs.token }}
     run: |
       if [ -z "$TOKEN" ]; then
-        echo "::error title=FFX_RUST_TOKEN is not set::The repository secret FFX_RUST_TOKEN is missing (or not passed to this run: pull requests from forks get no secrets). cargo needs it to fetch the private ffx-rust crates. Create a fine-grained personal access token (resource owner yutamago, repository access: only yutamago/ffx-rust, permission Contents: Read-only) and add it in github.com/yutamago/ffx-demaster under Settings > Secrets and variables > Actions > New repository secret, named FFX_RUST_TOKEN. See docs/ci.md."
+        echo "::error title=FFX_RUST_TOKEN is not set::The repository secret FFX_RUST_TOKEN is missing (or not passed to this run: pull requests from forks get no secrets). cargo needs it to fetch the private ffx-rust crates. Create a fine-grained personal access token (resource owner yutamago, repository access: only yutamago/ffx-rust, permission Contents: Read-only) and add it in github.com/yutamago/ffx-mods under Settings > Secrets and variables > Actions > New repository secret, named FFX_RUST_TOKEN. See docs/ci.md."
         exit 1
       fi
       git config --global url."https://x-access-token:${TOKEN}@github.com/yutamago/ffx-rust".insteadOf "https://github.com/yutamago/ffx-rust"

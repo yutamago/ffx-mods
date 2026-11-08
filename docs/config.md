@@ -1,8 +1,27 @@
-# Settings (`demaster.toml`)
+# Settings
 
-`demaster.toml` sits next to `demaster.exe` in `mods/yuta.demaster/`. It says
-where your PS2 disc image is and which parts of the game look like the PS2
-original. Every row of [`differences.md`](differences.md) has a setting here.
+Every difference between the HD Remaster and the PS2 original that the
+mods restore is a setting. **Each mod has its own settings file,
+`settings.toml` in its folder (`mods/yuta.<name>/`), with only its
+settings**; FFX Demaster has all of them in one `demaster.toml` next to
+its `demaster.exe` (the same keys and defaults). Every row of
+[`differences.md`](differences.md) has a setting here.
+
+| Mod | Settings |
+|---|---|
+| `yuta.ps2-music-engine` | `audio.music_engine` (default `"live"` in this mod) |
+| `yuta.ps2-characters` | `models.party`, `models.npc`, `models.monster`, `models.aeon`, `models.weapon`, `models.object`, `render.texture_filter`, `render.texture_quality` |
+| `yuta.ps2-lighting` | `render.lighting` |
+| `yuta.ps2-interface` | `ui.menus`, `ui.portraits`, `ui.font`, `ui.title`, `ui.loading`, `ui.button_glyphs`, `ui.boot_logo` |
+| `yuta.ps2-aspect-ratio` | `render.aspect` |
+| `yuta.ps2-game-feel` | `timing.run_speed`, `ui.battle_menu_delay`, `ui.battle_subtitles` |
+| `yuta.bug-fixes` | `fixes.npc_mouths`, `fixes.farplane_video`, `fixes.lulu_fury` |
+| FFX Demaster only | `movies`, `maps.*`, `effects.textures`, `render.glow`, `render.shadows`, `audio.soundtrack`, `audio.music_engine = "ps2"` (the rendered bank) |
+
+The converter's list is `converter/src/mods.rs`; each mod's own is its
+`mods/<name>/Mod.cs` (a test keeps them, the shipped `settings.toml` and
+this page in step). A key in a mod's file that isn't one of its settings
+is ignored with a warning (the converter's output and the F8 window).
 
 **The rule for defaults: presentation from the PS2, logic from the PC.**
 Presentation settings are `"ps2"` (the default) or `"hd"` (the HD
@@ -10,36 +29,41 @@ Remaster). Fixes are `true` (fixed, the default) or `false` (as on PC).
 Game logic (balance, Eternal Calm, boosters, controls, PC text and voices,
 30 fps) always stays the PC's.
 
-**After changing a setting:** run `demaster.exe build` again, then restart
-the game. Fahrenheit picks up the mod's files only when the game starts, and
-the mod reads `demaster.toml` only then. In the game, F8 shows whether the
-built files match the settings.
+**After changing a setting:** for a mod with PS2 files (music engine,
+characters, lighting, interface), run its `install.cmd` again (it runs
+`demaster.exe build`, which redoes only what changed); then restart the
+game. Fahrenheit picks up the mods' files only when the game starts, and
+the mods read their settings only then. In the game, F8 shows every mod
+of the family and whether its built files match its settings.
 
-**Status.** Not every setting does something yet. `demaster.exe build` ends
-with the list of settings it has no job for, and F8 lists the code patches
-that don't exist yet. The *Status* column below is as of this version.
+**Status.** Not every setting of FFX Demaster does something yet; the
+*Status* column below is as of this version.
 
 Who applies a setting:
-- **converter**: `demaster.exe build` writes PS2 files into
-  `mods/yuta.demaster/efl/x/`. With `"hd"` it writes none and removes those
-  of an earlier build.
-- **mod**: code in `yuta.demaster.dll`, applied when the game starts.
+- **converter**: `demaster.exe build` (run by `install.cmd`) writes PS2
+  files into the mod's `efl/x/`. With `"hd"` it writes none and removes
+  those of an earlier build.
+- **mod**: code in the mod's DLL, applied when the game starts.
 
 ## Paths
 
 | Key | Meaning |
 |---|---|
-| `source.iso` | Your PS2 disc image of Final Fantasy X (`.iso`, any region). Required. |
+| `source.iso` | Your PS2 disc of Final Fantasy X, any region: an image file (`.iso`), or on Windows the drive with the disc in it (`'E:'`, read as the raw volume `\\.\E:`). Required for the mods that build PS2 files, except PS2 lighting (without it the event lights stay HD). `install.cmd` asks and writes it here. |
 | `source.game` | The game folder, the one with `FFX.exe` and `data\FFX_Data.vbf`. Empty: the converter looks in the usual Steam folders (`steamapps\common\FINAL FANTASY FFX&FFX-2 HD Remaster` in every Steam library). |
 | `source.ffmpeg` | ffmpeg, which converts the movies (not included). Empty: `ffmpeg.exe` next to `demaster.exe` or in `tools\`, else the one on your PATH; on Windows, if there is none, the converter downloads an LGPL build of FFmpeg 8.1.3 into `mods\yuta.demaster\tools\` (168 MB) and checks it (`docs/movies.md`). |
-| `build.mod_dir` | Where the files go. Empty: the folder `demaster.exe` is in, which is right when it sits in `mods\yuta.demaster`. |
+| `build.mod_dir` | Where the files go. Empty: the folder `demaster.exe` is in, which is right when it sits in the mod's folder (`mods\yuta.<name>`). |
 
-Relative paths are relative to the folder of `demaster.toml`. On Windows,
+Relative paths are relative to the folder of the settings file. On Windows,
 write paths in single quotes (`iso = 'D:\Games\FFX.iso'`): inside double
 quotes a backslash starts an escape sequence.
 
-The command line overrides the file: `demaster.exe build --iso <file>
---game <folder> --mod-dir <folder> --ffmpeg <ffmpeg.exe> --config <file>`. More options:
+The command line overrides the file: `demaster.exe build --mod <name>
+--iso <file or drive> --game <folder> --mod-dir <folder> --ffmpeg <ffmpeg.exe>
+--config <file>`. `--mod` picks the mod (without it: the mod whose manifest
+is in the mod folder, else every job, as FFX Demaster). `--no-disc` builds
+without the disc (PS2 lighting); `--save-source` writes `--iso`/`--game`
+into the settings file (as `install.cmd` does). More options:
 `--force` rebuilds jobs that are unchanged, `--only chr.monster,chr.npc`
 runs just those jobs (`demaster.exe jobs` lists them), `--verbose` prints
 every file.
@@ -142,7 +166,8 @@ In the mod folder:
   and date) and converter version are unchanged and whose files are all
   there, and removes the files of jobs that are now off.
 - `build/stamp.json`: the settings the files were built with and the
-  converter version. The mod compares it with `demaster.toml` at startup. It
+  converter version. The mod compares it with its `settings.toml` at
+  startup. It
   is deleted when a build starts, so an interrupted build reads as "not
   built".
 

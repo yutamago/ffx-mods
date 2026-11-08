@@ -22,7 +22,7 @@ chains (`docs/render.md`, "Texture quality").
 
 | Part | Files | In the game |
 |---|---|---|
-| Title screen (`map/titl/titl00/2d`): PS2 logo, menu, bar at the PS2 place; the menu cursor moved with it (`mod/TitlePatches.cs`) | 12 layers (EN x2, DE, FR, IT, ES, 6 "Install" labels) | checked (`boot.txt`, English); compared with the PS2 (`compare-title`) |
+| Title screen (`map/titl/titl00/2d`): PS2 logo, menu, bar at the PS2 place; the menu cursor moved with it (`mods/ps2-interface/TitlePatches.cs`) | 12 layers (EN x2, DE, FR, IT, ES, 6 "Install" labels) | checked (`boot.txt`, English); compared with the PS2 (`compare-title`) |
 | "FINAL FANTASY X PROJECT" boot logo (`titl02` 1, 5, 6, at the PS2 place), "Fine" screen pieces (`titl01`) | 6 | boot logo checked in the game against the PS2 |
 | "HD Remaster" under the opening's logo (`magic_0662/logo_hdremaster`) | 1, transparent | not reached by a replay |
 | Loading screen (`menu/loading`: `ld00..24`, `loadingbg`) | 26, transparent | not seen: the harness loads hide it |
@@ -30,18 +30,18 @@ chains (`docs/render.md`, "Texture quality").
 | Menu faces `face_ply`, `face_smn`, `sface_ply` | 14 (every language folder) | checked (`tools/replays/ui-status.txt`): PS2 face on the Status page |
 | Button glyphs (`menu/d3d11/pad_icon`) | 1 | not checked (the harness pad shows no prompt in these replays) |
 | Message window atlas `meswin`: the PS2 window pieces (below, "The PS2 windows") | 8 (every language folder) | checked (`tools/replays/ui-dialogue.txt`, `ui-dialogue-field.txt`): PS2 message windows |
-| Battle command windows (code only: `mod/BattlePatches.cs`, below, "The battle command windows") | 0 | checked through injected game calls (`tools/replays/ui-battle-main.txt`, `ui-battle-item.txt`): PS2 gradient box and layout; hooks seen installing in Fahrenheit |
-| Main menu screen: background, party rows, options, help bar, footer (`ps2win` texture + `mod/MainMenuPatches.cs`, below, "The main menu") | 8 (`ps2win`, every menu folder) | checked through injected game calls (`tools/replays/ui-mainmenu.txt`); hooks seen installing in Fahrenheit |
+| Battle command windows (code only: `mods/ps2-interface/BattlePatches.cs`, below, "The battle command windows") | 0 | checked through injected game calls (`tools/replays/ui-battle-main.txt`, `ui-battle-item.txt`): PS2 gradient box and layout; hooks seen installing in Fahrenheit |
+| Main menu screen: background, party rows, options, help bar, footer (`ps2win` texture + `mods/ps2-interface/MainMenuPatches.cs`, below, "The main menu") | 8 (`ps2win`, every menu folder) | checked through injected game calls (`tools/replays/ui-mainmenu.txt`); hooks seen installing in Fahrenheit |
 | The PS2 cursor (code: `TOMakePktShapeCursor` kind 0, below) | 0 | checked through injected game calls (battle windows) |
 | Item icons, battle words, labels (`icon`, `strtex`; below, "Item icons, battle words, labels") | 8 `icon`, 2 `strtex` | checked through injected game calls (`tools/replays/ui-items.txt`, `ui-battle-overdrive.txt`) |
-| The battle Overdrive tab (`ps2btl` + `mod/BattleSeqPatches.cs`, below) | 8 (`ps2btl`) | checked through injected game calls (`tools/replays/ui-battle-overdrive.txt`) |
-| Items and Abilities screens (`mod/ItemMenuPatches.cs`, below) | 0 | checked through injected game calls (`tools/replays/ui-items.txt`, `ui-abilities.txt`); hooks seen installing in Fahrenheit |
-| The PS2 menu fonts M and S (`ps2fnt` + `mod/Ps2Menu.cs`, below) | 8 (`ps2fnt`) | checked through injected game calls (`ui-mainmenu.txt`, `ui-items.txt`, `ui-abilities.txt`) |
+| The battle Overdrive tab (`ps2btl` + `mods/ps2-interface/BattleSeqPatches.cs`, below) | 8 (`ps2btl`) | checked through injected game calls (`tools/replays/ui-battle-overdrive.txt`) |
+| Items and Abilities screens (`mods/ps2-interface/ItemMenuPatches.cs`, below) | 0 | checked through injected game calls (`tools/replays/ui-items.txt`, `ui-abilities.txt`); hooks seen installing in Fahrenheit |
+| The PS2 menu fonts M and S (`ps2fnt` + `mods/ps2-interface/Ps2Menu.cs`, below) | 8 (`ps2fnt`) | checked through injected game calls (`ui-mainmenu.txt`, `ui-items.txt`, `ui-abilities.txt`) |
 | Status, Equip, Overdrive, Customize, Config screens (`mod/*MenuPatches.cs`, below) | 0 | checked through injected game calls (`ui-status-ps2.txt`, `ui-equip.txt`, `ui-overdrive.txt`, `ui-customize.txt`, `ui-config.txt`); not run in Fahrenheit |
-| The 16x12 font at the PS2's size, the menu sequence scenes (`mod/Ps2Menu.cs`, below) | 0 | compared with the PS2 in PCSX2 (`docs/compare.md`) through injected game calls |
+| The 16x12 font at the PS2's size, the menu sequence scenes (`mods/ps2-interface/Ps2Menu.cs`, below) | 0 | compared with the PS2 in PCSX2 (`docs/compare.md`) through injected game calls |
 | The PAL menu layout (`jppc/menu/menu_script.bin`, below, "The menu layout data") | 1 | compared with the PS2 (Config) |
-| The battle HUD: help bar, CTB list, party list (`mod/BattleHudPatches.cs`), the battle sequence scenes (BEFEHL footer, glow, lines; `mod/BattleSeqPatches.cs`), command window numbers in the 16x12 font (below, "The battle HUD", "The battle sequence scenes") | 0 | compared with the PS2 (`compare-battle-kami`) through injected game calls |
-| The world map: the PS2 picture (`sgjob.rs`) and its location plates (`mod/WorldMapPatches.cs`, below, "The world map") | 8 (`worldmap`, every menu folder) | not seen in the game: `tools/replays/ui-worldmap.txt`'s `call 0x00821750 0x17` opens the main menu, not the map; no PS2 save state |
+| The battle HUD: help bar, CTB list, party list (`mods/ps2-interface/BattleHudPatches.cs`), the battle sequence scenes (BEFEHL footer, glow, lines; `mods/ps2-interface/BattleSeqPatches.cs`), command window numbers in the 16x12 font (below, "The battle HUD", "The battle sequence scenes") | 0 | compared with the PS2 (`compare-battle-kami`) through injected game calls |
+| The world map: the PS2 picture (`sgjob.rs`) and its location plates (`mods/ps2-interface/WorldMapPatches.cs`, below, "The world map") | 8 (`worldmap`, every menu folder) | not seen in the game: `tools/replays/ui-worldmap.txt`'s `call 0x00821750 0x17` opens the main menu, not the map; no PS2 save state |
 | The sphere grid's PS2 texture pages (`sgjob.rs`, below, "The sphere grid") | 34 (`menu/abmap/dat00`, `dat12`) | not seen in the game: `tools/replays/ui-spheregrid.txt` drafted, not run |
 
 68 files in all; 20 HD textures have no PS2 counterpart (listed by
@@ -168,7 +168,7 @@ draws an animated water band over that part, `graphicDrawMainMenuWaterEffect`
 of the 70 `menu/titl/Water_NN` textures per frame (`DAT_00ccba09` counts
 0..69), a 512 x 175 UI element at (0, 0), white at alpha 100, from the main
 loop while `g_YnTest20Seen` (`0x025d5ebc`) is set. Under `ui.title`
-(`mod/TitlePatches.cs`) the call is skipped and the converter keeps the
+(`mods/ps2-interface/TitlePatches.cs`) the call is skipped and the converter keeps the
 banner and the water strip in the layer (ui job version 10; before, rows
 0..83 were black under the PC's band).
 
@@ -190,7 +190,7 @@ message out with HD numbers, its rectangle from the message's f32 `+0x34`
 (y 211; `TkMenuMessageLayout_008de370` also pins x to 0x160, 0x154 in
 language 3) and the second choice 16 + 21.5 lines below the first
 (`TOLayoutMessageChoices_008b9a60`, f64 `0x00b655e8`, read only there).
-`mod/TitlePatches.cs` (`ui.title`, so that setting is now converter and
+`mods/ps2-interface/TitlePatches.cs` (`ui.title`, so that setting is now converter and
 mod) runs the layout with `+0x34` 62 lines lower and the constant at 6.0:
 the cursor sits at the PS2 picture's lines (280 and 302, 22 apart).
 
@@ -283,7 +283,7 @@ Abes picture). The `ui.loading` job writes them as 8x8 transparent
 textures, so the loading screen draws nothing (black). Not seen in the
 harness (its loads are instant). The autosave icon (`autosaving`) and the
 cloud-save screens stay. Hiding the screen entirely (not drawing its
-black frame) and skipping the splash videos need code (`mod/Patches.cs`,
+black frame) and skipping the splash videos need code (`mods/ps2-interface/Mod.cs`,
 still planned); so `ui.loading` stays a mod setting, and changing it needs
 a converter build too for the textures.
 
@@ -382,14 +382,14 @@ visible.
   of entries 0-3 (the box at (160, 56), 24x32) go into every
   `menu*/meswin` (8 folders; no text in them), 4x, texel for texel, and
   only where the HD atlas is empty.
-- Mod (`mod/MenuPatches.cs`): a hook on `yiWindowDrawMenu` runs
+- Mod (`mods/ps2-interface/MenuPatches.cs`): a hook on `yiWindowDrawMenu` runs
   `yiWindowDrawPlate`, which is exactly the PS2's kind-0 draw. A hook on
   `TODrawMenuPlateXYWHType` draws type 10 (the remaster's message-box
   plate, also used by the yes/no questions and the battle-end notice) as
   `TOMkpWindowPlain(x, y, w, h)`. The other plate types stay HD.
 
 So `ui.menus` is applied by both (`AppliedBy::Both` in `config.rs` and
-`mod/Settings.cs`): changing it needs a `demaster build` and a restart.
+`mods/ps2-interface/Mod.cs`): changing it needs `install.cmd` (a `demaster build`) and a restart.
 
 **Checked.** In the ffx-rust harness, which can't run the mod's hooks: a
 call to `TOSetWindowKind` (`0x00906e60`) sets the window's kind to 3, so
@@ -459,7 +459,7 @@ module (`0x00227218`..`0x0024ef3c`). They tint menu plates (the main menu's
 ability and item lists, presumably), not the battle rows. The earlier note
 here said otherwise.
 
-**The restoration** (`mod/BattlePatches.cs`, from `MenuPatches.menus`):
+**The restoration** (`mods/ps2-interface/BattlePatches.cs`, from `MenuPatches.menus`):
 hooks on the PC's seven command-window draws replace them with the PS2 draw
 made of FFX.exe's primitives: `TODrawBoxXYWHC2` (`0x008f3db0`, untextured,
 PS2 units, `c0` left), `DrawCrossMenuScrollParts`, `TOMakePktScissor`,
@@ -620,9 +620,9 @@ the ffx-rust harness both serve a path the archive does not have.
 The layout words come from `TOSeqInitParam` (PS2 `0x00209bc8`, PC
 `0x008ae6f0`; the same 92 reads in the same order). The PC stores them
 mirrored: a point is (y, x) from its lower address, a rectangle (h, w, y, x);
-the mapping used (PS2 -> PC) is in `mod/MainMenuPatches.cs`.
+the mapping used (PS2 -> PC) is in `mods/ps2-interface/MainMenuPatches.cs`.
 
-**The restoration** (`mod/MainMenuPatches.cs`, from `MenuPatches.menus`):
+**The restoration** (`mods/ps2-interface/MainMenuPatches.cs`, from `MenuPatches.menus`):
 hooks on `TkMenuDrawMain`, `MenuMain_DrawCmdWindow` and the help draw
 replace them with the PS2 draws above, made of FFX.exe's primitives (the
 same calls the PS2 made where the PC kept them): `TODrawBoxXYWHC2`,
@@ -714,7 +714,7 @@ shadow colour `k - 8`; in a tile glyph `i` of font M sits at (1, 1) in the
 16 x 16 cell `(i % 16, i / 16)`, font S in `(i % 16, 6 + i / 16)`. The empty
 border keeps the bilinear filter from pulling in the neighbouring glyphs
 (with the glyphs packed as on the PS2 sheet, the colon of the time showed
-lines from its neighbours). `mod/Ps2Menu.cs` (`font_m`, `font_s`,
+lines from its neighbours). `mods/ps2-interface/Ps2Menu.cs` (`font_m`, `font_s`,
 `value_m`, `value_s`, `play_time`) draws each glyph as two meswin shape-0
 quads with explicit UVs (`TOMkpShapeXYWHUVC2` `0x00903ee0`: ids below 199
 take the sheet `0x3e00` and UVs 0..1 as given) while
@@ -941,7 +941,7 @@ inside `TODrawWaitBtlWinMain` instead, which the PS2 window port drops. The
 HD `battle` cell of layout 13 holds only italic text, no plate.
 
 **The restoration.** The converter writes the whole PS2 `battle` (CLUT 1,
-PS2 size) as `menu*/d3d11/ps2btl` (as `ps2win`). `mod/BattleSeqPatches.cs`
+PS2 size) as `menu*/d3d11/ps2btl` (as `ps2win`). `mods/ps2-interface/BattleSeqPatches.cs`
 hooks `TOSeqDraw` (`0x008ae2f0`) to know when scene 2 runs and
 `TOMakePktSeqPrimLayout_008fe0b0`: shapes 413, 414, 421 below y 300 are drawn
 as the PS2's drawer (`0x001fd268`) does, each part of the layout at (x + dx sx
@@ -981,7 +981,7 @@ only `bnormallay`, `bnormalllay` and `blimitlay`; its
 primitive (`TOMakePktSeqPrimLine` `0x008fe070`) is a bare `ret`, so no
 scene line is drawn anywhere on the PC.
 
-**The restoration** (`mod/BattleSeqPatches.cs`): hooks on
+**The restoration** (`mods/ps2-interface/BattleSeqPatches.cs`): hooks on
 `TOOpenBtlWinMain` and `TOOpenBtlLimitBreak` start the PS2's other scenes
 after the PC's call; the primitive hook draws 411, 415, 416, 418, 419,
 417 below y 330 and 413/414/421 below y 300 the PS2 way (each part at
@@ -1012,7 +1012,7 @@ the CTB list (`0x002138c8(x, y)` = `TOBtlDrawCtbWindow`, at dum19), the
 window callbacks, the help bar (`0x00218338` = `TOBtlDrawHelpWin`), the
 target info window (`0x00218a80(chr, 0x14, 0x46)` = `TOBtlDrawInfoWin`;
 the PC passes (0xb3, 0xf0)) and its text. The PC rewrote the draws with HD
-sheets and HD coordinates. `mod/BattleHudPatches.cs` replaces three of
+sheets and HD coordinates. `mods/ps2-interface/BattleHudPatches.cs` replaces three of
 them with the PS2 draws (PS2 units, the PS2 meswin `ps2win` and battle
 atlas `ps2btl`):
 
@@ -1100,7 +1100,7 @@ entering at x1 when one's end passes x1 - 20 (`0x00218f20`), drawn in the
 bar in HD units (`TOBtlInitInfoWinMes`: x 700..1400, y 101..160), scrolls
 1.2 HD units a frame and draws its battle typeface.
 
-**The restoration** (`mod/BattleHudPatches.cs`): `TOBtlDrawInfoWin` is
+**The restoration** (`mods/ps2-interface/BattleHudPatches.cs`): `TOBtlDrawInfoWin` is
 replaced by the PS2 draw at (0x14, 0x46); `TOBtlSetInfoWinMes`,
 `TOBtlCtrlInfoWinMes` (after the PC's own, which keeps the shown flag) and
 `TOBtlDrawInfoWinMes` keep and draw the PS2's line state (the box x0 from
@@ -1143,7 +1143,7 @@ glyphs 1.5 times as big, 46 further left and lower; Lulu's counter 10 right and 
 fill; the timer 15 right and 20 up with 16-pixel digits (and moved up during the reels); the
 prompts in the battle typeface at y 71.
 
-**The restoration** (`mod/BattleLimitPatches.cs`): hooks on the four PC draws make the PS2 calls
+**The restoration** (`mods/ps2-interface/BattleLimitPatches.cs`): hooks on the four PC draws make the PS2 calls
 with FFX.exe's primitives (battle shapes from the PS2 atlas `ps2btl` through `BattleHudPatches.bshape`,
 icon shapes 600.. from the `icon` sheet with half-texel-inset UVs, `TODrawBoxXYWHC2`,
 `TODrawBoxXYWHC2FW`, the 16x12 font at the PS2 size); `TODrawLimitBG` and Wakka's frame draw
@@ -1174,7 +1174,7 @@ cell per character, as the PS2 code steps).
 
 The PC kept the PS2 menu logic and window records: every field the PS2
 draws read has the PS2's offset in the PC's 0x98-byte window
-(`+0x2c`..`+0x94`). `mod/ItemMenuPatches.cs` hooks the PC's draws and makes
+(`+0x2c`..`+0x94`). `mods/ps2-interface/ItemMenuPatches.cs` hooks the PC's draws and makes
 the PS2's calls (SLPM_675.13 -> FFX.exe):
 
 | PC draw | PS2 draw | What |
@@ -1250,7 +1250,7 @@ band under the bar and the column between the lists).
 
 ## The Status screen (`ui.menus`: code)
 
-`mod/StatusMenuPatches.cs` hooks two PC draws and makes the PS2's calls (SLPM_675.13 -> FFX.exe):
+`mods/ps2-interface/StatusMenuPatches.cs` hooks two PC draws and makes the PS2's calls (SLPM_675.13 -> FFX.exe):
 
 | PC draw | PS2 draw | What |
 |---|---|---|
@@ -1295,7 +1295,7 @@ The PC's `TkMn2GetStatusPos` (`0x008d4920`) reads the same names as the PS2's `0
   - The cursor at `pos_sobiplt` + (12, 1 + 32 (`+0x48` - `+0x32`)).
   - The scroll bar `0x00225e90` -> `0x00200878` (the item list's draw) over `r_soscrol`.
 
-**The restoration** (`mod/EquipMenuPatches.cs`): hooks on `MenuEquip_Draw_008cf670` and `MenuWeapon_DrawList_008cf9f0` make the calls above with FFX.exe's primitives.
+**The restoration** (`mods/ps2-interface/EquipMenuPatches.cs`): hooks on `MenuEquip_Draw_008cf670` and `MenuWeapon_DrawList_008cf9f0` make the calls above with FFX.exe's primitives.
 - `TODrawMenuBG` and `MenuDrawDividerShapes(4)` are dropped.
 - The page goes through `MenuStatus_DrawPage`, as the PC calls it (the Status port hooks it).
 - Logic and input stay the PC's.
@@ -1344,7 +1344,7 @@ main menu's own draw). PS2 record `0x00325a78` (control `0x00230aa0` = `TkMenuCt
 - No counts or progress numbers in the mode rows. The PC's divider lines
   (`MenuDrawDividerShapes(5)`) are not on the PS2.
 
-**The restoration** (`mod/OverdriveMenuPatches.cs`): hooks on both PC draws make the calls above
+**The restoration** (`mods/ps2-interface/OverdriveMenuPatches.cs`): hooks on both PC draws make the calls above
 with FFX.exe's primitives; layout words by name through `TkMn2SeqGetPos` / `TkMn2SeqGetRect` /
 `TkMn2SeqGetColor` (scene 1), several of them being the Status init's (`0x00228c48` / PC
 `0x008d4920`). The sub-command bar (View / Set Mode) is `ItemMenuPatches`', the help bar
@@ -1412,7 +1412,7 @@ The mod reads them by name (`TOSeqGetPoint`, `TOSeqGetRect`, `TkMn2SeqGetColor`)
   cursor; scroll bar; the equipment row's weapon on a kind-0 plate at `pos_ksobiplt2`
   (`0x002324d8`). This window draws over the equipment list in the same places.
 
-**The restoration** (`mod/CustomizeMenuPatches.cs`): hooks on `MenuKaizou_Draw_008d6860` and
+**The restoration** (`mods/ps2-interface/CustomizeMenuPatches.cs`): hooks on `MenuKaizou_Draw_008d6860` and
 `DrawGearCustomizationMenu` make those calls with `Ps2Menu`'s primitives,
 `TkMn2DrawMenuWindowScissor` `0x008c0f70` (PS2-unit twin of `0x002274a8`),
 `TOMkpWindowFrame_008f9b60` (twin of `0x001fa328`), `TODrawSheetCell_008f8bb0` for the strtex
@@ -1455,7 +1455,7 @@ the harness. The help bar stays HD. The cost row plate (225 wide) runs past the 
 
 The window's left edge is the corner cell's brushed alpha edge (the same pieces as the plain message window). Over the light menu gradient its gaps show the background.
 
-**The restoration** (`mod/ConfigMenuPatches.cs`). The hook on `MenuConfig_Draw` (`0x008cb320`) calls `TkMenuDrawKick` twice, then draws the PS2 rows in one packet:
+**The restoration** (`mods/ps2-interface/ConfigMenuPatches.cs`). The hook on `MenuConfig_Draw` (`0x008cb320`) calls `TkMenuDrawKick` twice, then draws the PS2 rows in one packet:
 
 - Plate: `0x008f5e90` (= `TkMn2DrawCommonPlateR`'s `0x008f09f0`).
 - Title and choices: `TOMkpBaseMesFont`; widths from `TkMn2StringWidth`.
@@ -1545,7 +1545,7 @@ whole 16:9 screen. The location bar is an HD sheet quad, meswin shape 200 and th
 places.
 
 **The restoration.** Converter (`sgjob::world_map`, `ui.menus`): the PS2 picture with CLUT 5 at
-PS2 size into the 8 menu folders' `worldmap` (no text on it). Mod (`mod/WorldMapPatches.cs`): a
+PS2 size into the 8 menu folders' `worldmap` (no text on it). Mod (`mods/ps2-interface/WorldMapPatches.cs`): a
 hook on `MenuWorldMap_Draw_008e2b60` makes the PS2 draw's calls (picture, marker scene, the
 plates and name centred) in one packet. Control and input stay the PC's.
 
@@ -1559,7 +1559,7 @@ in the comparison set has seen the map, so no PS2 state (`docs/compare.md`).
 `docs/screen.md`); its destination list is an event message window (the PS2 window,
 "The PS2 windows"). No other map picture was found for it; not looked at further.
 
-## Shared pieces of the ported menus (`mod/Ps2Menu.cs`)
+## Shared pieces of the ported menus (`mods/ps2-interface/Ps2Menu.cs`)
 
 - `shape` / `shape_c2`: a meswin shape at its own size, every layout part as a
   `TOMkpShapeXYWHUVC2` quad with the UVs half a texel inside the part's cell.

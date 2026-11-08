@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: MIT
-# CI: builds and tests everything, and packages the release zip as an artifact.
-#   mod        the C# mod (Linux; needs no secret)
-#   linux      converter tests (Linux)
-#   windows    demaster.exe (MSVC, static CRT), the
-#              release zip (tools/package.cs) with a check that it holds no
+# CI: builds and tests everything, and packages the release zips (one per mod) as an artifact.
+#   mod        the shared library and the seven C# mods (Linux; needs no secret)
+#   linux      converter and live engine tests (Linux)
+#   windows    demaster.exe (MSVC, static CRT) and demaster_live.dll (32-bit), the
+#              release zips (tools/package.cs) with a check that they hold no
 #              game data
 # release.yml calls this workflow with the tag, so a release is built the same way.
 #
@@ -22,7 +22,7 @@ on:
   workflow_call:
     inputs:
       tag:
-        description: Release tag (v1.2.3); sets the version of the converter and the mod
+        description: Release tag (v1.2.3); sets the version of the converter and the mods
         type: string
         default: ""
 
@@ -36,12 +36,12 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   # The release tag (v1.2.3), empty outside a release: then the versions in
-  # Cargo.toml and the csproj stay.
+  # Cargo.toml and the csproj files stay.
   TAG: ${{ inputs.tag }}
 
 jobs:
   mod:
-    name: Mod (C#)
+    name: Mods (C#)
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v7
@@ -53,12 +53,12 @@ jobs:
     - name: Build
       run: |
         version="${TAG#v}"
-        dotnet build -c Release ${version:+-p:Version="$version"} ffx-demaster.slnx
+        dotnet build -c Release ${version:+-p:Version="$version"} ffx-mods.slnx
 
     - uses: actions/upload-artifact@v7
       with:
-        name: mod
-        path: mod/artifacts/deploy/rel/mods/yuta.demaster/
+        name: mods
+        path: artifacts/deploy/rel/mods/
         if-no-files-found: error
         retention-days: 7
 
@@ -118,8 +118,8 @@ jobs:
 
     - uses: actions/download-artifact@v8
       with:
-        name: mod
-        path: mod/artifacts/deploy/rel/mods/yuta.demaster/
+        name: mods
+        path: artifacts/deploy/rel/mods/
 
     - uses: actions/setup-dotnet@v6
       with:
@@ -127,26 +127,38 @@ jobs:
 
     - name: Package
       run: |
-        zip="yuta.demaster-${TAG:-ci}.zip"
-        dotnet run tools/package.cs -- "$zip"
-        echo "ZIP=$zip" >> "$GITHUB_ENV"
+        dotnet run tools/package.cs -- dist "${TAG:-ci}"
 
-    - name: Check the zip
+    # Every zip: the shared library, the mod with its settings, README, licences and install
+    # script; demaster.exe for the mods with PS2 files; nothing else (no efl/, build/, game data).
+    - name: Check the zips
       shell: pwsh
       run: |
         Add-Type -AssemblyName System.IO.Compression.FileSystem
-        $zip = [IO.Compression.ZipFile]::OpenRead("$PWD/$env:ZIP")
-        $names = $zip.Entries.FullName
-        $zip.Dispose()
-        $names
-        foreach ($f in 'yuta.demaster.dll', 'yuta.demaster.manifest.json', 'demaster.exe', 'demaster_live.dll', 'demaster.toml', 'README.txt', 'LICENSES.txt') {
-          if ($names -notcontains "mods/yuta.demaster/$f") { throw "the zip has no $f" }
+        $builds = @{ 'ps2-music-engine' = $true; 'ps2-characters' = $true; 'ps2-lighting' = $true; 'ps2-interface' = $true;
+                     'ps2-aspect-ratio' = $false; 'ps2-game-feel' = $false; 'bug-fixes' = $false }
+        $zips = @(Get-ChildItem dist -Filter '*.zip')
+        if ($zips.Count -ne $builds.Count) { throw "expected $($builds.Count) zips, found $($zips.Count)" }
+        foreach ($name in $builds.Keys) {
+          $id = "yuta.$name"
+          $zip = $zips | Where-Object { $_.Name -like "$id-*.zip" }
+          if (-not $zip) { throw "no zip for $id" }
+          $z = [IO.Compression.ZipFile]::OpenRead($zip.FullName)
+          $names = $z.Entries.FullName
+          $z.Dispose()
+          "$($zip.Name):"; $names | ForEach-Object { "  $_" }
+          $need = @("mods/yuta.ffx-mods/yuta.ffx-mods.dll", "mods/yuta.ffx-mods/yuta.ffx-mods.manifest.json")
+          foreach ($f in "$id.dll", "$id.manifest.json", 'settings.toml', 'README.txt', 'LICENSES.txt', 'install.cmd', 'install.ps1') { $need += "mods/$id/$f" }
+          if ($builds[$name]) { $need += "mods/$id/demaster.exe" }
+          if ($name -eq 'ps2-music-engine') { $need += "mods/$id/demaster_live.dll" }
+          foreach ($f in $need) { if ($names -notcontains $f) { throw "$($zip.Name) has no $f" } }
+          if (-not $builds[$name] -and ($names -like '*/demaster.exe')) { throw "$($zip.Name) has demaster.exe, but $name builds nothing" }
+          $bad = $names | Where-Object { ($_ -notlike "mods/$id/*" -and $_ -notlike 'mods/yuta.ffx-mods/*') -or $_ -match '/(efl|build|tools|preview|music)/|\.(phyre|iso|bin|img|png|dds|webm|fsb|wav|vbf|bgm|wd|irx)$' }
+          if ($bad) { throw "$($zip.Name) contains files it must not: $bad" }
         }
-        $bad = $names | Where-Object { $_ -notlike 'mods/yuta.demaster/*' -or $_ -match '/(efl|build|tools|preview)/|\.(phyre|iso|bin|img|png|dds|webm|fsb|wav|vbf)$' }
-        if ($bad) { throw "the zip contains files it must not: $bad" }
 
     - uses: actions/upload-artifact@v7
       with:
-        name: zip
-        path: ${{ env.ZIP }}
+        name: zips
+        path: dist/*.zip
         if-no-files-found: error

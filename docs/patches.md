@@ -1,7 +1,11 @@
 # Code patches
 
-The mod's changes to `FFX.exe`'s code (`mod/GamePatches.cs`, keyed in
-`mod/Patches.cs` by their `demaster.toml` setting). Addresses are VAs of
+The mods' changes to `FFX.exe`'s code, each keyed in its mod's `Mod.cs`
+by its `settings.toml` setting: `mods/ps2-game-feel/GameFeelPatches.cs`
+(`ui.battle_menu_delay`, `ui.battle_subtitles`, `timing.run_speed`),
+`mods/bug-fixes/FixPatches.cs` (`fixes.*`) and
+`mods/ps2-interface/LoadingPatches.cs` (`ui.loading`). `audio.soundtrack`
+is FFX Demaster's (its `mod/GamePatches.cs`); it stays described here. Addresses are VAs of
 ffx-rust's `symbols/ffx.sym` (image base `0x00400000`; Fahrenheit's
 `FhCallLocation` takes VA − `0x400000`, the file offset in `.text` is
 VA − `0x400c00`). A byte patch is written only when the bytes there are the
@@ -112,6 +116,8 @@ save). The code patch itself: bytes matched and written in the Fahrenheit
 run; not watched in a battle there.
 
 ## `audio.soundtrack` (row 20)
+
+(FFX Demaster's patch, not one of the seven mods'.)
 
 **Where the choice lives.** In the save: `g_SaveData` (`0x0112ca90`,
 `MsGetSaveEventAddress`) byte `+0x5ec`, 0 = arranged, 1 = original.
@@ -319,7 +325,7 @@ evidence is the slot state, not a picture.
 
 **The patch.** The `jle` at `0x00834714` (`7e 04`) that picks `push 0`
 becomes `jg` (`7f 04`): open gets 0, closed gets 1, as on the PS2
-(`mod/GamePatches.cs`). The jaw bone is untouched (it was never wrong).
+(`mods/bug-fixes/FixPatches.cs`). The jaw bone is untouched (it was never wrong).
 Not yet run in Fahrenheit: the harness cannot write code (the page is
 read-only; the write crashed the game), so the patched code is checked by
 its bytes and by the PS2's behaviour above, which it reproduces.

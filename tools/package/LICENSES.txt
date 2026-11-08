@@ -1,26 +1,25 @@
 Licences
 ========
 
-FFX Demaster
-------------
+FFX mods
+--------
 
-Source: https://github.com/yutamago/ffx-demaster
+Source: https://github.com/yutamago/ffx-mods
 
-- The mod (yuta.demaster.dll) and the build scripts: MIT (the
-  SPDX-License-Identifier in each source file).
-- The converter (demaster.exe): MIT OR Apache-2.0 (converter/Cargo.toml).
+- The mods (yuta.*.dll), the shared library (yuta.ffx-mods.dll) and the
+  install script: MIT (the SPDX-License-Identifier in each source file).
+- The converter (demaster.exe) and the live music engine
+  (demaster_live.dll): MIT OR Apache-2.0 (converter/Cargo.toml,
+  live/Cargo.toml).
 
 Not included
 ------------
 
 - Game data. Final Fantasy X belongs to Square Enix. This package contains no
   game files; demaster.exe builds them on your computer from your own PS2
-  disc image and your own copy of the game.
+  disc and your own copy of the game.
 - Fahrenheit (https://github.com/fahrenheit-crew/fahrenheit, MIT): install it
   separately.
-- FFmpeg. When demaster.exe downloads it (README.txt, "ffmpeg"), it is an
-  LGPL v3 build of FFmpeg 8.1.3 from https://github.com/BtbN/FFmpeg-Builds,
-  run as a separate program; its licence is saved next to it in tools\.
 
 Included third-party code
 -------------------------

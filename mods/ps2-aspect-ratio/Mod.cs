@@ -19,8 +19,21 @@ public sealed class AspectRatioModule : FhModule {
 
     public static readonly ModInfo INFO = new("ps2-aspect-ratio", "PS2 aspect ratio", SETTINGS, PATCHES, Builds: false);
 
+    private bool _failed;
+
     public override bool init(FhModContext mod_context, FileStream global_state_file) {
         ModHost.start(this, _logger, mod_context, INFO);
         return true;
+    }
+
+    /// <summary>Called once a frame: the movie check of render.aspect (AspectPatches.per_frame).</summary>
+    public override void render_imgui() {
+        // Fahrenheit calls this without a try/catch, so an exception would end the game.
+        if (_failed) return;
+        try { AspectPatches.per_frame(); }
+        catch (Exception e) {
+            _failed = true;
+            _logger.Error($"render.aspect: the movie check failed and is now off: {e}");
+        }
     }
 }

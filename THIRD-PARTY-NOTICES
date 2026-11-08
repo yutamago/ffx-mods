@@ -1,7 +1,7 @@
 Third-party notices
 ===================
 
-mod/Directory.Build.props and mod/Directory.Build.targets come from the Fahrenheit
+Directory.Build.props and Directory.Build.targets (the repository root) come from the Fahrenheit
 mod template (https://github.com/fahrenheit-crew/fh-mods-template), under this
 license:
 

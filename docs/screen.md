@@ -65,7 +65,7 @@ handling of 4:3 and 21:9 monitors.
 
 The mod keeps the 16:9 targets and draws the frame **anamorphic**:
 everything in it is 4/3 too wide, and the last copy squeezes it into the
-middle 4:3 of the window. Four changes (`mod/RenderPatches.cs`,
+middle 4:3 of the window. Four changes (`mods/ps2-aspect-ratio/AspectPatches.cs`,
 `aspect`):
 
 1. **Output aspect.** `0x00c34154` = 4/3. The copy pillarboxes the frame
@@ -172,7 +172,7 @@ GS 1/16 pixel; the HD's / 15 makes every event sprite 16/15 too large
 around its position (with only the x unit fixed the line measured 42.8 %
 against 39.8 %, 1.073, and the letters 3.26 % against 3.12 % high).
 
-The fix (`mod/RenderPatches.cs`, `atel_shp`, part of
+The fix (`mods/ps2-aspect-ratio/AspectPatches.cs`, `atel_shp`, part of
 `render.aspect = "ps2"`): a hook on `updateVFXRenderDataAtelShp` that,
 after the game filled the six render data (`id + 10000 k`, through
 `graphicVFXGetRenderDataByInstance`), multiplies the matrix's x output

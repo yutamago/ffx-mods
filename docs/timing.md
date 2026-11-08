@@ -139,7 +139,7 @@ defaults to the PC's speed.
 
 **Setting.** `timing.run_speed = "ps2"` (the default since 2026-11-04, user decision; `"hd"` keeps the PC's 38): the PC's
 `fld [0x00b59830]` at `0x0082d8e6` reads the `.rdata` 34.0 at `0x00b656c4`
-instead (`mod/GamePatches.cs`). Checked: bytes and constants (static);
+instead (`mods/ps2-game-feel/GameFeelPatches.cs`). Checked: bytes and constants (static);
 not yet run in the game.
 
 ## `WaitFrames` and the other waits
