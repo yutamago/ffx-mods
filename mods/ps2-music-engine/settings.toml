@@ -1,0 +1,24 @@
+# PS2 music engine settings.
+#
+# After changing anything here: run install.cmd again, then restart the game.
+#
+# Windows paths: use single quotes, 'C:\Games\FFX.iso' (in double quotes a
+# backslash starts an escape), or forward slashes.
+
+[source]
+# Your own PS2 disc of Final Fantasy X (any region): an image file
+# ('D:\PS2\Final Fantasy X.iso') or the disc drive with the disc in it ('E:').
+# install.cmd asks for it and writes it here.
+iso = ''
+# The game folder, the one with FFX.exe and data\FFX_Data.vbf. Leave empty to
+# look in the usual Steam folders.
+game = ''
+
+[audio]
+# "live": the PS2's own sound driver plays the original soundtrack inside the
+# game, from the disc's music sequences and instruments (copied into music\ by
+# install.cmd), driven by the game's music commands (fades, pauses, tempo as
+# the scripts ask). It plays while the game's soundtrack option is "Original";
+# the three tracks with streamed parts, and anything the engine can't play,
+# stay the PC's recordings. "hd": the PC's recordings.
+music_engine = "live"

@@ -3,7 +3,7 @@
 using System.Runtime.InteropServices;
 using System.Threading;
 
-namespace Yuta.Demaster;
+namespace Yuta.FfxMods.Interface;
 
 /// <summary>
 /// ui.menus, battle: the battle command windows drawn the PS2 way. The PC keeps the PS2's battle
@@ -343,7 +343,7 @@ internal static unsafe class BattlePatches {
         return 0;
     }
 
-    private static bool hook(DemasterModule m, uint va, WinDraw d) {
+    private static bool hook(ModHost m, uint va, WinDraw d) {
         _keep.Add(d);
         return Native.fn<WinDraw>(va).hook(m, d);
     }
@@ -352,7 +352,7 @@ internal static unsafe class BattlePatches {
     /// Hooks the seven command-window draws. The change window (kind 10: TODrawWaitBtlWinChange)
     /// and the gil window (0x15, 0x16: TODrawWaitBtlWinInputGil) keep the HD draw.
     /// </summary>
-    public static bool windows(DemasterModule m) {
+    public static bool windows(ModHost m) {
         _log = m.log;
         return hook(m, DRAW_MAIN, draw_main)
             & hook(m, DRAW_SUB, w => *(int*)Native.ptr(HIDDEN) == 1 ? 0 : draw_sub(w, 2, "sub"))

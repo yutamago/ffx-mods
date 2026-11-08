@@ -1,0 +1,10 @@
+<Solution>
+  <Project Path="common/yuta.ffx-mods.csproj" />
+  <Project Path="mods/bug-fixes/yuta.bug-fixes.csproj" />
+  <Project Path="mods/ps2-aspect-ratio/yuta.ps2-aspect-ratio.csproj" />
+  <Project Path="mods/ps2-characters/yuta.ps2-characters.csproj" />
+  <Project Path="mods/ps2-game-feel/yuta.ps2-game-feel.csproj" />
+  <Project Path="mods/ps2-interface/yuta.ps2-interface.csproj" />
+  <Project Path="mods/ps2-lighting/yuta.ps2-lighting.csproj" />
+  <Project Path="mods/ps2-music-engine/yuta.ps2-music-engine.csproj" />
+</Solution>

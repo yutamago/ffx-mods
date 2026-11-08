@@ -3,7 +3,7 @@
 using System.Runtime.InteropServices;
 using System.Threading;
 
-namespace Yuta.Demaster;
+namespace Yuta.FfxMods.Interface;
 
 /// <summary>
 /// ui.menus, the Config screen drawn by the PS2's draw code (SLPM_675.13 0x00235a68: the page
@@ -148,7 +148,7 @@ internal static unsafe class ConfigMenuPatches {
         Ps2Menu.shape(0xe4, x + dw, y);
     }
 
-    public static bool install(DemasterModule m) {
+    public static bool install(ModHost m) {
         _log = m.log;
         WinDraw d = config_draw;
         _keep.Add(d);

@@ -1,0 +1,36 @@
+# PS2 interface settings.
+#
+# After changing anything here: run install.cmd again, then restart the game.
+#
+# "ps2": the PS2 original (the default). "hd": the HD Remaster.
+#
+# Windows paths: use single quotes, 'C:\Games\FFX.iso' (in double quotes a
+# backslash starts an escape), or forward slashes.
+
+[source]
+# Your own PS2 disc of Final Fantasy X (any region): an image file
+# ('D:\PS2\Final Fantasy X.iso') or the disc drive with the disc in it ('E:').
+# install.cmd asks for it and writes it here.
+iso = ''
+# The game folder, the one with FFX.exe and data\FFX_Data.vbf. Leave empty to
+# look in the usual Steam folders.
+game = ''
+
+[ui]
+# Menus, cursor and windows drawn the PS2 way (the PC-only screens such as
+# the Esc menu and save/load stay HD).
+menus = "ps2"
+# Character portraits and icons.
+portraits = "ps2"
+# The PS2 font.
+font = "ps2"
+# The PS2 title screen: the plain logo instead of "HD Remaster", the picture
+# and its menu at the PS2 place.
+title = "ps2"
+# "ps2": no loading screen, no splash videos, a black window at start.
+loading = "ps2"
+# PS2 button glyphs instead of the Xbox-style ones.
+button_glyphs = "ps2"
+# "ps2": the PS2's "SQUARESOFT presents" screen at boot, before the project
+# logo (6.5 s; Start shortens it). Off by default.
+boot_logo = "hd"

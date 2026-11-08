@@ -3,7 +3,7 @@
 using System.Runtime.InteropServices;
 using System.Threading;
 
-namespace Yuta.Demaster;
+namespace Yuta.FfxMods.Interface;
 
 /// <summary>
 /// ui.menus: the main menu's Overdrive screen drawn by the PS2's draw code (SLPM_675.13 record
@@ -263,12 +263,12 @@ internal static unsafe class OverdriveMenuPatches {
 
     // ---- install ------------------------------------------------------------------------------------
 
-    private static bool hook<T>(DemasterModule m, uint va, T d) where T : Delegate {
+    private static bool hook<T>(ModHost m, uint va, T d) where T : Delegate {
         _keep.Add(d);
         return Native.fn<T>(va).hook(m, d);
     }
 
-    public static bool install(DemasterModule m) {
+    public static bool install(ModHost m) {
         _log = m.log;
         return hook<Draw>(m, RECORD_DRAW, record_draw)
             & hook<WinDraw>(m, WINDOW_DRAW, window_draw);

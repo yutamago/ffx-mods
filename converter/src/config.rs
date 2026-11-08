@@ -1,5 +1,7 @@
-//! `demaster.toml`: where the PS2 disc and the game are, and one setting per
-//! row of `docs/differences.md` (described in `docs/config.md`).
+//! The settings: where the PS2 disc and the game are, and one setting per
+//! row of `docs/differences.md` (described in `docs/config.md`). FFX
+//! Demaster has them all in one `demaster.toml`; each mod of ffx-mods has its
+//! own in its `settings.toml` (`mods.rs`).
 //!
 //! The rule for defaults: presentation from the PS2, logic from the PC. A
 //! presentation setting is `"ps2"` or `"hd"`; a fix is `true` (fixed) or
@@ -249,7 +251,7 @@ pub const SETTINGS: &[(&str, AppliedBy)] = {
         ("maps.battle", Converter),
         ("effects.textures", Converter),
         ("render.glow", Mod),
-        ("render.lighting", Mod),
+        ("render.lighting", Both),
         ("render.shadows", Mod),
         ("render.aspect", Mod),
         ("render.texture_filter", Mod),
@@ -258,7 +260,7 @@ pub const SETTINGS: &[(&str, AppliedBy)] = {
         ("ui.portraits", Converter),
         ("ui.font", Converter),
         ("ui.title", Both),
-        ("ui.loading", Mod),
+        ("ui.loading", Both),
         ("ui.battle_subtitles", Mod),
         ("ui.battle_menu_delay", Mod),
         ("ui.button_glyphs", Converter),
@@ -279,6 +281,8 @@ pub struct Loaded {
     pub path: PathBuf,
     /// Keys the converter doesn't know (typos, settings of a newer version).
     pub unknown: Vec<String>,
+    /// The file's text.
+    pub text: String,
 }
 
 impl Config {
@@ -290,15 +294,45 @@ impl Config {
         Ok((config, unknown))
     }
 
+    /// Parses a mod's settings file over that mod's defaults (its shipped
+    /// `settings.toml`): keys the file leaves out get the mod's defaults, not
+    /// [`Config::default`]'s. Unknown keys are those of `text`.
+    pub fn parse_with_defaults(text: &str, defaults: &str) -> Result<(Config, Vec<String>)> {
+        // first alone, for its errors (with line numbers) and unknown keys
+        let (_, unknown) = Config::parse(text)?;
+        let mut base: toml::Table = defaults.parse().context("the default settings")?;
+        let user: toml::Table = text.parse()?;
+        merge(&mut base, user);
+        let config: Config = toml::Value::Table(base).try_into()?;
+        Ok((config, unknown))
+    }
+
+    /// The keys a settings file sets (`source.iso`, `models.npc`), sorted.
+    pub fn present_keys(text: &str) -> Result<Vec<String>> {
+        let table: toml::Table = text.parse()?;
+        let mut out = BTreeMap::new();
+        flatten("", &toml::Value::Table(table), &mut out);
+        Ok(out.into_keys().collect())
+    }
+
     pub fn load(path: &Path) -> Result<Loaded> {
+        Config::load_with_defaults(path, None)
+    }
+
+    /// [`Config::load`], over `defaults` ([`Config::parse_with_defaults`]) when given.
+    pub fn load_with_defaults(path: &Path, defaults: Option<&str>) -> Result<Loaded> {
         let text =
             std::fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
-        let (config, unknown) =
-            Config::parse(&text).with_context(|| format!("in {}", path.display()))?;
+        let (config, unknown) = match defaults {
+            Some(d) => Config::parse_with_defaults(&text, d),
+            None => Config::parse(&text),
+        }
+        .with_context(|| format!("in {}", path.display()))?;
         Ok(Loaded {
             config,
             path: path.to_path_buf(),
             unknown,
+            text,
         })
     }
 
@@ -311,6 +345,60 @@ impl Config {
         out.retain(|k, _| !k.starts_with("source.") && !k.starts_with("build."));
         out
     }
+}
+
+/// Puts `over`'s keys into `base`, table by table.
+fn merge(base: &mut toml::Table, over: toml::Table) {
+    for (k, v) in over {
+        match (base.get_mut(&k), v) {
+            (Some(toml::Value::Table(b)), toml::Value::Table(o)) => merge(b, o),
+            (_, v) => {
+                base.insert(k, v);
+            }
+        }
+    }
+}
+
+/// `text` with `key = 'value'` in its `[source]` table: the line replaced
+/// when there is one, else added after the table header (and the table
+/// added at the end when there is none). Comments and the rest stay.
+pub fn set_source(text: &str, key: &str, value: &str) -> String {
+    let quoted = if value.contains('\'') || value.contains('\n') {
+        format!("\"{}\"", value.replace('\\', "\\\\").replace('"', "\\\"").replace('\n', "\\n"))
+    } else {
+        format!("'{value}'")
+    };
+    let line = format!("{key} = {quoted}");
+    let crlf = text.contains("\r\n");
+    let mut lines: Vec<String> = text.lines().map(str::to_string).collect();
+    let header = lines.iter().position(|l| l.trim() == "[source]");
+    match header {
+        None => {
+            if lines.last().is_some_and(|l| !l.trim().is_empty()) {
+                lines.push(String::new());
+            }
+            lines.push("[source]".into());
+            lines.push(line);
+        }
+        Some(h) => {
+            let end = lines[h + 1..]
+                .iter()
+                .position(|l| l.trim_start().starts_with('['))
+                .map_or(lines.len(), |e| h + 1 + e);
+            let found = (h + 1..end).find(|&i| {
+                let l = lines[i].trim_start();
+                l.strip_prefix(key).is_some_and(|r| r.trim_start().starts_with('='))
+            });
+            match found {
+                Some(i) => lines[i] = line,
+                None => lines.insert(h + 1, line),
+            }
+        }
+    }
+    let nl = if crlf { "\r\n" } else { "\n" };
+    let mut out = lines.join(nl);
+    out.push_str(nl);
+    out
 }
 
 fn flatten(prefix: &str, v: &toml::Value, out: &mut BTreeMap<String, String>) {
@@ -368,35 +456,38 @@ mod tests {
         assert_eq!(keys, listed);
     }
 
-    /// The C# mod keeps its own copy of the list (mod/Settings.cs) and has a
-    /// code patch for each setting it applies (mod/Patches.cs); docs/config.md
-    /// describes each.
+    /// docs/config.md describes every setting (the mods' own lists are
+    /// checked in `mods.rs`).
     #[test]
-    fn mod_and_docs_know_every_setting() {
-        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../mod");
-        let settings = std::fs::read_to_string(dir.join("Settings.cs")).unwrap();
-        let patches = std::fs::read_to_string(dir.join("Patches.cs")).unwrap();
-        let docs = std::fs::read_to_string(dir.join("../docs/config.md")).unwrap();
-        let defaults = Config::default().settings();
-        for (key, by) in SETTINGS {
-            let by_cs = match by {
-                AppliedBy::Converter => "Converter",
-                AppliedBy::Mod => "Mod",
-                AppliedBy::Both => "Both",
-            };
-            let line = settings
-                .lines()
-                .find(|l| l.contains(&format!("new(\"{key}\",")))
-                .unwrap_or_else(|| panic!("{key} missing from mod/Settings.cs"));
-            assert!(line.contains(&format!("AppliedBy.{by_cs},")), "{key}: {line}");
-            assert!(line.contains(&format!("\"{}\")", defaults[*key])), "{key}: {line}");
+    fn docs_know_every_setting() {
+        let docs = std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("../docs/config.md")).unwrap();
+        for (key, _) in SETTINGS {
             assert!(docs.contains(&format!("`{key}`")), "{key} missing from docs/config.md");
-            assert_eq!(
-                patches.contains(&format!("new(\"{key}\",")),
-                *by != AppliedBy::Converter,
-                "{key} in mod/Patches.cs"
-            );
         }
+    }
+
+    #[test]
+    fn mod_defaults_and_source() {
+        let defaults = "[render]\nlighting = \"ps2\"\n[audio]\nmusic_engine = \"live\"\n";
+        let (c, unknown) = Config::parse_with_defaults("[render]\nlighting = \"hd\"\n[ui]\nmenus = \"hd\"\n", defaults).unwrap();
+        assert_eq!(c.render.lighting, Look::Hd);
+        assert_eq!(c.audio.music_engine, MusicEngine::Live);
+        assert_eq!(c.ui.menus, Look::Hd);
+        assert!(unknown.is_empty());
+        assert_eq!(Config::present_keys("a = 1\n[source]\niso = ''\n").unwrap(), ["a", "source.iso"]);
+
+        let text = "# c\n[source]\n# the disc\niso = ''\ngame = ''\n\n[render]\nlighting = \"ps2\"\n";
+        let t = set_source(text, "iso", r"D:\PS2\FFX.iso");
+        assert!(t.contains("iso = 'D:\\PS2\\FFX.iso'\ngame = ''"), "{t}");
+        let t = set_source(&t, "game", "C:\\it's here");
+        assert!(t.contains(r#"game = "C:\\it's here""#), "{t}");
+        let (c, _) = Config::parse(&t).unwrap();
+        assert_eq!(c.source.iso, r"D:\PS2\FFX.iso");
+        assert_eq!(c.source.game, r"C:\it's here");
+        let t = set_source("[render]\nlighting = \"ps2\"\n", "iso", "x.iso");
+        assert!(t.ends_with("[source]\niso = 'x.iso'\n"), "{t}");
+        let t = set_source("[source]\r\niso = ''\r\n", "iso", "y");
+        assert_eq!(t, "[source]\r\niso = 'y'\r\n");
     }
 
     #[test]

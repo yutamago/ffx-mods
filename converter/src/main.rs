@@ -6,7 +6,7 @@ use anyhow::{Context, Result, bail};
 
 fn usage() -> ! {
     eprintln!(
-        "FFX Demaster converter {}\nusage:\n{}\n  demaster chr <iso> <FFX_Data.vbf> <out dir> <kind/name>...\n      bake character textures (PNG previews + .dds.phyre)\n  demaster models <iso> <FFX_Data.vbf> <out dir> all|<kind/name>...\n      PS2 meshes into the remodelled characters (run after chr; docs/models.md)\n  demaster models-debug <chr file> <FFX_Data.vbf> <kind/name>\n      print a PS2 mesh against its HD model\n  demaster materials-debug <FFX_Data.vbf> <kind/name>|<.dae.phyre file>|--variants|--states <variant path>\n      each segment's material, shader variant switches, passes and alpha threshold; every character variant; one variant's pass states\n  demaster materials-audit <FFX_Data.vbf> <efl/x dir> [--known <file>] [kind/name...]\n      check the built character materials against the texels their segments sample (docs/models.md, \"Alpha\")\n  demaster fx <iso> <FFX_Data.vbf> <out dir> all|<id>...\n      effect textures; id: 7, magic_0007, map/bika/bika00, btlmap/bika/bika00_a, chr/mon/m028\n  demaster maps <iso> <FFX_Data.vbf> <out dir> <map|area|kind>...|all\n      field and battle map textures (PNG previews, maps.tsv + .dds.phyre)\n  demaster ui <iso> <FFX_Data.vbf> <out dir>\n      menus, portraits, title, loading screen, button glyphs, font (PNG previews + .dds.phyre, base.ftc)\n  demaster movies <iso> <FFX_Data.vbf> <mod dir> all|<name>...\n      PS2 movies as WebM (name: opn, sak, ...; ffmpeg: $FFMPEG, else found or downloaded as by build; docs/movies.md)\n  demaster movie-debug <iso> <FFX_Data.vbf> <out dir> <name> [frame]...\n      decode one PS2 movie: statistics, PNGs of the frames, the sound as WAV\n  demaster music <iso> <FFX_Data.vbf> <out dir> all|<id|name>...\n      render PS2 music tracks (musicNNN.bgm) as 48 kHz WAVs (docs/music.md)\n  demaster music-bank <bank.fsb> <out dir> [name...]\n      decode a music bank (FSB5, IMA ADPCM) to WAVs\n  demaster texanim-debug <chr file> <FFX_Data.vbf> <kind/name>\n      print a PS2 texture animation against the HD .ags",
+        "demaster, the FFX PS2 mods converter, {}\nusage:\n{}\n  demaster chr <iso> <FFX_Data.vbf> <out dir> <kind/name>...\n      bake character textures (PNG previews + .dds.phyre)\n  demaster models <iso> <FFX_Data.vbf> <out dir> all|<kind/name>...\n      PS2 meshes into the remodelled characters (run after chr; docs/models.md)\n  demaster models-debug <chr file> <FFX_Data.vbf> <kind/name>\n      print a PS2 mesh against its HD model\n  demaster materials-debug <FFX_Data.vbf> <kind/name>|<.dae.phyre file>|--variants|--states <variant path>\n      each segment's material, shader variant switches, passes and alpha threshold; every character variant; one variant's pass states\n  demaster materials-audit <FFX_Data.vbf> <efl/x dir> [--known <file>] [kind/name...]\n      check the built character materials against the texels their segments sample (docs/models.md, \"Alpha\")\n  demaster fx <iso> <FFX_Data.vbf> <out dir> all|<id>...\n      effect textures; id: 7, magic_0007, map/bika/bika00, btlmap/bika/bika00_a, chr/mon/m028\n  demaster maps <iso> <FFX_Data.vbf> <out dir> <map|area|kind>...|all\n      field and battle map textures (PNG previews, maps.tsv + .dds.phyre)\n  demaster ui <iso> <FFX_Data.vbf> <out dir>\n      menus, portraits, title, loading screen, button glyphs, font (PNG previews + .dds.phyre, base.ftc)\n  demaster movies <iso> <FFX_Data.vbf> <mod dir> all|<name>...\n      PS2 movies as WebM (name: opn, sak, ...; ffmpeg: $FFMPEG, else found or downloaded as by build; docs/movies.md)\n  demaster movie-debug <iso> <FFX_Data.vbf> <out dir> <name> [frame]...\n      decode one PS2 movie: statistics, PNGs of the frames, the sound as WAV\n  demaster music <iso> <FFX_Data.vbf> <out dir> all|<id|name>...\n      render PS2 music tracks (musicNNN.bgm) as 48 kHz WAVs (docs/music.md)\n  demaster music-bank <bank.fsb> <out dir> [name...]\n      decode a music bank (FSB5, IMA ADPCM) to WAVs\n  demaster texanim-debug <chr file> <FFX_Data.vbf> <kind/name>\n      print a PS2 texture animation against the HD .ags",
         build::VERSION,
         build::USAGE
     );
@@ -29,7 +29,8 @@ fn wait_for_enter() {
 fn main() -> Result<()> {
     let a: Vec<String> = std::env::args().collect();
     let Some(cmd) = a.get(1) else {
-        // No arguments: build with the demaster.toml next to the exe.
+        // No arguments: build the mod folder the exe is in (its settings.toml;
+        // demaster.toml for FFX Demaster).
         let ok = build::run(&build::Args::default()).unwrap_or_else(|e| {
             eprintln!("error: {e:#}");
             false
@@ -44,7 +45,15 @@ fn main() -> Result<()> {
                 std::process::exit(1);
             }
         }
-        "jobs" => build::list_jobs(),
+        "jobs" => build::list_jobs(&a[2..])?,
+        "mods" => build::list_mods(),
+        "find-game" => build::find_game(&a[2..])?,
+        "disc-check" => {
+            let Some(p) = a.get(2) else { usage() };
+            let path = disc::source_path(p);
+            let id = disc::check(&path)?;
+            println!("{}: {id}", path.display());
+        }
         "--version" | "-V" => println!("demaster {}", build::VERSION),
         "help" | "--help" | "-h" => usage(),
         "chr" => {

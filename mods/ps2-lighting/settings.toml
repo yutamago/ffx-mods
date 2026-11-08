@@ -1,0 +1,24 @@
+# PS2 lighting settings.
+#
+# After changing anything here: run install.cmd again, then restart the game.
+#
+# Windows paths: use single quotes, 'C:\Games\FFX.iso' (in double quotes a
+# backslash starts an escape), or forward slashes.
+
+[source]
+# Your own PS2 disc of Final Fantasy X (any region): an image file
+# ('D:\PS2\Final Fantasy X.iso') or the disc drive with the disc in it ('E:').
+# install.cmd asks for it and writes it here. Optional: without it the
+# character shaders are still built (from the PC game), and the event lights
+# stay HD.
+iso = ''
+# The game folder, the one with FFX.exe and data\FFX_Data.vbf. Leave empty to
+# look in the usual Steam folders.
+game = ''
+
+[render]
+# "ps2": characters lit the PS2 way (its light colours, directions and level,
+# no soft falloff or fill light; patched character shaders; with the PS2 disc
+# also the PS2's light colours in the cutscenes the HD retuned).
+# "hd": the HD lighting.
+lighting = "ps2"

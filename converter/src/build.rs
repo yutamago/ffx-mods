@@ -1,6 +1,9 @@
 //! `demaster build`: runs every enabled job into the mod folder, removes what
 //! an earlier build wrote and no longer belongs, and writes the build stamp
-//! the C# mod checks at startup.
+//! the C# mod checks at startup. For a mod of ffx-mods (`--mod`, or the
+//! mod whose manifest is in the folder, `mods.rs`) only that mod's jobs and
+//! settings, from its `settings.toml`; without one, every job, from
+//! `demaster.toml` (FFX Demaster).
 //!
 //! Files in the mod folder:
 //! - `efl/x/...`: the replacements (Fahrenheit's file loader).
@@ -20,6 +23,7 @@ use sha2::{Digest, Sha256};
 
 use crate::config::{AppliedBy, Config, DEFAULT_TOML, Loaded, SETTINGS};
 use crate::jobs::{self, Ctx, Output};
+use crate::mods::{self, DiscUse, Profile};
 
 /// The converter's version; release builds set `DEMASTER_VERSION` to the tag.
 pub const VERSION: &str = match option_env!("DEMASTER_VERSION") {
@@ -30,13 +34,23 @@ pub const VERSION: &str = match option_env!("DEMASTER_VERSION") {
 /// The Steam folder name of FINAL FANTASY X/X-2 HD Remaster (app 359870).
 const STEAM_DIR: &str = "FINAL FANTASY FFX&FFX-2 HD Remaster";
 
-pub const USAGE: &str = "  demaster build [--config <demaster.toml>] [--iso <disc.iso>] [--game <game folder>]
-                 [--mod-dir <mod folder>] [--ffmpeg <ffmpeg program>]
-                 [--only <job>,...] [--force] [--verbose]
-      builds the PS2 files the settings in demaster.toml ask for
-      (without arguments, demaster.exe does this and waits for Enter)
-  demaster jobs
-      lists the build jobs and their settings";
+pub const USAGE: &str = "  demaster build [--mod <name>] [--config <settings.toml>] [--iso <disc.iso>|<drive>:]
+                 [--no-disc] [--game <game folder>] [--save-source] [--mod-dir <mod folder>]
+                 [--ffmpeg <ffmpeg program>] [--only <job>,...] [--force] [--verbose]
+      builds the PS2 files the settings ask for: of one mod of ffx-mods (--mod, or the
+      mod whose manifest is in the mod folder; settings.toml there), else of every job
+      (demaster.toml). --iso takes a disc image or the drive with the PS2 disc (E:).
+      --no-disc leaves out the jobs that need the disc. --save-source writes --iso and
+      --game into the settings file. Without arguments, demaster.exe builds the mod
+      folder it is in and waits for Enter.
+  demaster jobs [--mod <name>]
+      lists the build jobs and their settings
+  demaster mods
+      lists the mods of ffx-mods with their settings and jobs
+  demaster find-game [--config <settings.toml>] [--game <game folder>]
+      prints the game folder (the one with FFX.exe) the build would use
+  demaster disc-check <disc.iso>|<drive>:
+      checks that it is a Final Fantasy X PS2 disc";
 
 #[derive(Default)]
 pub struct Args {
@@ -45,6 +59,12 @@ pub struct Args {
     pub game: Option<PathBuf>,
     pub ffmpeg: Option<PathBuf>,
     pub mod_dir: Option<PathBuf>,
+    /// The mod of ffx-mods to build (`mods.rs`).
+    pub mod_name: Option<String>,
+    /// Build without the PS2 disc: jobs that need it are left out.
+    pub no_disc: bool,
+    /// Write `--iso` and `--game` into the settings file's `[source]`.
+    pub save_source: bool,
     /// Run only these jobs (the others keep their files).
     pub only: Vec<String>,
     pub force: bool,
@@ -65,6 +85,9 @@ impl Args {
                 "--game" => args.game = Some(value()?.into()),
                 "--ffmpeg" => args.ffmpeg = Some(value()?.into()),
                 "--mod-dir" => args.mod_dir = Some(value()?.into()),
+                "--mod" => args.mod_name = Some(value()?),
+                "--no-disc" => args.no_disc = true,
+                "--save-source" => args.save_source = true,
                 "--only" => args.only.extend(value()?.split(',').map(|s| s.trim().to_string())),
                 "--force" | "-f" => args.force = true,
                 "--verbose" | "-v" => args.verbose = true,
@@ -111,7 +134,9 @@ struct Stamp {
 struct StampJob {
     name: String,
     settings: Vec<String>,
-    /// `built`, `unchanged`, `off`, `failed`, `not run` (`--only`).
+    /// `built`, `unchanged`, `off`, `failed`, `not run` (`--only`), `no disc`
+    /// (needs the disc, the build had none), `kept` (likewise, files of an
+    /// earlier build kept).
     status: String,
     files: usize,
     summary: String,
@@ -124,12 +149,13 @@ fn sha256_hex(text: &str) -> String {
         .collect()
 }
 
-/// The converter settings and their hash (see [`Stamp::config_hash`]).
-fn converter_settings(config: &Config) -> (BTreeMap<String, String>, String) {
+/// The converter settings (of the mod, when there is one) and their hash
+/// (see [`Stamp::config_hash`]).
+fn converter_settings(config: &Config, profile: Option<&Profile>) -> (BTreeMap<String, String>, String) {
     let all = config.settings();
     let s: BTreeMap<String, String> = SETTINGS
         .iter()
-        .filter(|(_, by)| *by != AppliedBy::Mod)
+        .filter(|(k, by)| *by != AppliedBy::Mod && profile.is_none_or(|p| p.settings.contains(k)))
         .map(|(k, _)| (k.to_string(), all[*k].clone()))
         .collect();
     let text: String = s.iter().map(|(k, v)| format!("{k}={v}\n")).collect();
@@ -207,7 +233,7 @@ fn steam_libraries() -> Vec<PathBuf> {
 }
 
 /// The game's `FFX_Data.vbf`: the argument, the config, a game folder above
-/// the converter, then the Steam libraries.
+/// the converter (`<game>/mods/<mod>/demaster.exe`), then the Steam libraries.
 pub fn find_vbf(arg: Option<&Path>, loaded: &Loaded) -> Result<PathBuf> {
     if let Some(p) = arg
         .map(Path::to_path_buf)
@@ -258,50 +284,147 @@ fn remove_with_dirs(path: &Path, stop: &Path) {
     }
 }
 
-/// Prints the job list (`demaster jobs`).
-pub fn list_jobs() {
-    for j in jobs::registry() {
-        println!("{:<16} {}", j.name(), j.settings().join(", "));
+/// Prints the job list (`demaster jobs [--mod <name>]`).
+pub fn list_jobs(a: &[String]) -> Result<()> {
+    let profile = match a {
+        [] => None,
+        [flag, name] if flag == "--mod" => Some(mods::find(name).with_context(|| format!("no mod {name} (`demaster mods` lists them)"))?),
+        _ => bail!("usage: demaster jobs [--mod <name>]"),
+    };
+    for j in registry_for(profile) {
+        println!("{:<24} {}{}", j.name(), j.settings().join(", "), if j.needs_disc() { "" } else { " (no disc needed)" });
     }
+    Ok(())
+}
+
+/// Prints the mods (`demaster mods`).
+pub fn list_mods() {
+    for p in mods::PROFILES {
+        let disc = match p.disc {
+            DiscUse::Needed => "needs the PS2 disc",
+            DiscUse::Optional => "PS2 disc optional",
+            DiscUse::None => "code only",
+        };
+        println!("{} ({}, {disc})", p.id(), p.title);
+        println!("    settings: {}", p.settings.join(", "));
+        if !p.jobs.is_empty() {
+            println!("    jobs:     {}", p.jobs.join(", "));
+        }
+    }
+}
+
+/// The jobs of a mod, in registry order; every job without one.
+fn registry_for(profile: Option<&Profile>) -> Vec<Box<dyn jobs::Job>> {
+    let mut all = jobs::registry();
+    if let Some(p) = profile {
+        all.retain(|j| p.jobs.contains(&j.name()));
+    }
+    all
+}
+
+/// `demaster find-game [--config <file>] [--game <folder>]`: prints the game
+/// folder (the parent of `data\FFX_Data.vbf`), or fails.
+pub fn find_game(a: &[String]) -> Result<()> {
+    let args = Args::parse(a)?;
+    let config_path = args.config.clone().unwrap_or_else(|| exe_dir().join("settings.toml"));
+    let loaded = if config_path.is_file() {
+        Config::load(&config_path)?
+    } else {
+        Loaded { config: Config::default(), path: config_path, unknown: Vec::new(), text: String::new() }
+    };
+    let vbf = find_vbf(args.game.as_deref(), &loaded)?;
+    let game = vbf.parent().and_then(Path::parent).context("game folder")?;
+    println!("{}", game.display());
+    Ok(())
 }
 
 /// Runs `demaster build`; returns whether every job succeeded.
 pub fn run(args: &Args) -> Result<bool> {
     let started = Instant::now();
-    let config_path = args
-        .config
-        .clone()
-        .unwrap_or_else(|| exe_dir().join("demaster.toml"));
+    let base_dir = args.mod_dir.clone().unwrap_or_else(exe_dir);
+    let profile = match &args.mod_name {
+        Some(n) => Some(mods::find(n).with_context(|| format!("no mod {n} (`demaster mods` lists them)"))?),
+        None => mods::in_dir(&base_dir),
+    };
+    let config_path = args.config.clone().unwrap_or_else(|| match profile {
+        Some(_) => base_dir.join("settings.toml"),
+        None => exe_dir().join("demaster.toml"),
+    });
+    if let Some(p) = profile
+        && p.disc == DiscUse::None
+    {
+        println!("{} ({}) has no files to build: it is code only. Settings: {}", p.id(), p.title, config_path.display());
+        return Ok(true);
+    }
     if !config_path.exists() {
         if args.config.is_some() {
             bail!("{} does not exist", config_path.display());
         }
-        std::fs::write(&config_path, DEFAULT_TOML)
+        std::fs::write(&config_path, profile.map_or(DEFAULT_TOML, |p| p.default_toml))
             .with_context(|| format!("writing {}", config_path.display()))?;
-        bail!(
-            "wrote the default settings to {}. Set `iso` under [source] to your PS2 disc image and run again",
-            config_path.display()
-        );
+        if profile.is_none() {
+            bail!(
+                "wrote the default settings to {}. Set `iso` under [source] to your PS2 disc image and run again",
+                config_path.display()
+            );
+        }
+        println!("wrote the default settings to {}", config_path.display());
     }
-    let loaded = Config::load(&config_path)?;
-    for k in &loaded.unknown {
+    if args.save_source {
+        let mut text = std::fs::read_to_string(&config_path)?;
+        let old = text.clone();
+        if let Some(iso) = &args.iso {
+            text = crate::config::set_source(&text, "iso", &iso.to_string_lossy());
+        }
+        if let Some(game) = &args.game {
+            text = crate::config::set_source(&text, "game", &game.to_string_lossy());
+        }
+        if text != old {
+            std::fs::write(&config_path, &text).with_context(|| format!("writing {}", config_path.display()))?;
+            println!("saved the disc and game folder in {}", config_path.display());
+        }
+    }
+    let loaded = Config::load_with_defaults(&config_path, profile.map(|p| p.default_toml))?;
+    let mut unknown = loaded.unknown.clone();
+    if let Some(p) = profile {
+        for k in Config::present_keys(&loaded.text)? {
+            if !k.starts_with("source.") && !k.starts_with("build.") && !p.settings.contains(&k.as_str()) && !unknown.contains(&k) {
+                unknown.push(k);
+            }
+        }
+    }
+    for k in &unknown {
         eprintln!("warning: {}: unknown setting `{k}`, ignored", config_path.display());
     }
     let config = &loaded.config;
 
-    let iso = args
+    // The disc: an image or a drive (`E:`), from --iso or the settings.
+    let iso_text: Option<String> = args
         .iso
-        .clone()
-        .or_else(|| loaded.resolve(&config.source.iso))
-        .with_context(|| {
+        .as_ref()
+        .map(|p| p.to_string_lossy().into_owned())
+        .or_else(|| Some(config.source.iso.trim().to_string()).filter(|s| !s.is_empty()));
+    let optional = profile.is_some_and(|p| p.disc == DiscUse::Optional);
+    let no_disc = args.no_disc || (iso_text.is_none() && optional);
+    let iso: Option<PathBuf> = if no_disc {
+        None
+    } else {
+        let text = iso_text.with_context(|| {
             format!(
-                "no PS2 disc image: set `iso` under [source] in {}",
+                "no PS2 disc: set `iso` under [source] in {} to your disc image or drive (run install.cmd)",
                 config_path.display()
             )
         })?;
-    if !iso.is_file() {
-        bail!("the PS2 disc image {} does not exist", iso.display());
-    }
+        let p = crate::disc::source_path(&text);
+        let p = if crate::disc::is_device(&p) || args.iso.is_some() { p } else { loaded.resolve(&text).unwrap_or(p) };
+        if !crate::disc::exists(&p) {
+            if crate::disc::is_device(&p) {
+                bail!("no disc in the drive {} (or it can't be read)", text);
+            }
+            bail!("the PS2 disc image {} does not exist", p.display());
+        }
+        Some(p)
+    };
     let vbf = find_vbf(args.game.as_deref(), &loaded)?;
     let mod_dir = args
         .mod_dir
@@ -309,13 +432,24 @@ pub fn run(args: &Args) -> Result<bool> {
         .or_else(|| loaded.resolve(&config.build.mod_dir))
         .unwrap_or_else(exe_dir);
     std::fs::create_dir_all(&mod_dir).with_context(|| mod_dir.display().to_string())?;
-    println!("FFX Demaster converter {VERSION}");
+    println!("demaster, the FFX PS2 mods converter, {VERSION}");
+    if let Some(p) = profile {
+        println!("mod:      {} ({})", p.id(), p.title);
+    }
     println!("settings: {}", config_path.display());
-    println!("disc:     {}", iso.display());
+    match &iso {
+        Some(i) if crate::disc::is_device(i) => println!("disc:     {} (disc drive)", i.display()),
+        Some(i) => println!("disc:     {}", i.display()),
+        None => println!(
+            "disc:     none{}",
+            profile.map_or(String::new(), |p| format!(": {}", p.without_disc))
+        ),
+    }
     println!("game:     {}", vbf.display());
-    println!("mod:      {}", mod_dir.display());
-    if !mod_dir.join("yuta.demaster.manifest.json").exists() {
-        println!("note: no yuta.demaster.manifest.json there; is it the mod folder?");
+    println!("folder:   {}", mod_dir.display());
+    let manifest = format!("{}.manifest.json", profile.map_or("yuta.demaster".to_string(), |p| p.id()));
+    if !mod_dir.join(&manifest).exists() {
+        println!("note: no {manifest} there; is it the mod folder?");
     }
     println!();
 
@@ -325,14 +459,25 @@ pub fn run(args: &Args) -> Result<bool> {
     let _ = std::fs::remove_file(&stamp_path);
 
     let pc = ffx_vbf::Archive::open(&vbf).with_context(|| format!("opening {}", vbf.display()))?;
-    let mut ctx = Ctx::new(config, &pc, &iso, args.verbose);
+    let mut ctx = match &iso {
+        Some(i) => Ctx::new(config, &pc, i, args.verbose),
+        None => Ctx::without_disc(config, &pc, args.verbose),
+    };
     ctx.ffmpeg = args.ffmpeg.clone().or_else(|| loaded.resolve(&config.source.ffmpeg));
     ctx.tools_dir = Some(mod_dir.join("tools"));
     ctx.vbf = Some(vbf.clone());
     let settings = config.settings();
-    let inputs = format!("{}|{}", identity(&iso), identity(&vbf));
+    let registry = registry_for(profile);
+    // The inputs in a job's key: the game's archive, and the disc (by its
+    // contents, so its image and the disc in a drive are the same) for jobs
+    // that read it.
+    let vbf_id = identity(&vbf);
+    let needs_disc = registry.iter().any(|j| j.needs_disc() && j.enabled(config));
+    let disc_id = match &iso {
+        Some(i) if needs_disc => crate::disc::identity(i)?,
+        _ => String::new(),
+    };
 
-    let registry = jobs::registry();
     for name in &args.only {
         if !registry.iter().any(|j| j.name() == name) {
             bail!("no job {name} (`demaster jobs` lists them)");
@@ -369,6 +514,26 @@ pub fn run(args: &Args) -> Result<bool> {
             report.push(sj);
             continue;
         }
+        if iso.is_none() && job.needs_disc() {
+            match previous {
+                Some(p) if !p.files.is_empty() => {
+                    println!("{name}: needs the PS2 disc; the files of the last build are kept");
+                    sj.status = "kept".into();
+                    sj.files = p.files.len();
+                    new.jobs.insert(name, p.clone());
+                }
+                _ => {
+                    println!(
+                        "{name}: needs the PS2 disc, none given: not built{}",
+                        profile.map_or(String::new(), |p| format!(" ({})", p.without_disc))
+                    );
+                    sj.status = "no disc".into();
+                }
+            }
+            report.push(sj);
+            continue;
+        }
+        let inputs = if job.needs_disc() { format!("{disc_id}|{vbf_id}") } else { vbf_id.clone() };
         let key = sha256_hex(&format!(
             "{VERSION}|{name}|{}|{}|{inputs}",
             job.version(),
@@ -466,8 +631,12 @@ pub fn run(args: &Args) -> Result<bool> {
     let files = keep.len();
     write_json(&manifest_path, &new)?;
 
-    let (conv, hash) = converter_settings(config);
-    let (defaults, _) = converter_settings(&Config::default());
+    let (conv, hash) = converter_settings(config, profile);
+    let default_config = match profile {
+        Some(p) => Config::parse_with_defaults("", p.default_toml)?.0,
+        None => Config::default(),
+    };
+    let (defaults, _) = converter_settings(&default_config, profile);
     let covered: BTreeSet<&str> = registry
         .iter()
         .flat_map(|j| j.settings().iter().copied())
@@ -477,6 +646,7 @@ pub fn run(args: &Args) -> Result<bool> {
         .filter(|(k, v)| v.as_str() != "hd" && !covered.contains(k.as_str()))
         .map(|(k, _)| k.clone())
         .collect();
+    let left_out = report.iter().any(|j| j.status == "no disc");
     let stamp = Stamp {
         converter_version: VERSION.to_string(),
         config_hash: hash,
@@ -500,6 +670,12 @@ pub fn run(args: &Args) -> Result<bool> {
     }
     if !all_ok {
         println!("some jobs failed; the game keeps the HD files for those");
+    }
+    if left_out {
+        println!(
+            "built without the PS2 disc{}. Run again with the disc to build the rest.",
+            profile.map_or(String::new(), |p| format!(": {}", p.without_disc))
+        );
     }
     println!(
         "done in {:.0} s. Restart the game to see the changes.",

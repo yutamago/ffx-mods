@@ -59,6 +59,10 @@ impl Job for LightingJob {
     fn enabled(&self, config: &Config) -> bool {
         config.render.lighting.ps2()
     }
+    /// Made from the PC's own shaders.
+    fn needs_disc(&self) -> bool {
+        false
+    }
     fn run(&self, ctx: &Ctx, out: &Output) -> Result<String> {
         let files: Vec<_> = ctx
             .pc

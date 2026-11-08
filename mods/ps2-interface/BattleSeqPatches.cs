@@ -3,7 +3,7 @@
 using System.Runtime.InteropServices;
 using System.Threading;
 
-namespace Yuta.Demaster;
+namespace Yuta.FfxMods.Interface;
 
 /// <summary>
 /// ui.menus, battle: the PS2 pieces the battle draws through its sequence data and its damage
@@ -207,7 +207,7 @@ internal static unsafe class BattleSeqPatches {
     }
 
     /// <summary>Points the scene line's call (0x00a7c20d) at <see cref="line"/>.</summary>
-    private static bool lines(DemasterModule m) {
+    private static bool lines(ModHost m) {
         _line = line;
         _keep.Add(_line);
         nint fp = Marshal.GetFunctionPointerForDelegate(_line);
@@ -217,7 +217,7 @@ internal static unsafe class BattleSeqPatches {
         return Native.patch_code(LINE_CALL + 1, original, patched, m.log);
     }
 
-    public static bool install(DemasterModule m) {
+    public static bool install(ModHost m) {
         _log = m.log;
         _seq_hook = seq_draw;
         _prim_hook = prim_layout;

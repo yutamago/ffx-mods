@@ -3,7 +3,7 @@
 using System.Runtime.InteropServices;
 using System.Threading;
 
-namespace Yuta.Demaster;
+namespace Yuta.FfxMods.Interface;
 
 /// <summary>
 /// ui.title: the title menu's choices where the PS2 had them. Evidence: docs/ui.md ("Title
@@ -60,7 +60,7 @@ internal static unsafe class TitlePatches {
         try { return _next(m); } finally { *y = old; }
     }
 
-    public static bool title(DemasterModule m, string value) {
+    public static bool title(ModHost m, string value) {
         _log = m.log;
         _hook = layout;
         bool ok = Native.patch_code(CHOICE_STEP, BitConverter.GetBytes(21.5), BitConverter.GetBytes(STEP), m.log);

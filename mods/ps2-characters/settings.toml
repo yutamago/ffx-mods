@@ -1,0 +1,40 @@
+# PS2 characters settings.
+#
+# After changing a [models] setting: run install.cmd again, then restart the
+# game. The [render] settings need only a restart.
+#
+# "ps2": the PS2 original (the default). "hd": the HD Remaster.
+#
+# Windows paths: use single quotes, 'C:\Games\FFX.iso' (in double quotes a
+# backslash starts an escape), or forward slashes.
+
+[source]
+# Your own PS2 disc of Final Fantasy X (any region): an image file
+# ('D:\PS2\Final Fantasy X.iso') or the disc drive with the disc in it ('E:').
+# install.cmd asks for it and writes it here.
+iso = ''
+# The game folder, the one with FFX.exe and data\FFX_Data.vbf. Leave empty to
+# look in the usual Steam folders.
+game = ''
+
+[models]
+# Tidus, Yuna and the rest of the party: the PS2 meshes and textures.
+party = "ps2"
+# NPCs.
+npc = "ps2"
+# Monsters and bosses.
+monster = "ps2"
+# Aeons.
+aeon = "ps2"
+# Weapons.
+weapon = "ps2"
+# Objects (chests, save spheres, vehicles and other props).
+object = "ps2"
+
+[render]
+# "game": the game's own texture filter. "nearest": unfiltered pixels.
+texture_filter = "game"
+# "ps2": the PS2 textures (of this mod and every other mod of the family)
+# load at their full size whatever the game's texture quality. "hd": the
+# game's texture quality shrinks them too.
+texture_quality = "ps2"

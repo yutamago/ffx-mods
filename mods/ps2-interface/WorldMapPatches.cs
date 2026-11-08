@@ -3,7 +3,7 @@
 using System.Runtime.InteropServices;
 using System.Threading;
 
-namespace Yuta.Demaster;
+namespace Yuta.FfxMods.Interface;
 
 /// <summary>
 /// ui.menus, the world map (the map picture TkMenuCtrlWorldMap shows, with the current place's
@@ -84,7 +84,7 @@ internal static unsafe class WorldMapPatches {
         if ((Interlocked.Or(ref _logged, 1) & 1) == 0) _log?.Info("ui.menus: world map drawn the PS2 way");
     });
 
-    public static bool install(DemasterModule m) {
+    public static bool install(ModHost m) {
         _log = m.log;
         Draw d = draw;
         _keep.Add(d);

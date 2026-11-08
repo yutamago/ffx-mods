@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 
-namespace Yuta.Demaster;
+namespace Yuta.FfxMods;
 
-internal enum BuildState {
-    /// <summary>build/stamp.json matches demaster.toml and the files are there.</summary>
+public enum BuildState {
+    /// <summary>build/stamp.json matches settings.toml and the files are there.</summary>
     Ok,
     /// <summary>No stamp: never built, or a build was interrupted.</summary>
     NotBuilt,
@@ -14,15 +14,17 @@ internal enum BuildState {
 }
 
 /// <summary>
-/// Compares build/stamp.json (written by demaster.exe) with demaster.toml: whether the PS2 files
-/// in efl/x were built with the settings the file has now.
+/// Compares build/stamp.json (written by demaster.exe) with the mod's settings.toml: whether the
+/// PS2 files in efl/x were built with the settings the file has now.
 /// </summary>
-internal sealed class BuildStatus {
+public sealed class BuildStatus {
     public BuildState   State = BuildState.NotBuilt;
     public string       Summary = "";
     /// <summary>Settings changed since the build: key, built value, value now.</summary>
     public readonly List<(string Key, string Built, string Now)> Changed = [];
     public readonly List<string> Failed = [];
+    /// <summary>Jobs that need the PS2 disc and were left out because the build had none.</summary>
+    public readonly List<string> NoDisc = [];
     public string?  ConverterVersion;
     public DateTime? BuiltAt;
     public int      Files;
@@ -48,7 +50,7 @@ internal sealed class BuildStatus {
         public string summary { get; set; } = "";
     }
 
-    public static BuildStatus check(string mod_dir, DemasterSettings settings, string mod_version) {
+    public static BuildStatus check(string mod_dir, ModSettings settings, string mod_version) {
         BuildStatus s = new();
         string stamp_path = Path.Combine(mod_dir, "build", "stamp.json");
         string efl = Path.Combine(mod_dir, "efl", "x");
@@ -56,8 +58,8 @@ internal sealed class BuildStatus {
         if (!File.Exists(stamp_path)) {
             s.State   = BuildState.NotBuilt;
             s.Summary = s.FilesFound == 0
-                ? "The PS2 files are not built yet."
-                : "The PS2 files are not built, or the last build was interrupted.";
+                ? "The files are not built yet."
+                : "The files are not built, or the last build was interrupted.";
             return s;
         }
         Stamp stamp;
@@ -75,6 +77,7 @@ internal sealed class BuildStatus {
         foreach (StampJob j in stamp.jobs) {
             s.Jobs.Add($"{j.name}: {j.status}{(j.status is "built" or "unchanged" ? $", {j.files} files" : "")}{(j.summary.Length > 0 ? $" ({j.summary})" : "")}");
             if (j.status == "failed") s.Failed.Add(j.name);
+            if (j.status == "no disc") s.NoDisc.Add(j.name);
         }
         foreach ((string key, string built) in stamp.settings.OrderBy(p => p.Key, StringComparer.Ordinal)) {
             string now = settings.Values.TryGetValue(key, out string? v) ? v
@@ -85,11 +88,11 @@ internal sealed class BuildStatus {
 
         if (s.Changed.Count > 0) {
             s.State   = BuildState.Outdated;
-            s.Summary = $"demaster.toml changed since the last build ({s.Changed.Count} setting{(s.Changed.Count == 1 ? "" : "s")}).";
+            s.Summary = $"settings.toml changed since the last build ({s.Changed.Count} setting{(s.Changed.Count == 1 ? "" : "s")}).";
         }
         else if (!same_version(stamp.converter_version, mod_version)) {
             s.State   = BuildState.Outdated;
-            s.Summary = $"The PS2 files were built by converter {stamp.converter_version}; this mod is {mod_version}.";
+            s.Summary = $"The files were built by converter {stamp.converter_version}; this mod is {mod_version}.";
         }
         else if (s.FilesFound < stamp.files) {
             s.State   = BuildState.Outdated;
@@ -101,7 +104,8 @@ internal sealed class BuildStatus {
         }
         else {
             s.State   = BuildState.Ok;
-            s.Summary = $"The PS2 files match demaster.toml ({stamp.files} files).";
+            s.Summary = $"The files match settings.toml ({stamp.files} files)."
+                      + (s.NoDisc.Count > 0 ? $" Built without the PS2 disc: {string.Join(", ", s.NoDisc)} not built, that part stays HD." : "");
         }
         return s;
     }

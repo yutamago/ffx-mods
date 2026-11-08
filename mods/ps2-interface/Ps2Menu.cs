@@ -4,7 +4,7 @@ using System.Collections.Concurrent;
 using System.Runtime.InteropServices;
 using System.Threading;
 
-namespace Yuta.Demaster;
+namespace Yuta.FfxMods.Interface;
 
 /// <summary>
 /// ui.menus: shared pieces of the ported PS2 menu draws (MainMenuPatches, ItemMenuPatches and the
@@ -181,7 +181,7 @@ internal static unsafe class Ps2Menu {
     /// double 16.0 at 0x00b313a0) pointed at a double of our own, which ps2_sized makes 20 (the
     /// PS2's line feed, 0x001f43c8) for the PS2 texts.
     /// </summary>
-    public static bool install(DemasterModule m) {
+    public static bool install(ModHost m) {
         _info_hook = font_info;
         bool ok = Native.fn<FontInfo>(FONT_INFO).hook(m, _info_hook);
         _font_hooked = ok;

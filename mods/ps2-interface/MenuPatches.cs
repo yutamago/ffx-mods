@@ -3,7 +3,7 @@
 using System.Runtime.InteropServices;
 using System.Threading;
 
-namespace Yuta.Demaster;
+namespace Yuta.FfxMods.Interface;
 
 /// <summary>
 /// ui.menus: the PS2 window look drawn by the PS2 code FFX.exe still holds. Addresses are
@@ -68,7 +68,7 @@ internal static class MenuPatches {
     /// The pieces it draws from meswin are put in by the converter (ui.menus job); without them
     /// the window is invisible, so the converter output must be current.
     /// </summary>
-    public static bool menus(DemasterModule m, string value) {
+    public static bool menus(ModHost m, string value) {
         FhLogger log = m.log;
         _draw_menu = window => {
             // Fahrenheit hands out call pointers only after every module's init.

@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 
-namespace Yuta.Demaster;
+namespace Yuta.FfxMods;
 
 /// <summary>
-/// Reads the subset of TOML that demaster.toml uses: comments, [tables], dotted keys,
+/// Reads the subset of TOML that the mods' settings.toml files use: comments, [tables], dotted keys,
 /// strings ("basic" and 'literal'), booleans and numbers. Values come back as text
 /// ("ps2", "true"), keyed by their full dotted name ("models.monster").
 /// The converter (Rust, the full TOML spec) is the authority; anything this reader

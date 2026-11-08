@@ -1,0 +1,20 @@
+<Project>
+    <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.targets', '$(MSBuildThisFileDirectory)../'))" />
+
+    <!-- Fahrenheit.Sdk writes "Dependencies":[] into the manifest; this puts the mod's
+         dependencies (FfxModsDependencies) in. Manifest texts must not contain ';'. -->
+    <Target Name="__FfxModsManifestDependencies" AfterTargets="__FhEmitManifest" Condition=" '$(FfxModsDependencies)' != '' ">
+        <PropertyGroup>
+            <__FfxModsManifest>$(PublishDir)/$(AssemblyName).manifest.json</__FfxModsManifest>
+            <__FfxModsDeps>&quot;$(FfxModsDependencies.Replace(',', '&quot;,&quot;'))&quot;</__FfxModsDeps>
+            <__FfxModsText>$([System.IO.File]::ReadAllText('$(__FfxModsManifest)').Replace('&quot;Dependencies&quot;:[]', '&quot;Dependencies&quot;:[$(__FfxModsDeps)]'))</__FfxModsText>
+        </PropertyGroup>
+        <WriteLinesToFile File="$(__FfxModsManifest)" Lines="$(__FfxModsText)" Overwrite="true" />
+    </Target>
+
+    <!-- The mod's default settings.toml and players' README.txt go into the mod folder. -->
+    <ItemGroup>
+        <None Include="settings.toml" CopyToPublishDirectory="PreserveNewest" Condition="Exists('settings.toml')" />
+        <None Include="README.txt" CopyToPublishDirectory="PreserveNewest" Condition="Exists('README.txt')" />
+    </ItemGroup>
+</Project>

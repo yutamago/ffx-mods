@@ -1,0 +1,11 @@
+# Bug fixes settings. After changing anything here, restart the game.
+#
+# true: fixed (the default). false: as on the PC.
+
+[fixes]
+# NPC mouths that stay open after they talk (the PC sets the mouth texture inverted).
+npc_mouths = true
+# The Farplane background video that never plays on PC.
+farplane_video = true
+# Lulu's Fury spins that often aren't registered.
+lulu_fury = true

@@ -3,7 +3,7 @@
 using System.Runtime.InteropServices;
 using System.Threading;
 
-namespace Yuta.Demaster;
+namespace Yuta.FfxMods.Interface;
 
 /// <summary>
 /// ui.menus, the Customize screen drawn by the PS2's draw code ported onto FFX.exe's primitives (as
@@ -278,12 +278,12 @@ internal static unsafe class CustomizeMenuPatches {
 
     // ---- install ------------------------------------------------------------------------------------
 
-    private static bool hook<T>(DemasterModule m, uint va, T d) where T : Delegate {
+    private static bool hook<T>(ModHost m, uint va, T d) where T : Delegate {
         _keep.Add(d);
         return Native.fn<T>(va).hook(m, d);
     }
 
-    public static bool install(DemasterModule m) {
+    public static bool install(ModHost m) {
         _log = m.log;
         return hook<WinDraw>(m, LIST_DRAW, list_draw)
             & hook<WinDraw>(m, ADD_DRAW, add_draw);

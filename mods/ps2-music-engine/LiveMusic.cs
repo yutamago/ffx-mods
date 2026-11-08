@@ -2,7 +2,7 @@
 
 using System.Runtime.InteropServices;
 
-namespace Yuta.Demaster;
+namespace Yuta.FfxMods.MusicEngine;
 
 /// <summary>
 /// audio.music_engine = "live": loads demaster_live.dll (next to this mod's DLL) and installs it.
@@ -22,7 +22,7 @@ internal static class LiveMusic {
     [UnmanagedFunctionPointer(CallingConvention.StdCall, CharSet = CharSet.Unicode)]
     private delegate uint Install([MarshalAs(UnmanagedType.LPWStr)] string mod_dir);
 
-    public static bool install(DemasterModule m, string value) {
+    public static bool install(ModHost m, string value) {
         string dir = m.mod_dir;
         string dll = Path.Combine(dir, "demaster_live.dll");
         if (!File.Exists(dll)) {

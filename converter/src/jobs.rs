@@ -48,6 +48,12 @@ pub trait Job: Sync {
     fn version(&self) -> u32 {
         1
     }
+    /// Whether it reads the PS2 disc. A job that doesn't (it builds from the
+    /// PC game alone) also runs in a build without the disc, and its key
+    /// leaves the disc out.
+    fn needs_disc(&self) -> bool {
+        true
+    }
     /// Writes the job's files through `out`. Returns a one-line summary.
     /// Per-item problems belong in the summary or in `ctx.note`, not in an
     /// error; an error marks the whole job failed.
@@ -61,7 +67,8 @@ pub struct Ctx<'a> {
     pub config: &'a Config,
     /// `FFX_Data.vbf`.
     pub pc: &'a ffx_vbf::Archive,
-    iso: PathBuf,
+    /// The disc image or drive volume (`disc::source_path`); `None` in a build without the disc.
+    iso: Option<PathBuf>,
     disc: Mutex<Option<Disc>>,
     /// Print per-item details.
     pub verbose: bool,
@@ -79,7 +86,7 @@ impl<'a> Ctx<'a> {
         Ctx {
             config,
             pc,
-            iso: iso.to_path_buf(),
+            iso: Some(iso.to_path_buf()),
             disc: Mutex::new(None),
             verbose,
             ffmpeg: None,
@@ -88,13 +95,21 @@ impl<'a> Ctx<'a> {
         }
     }
 
+    /// For a build without the PS2 disc: [`Ctx::disc`] fails.
+    pub fn without_disc(config: &'a Config, pc: &'a ffx_vbf::Archive, verbose: bool) -> Self {
+        let mut ctx = Ctx::new(config, pc, Path::new(""), verbose);
+        ctx.iso = None;
+        ctx
+    }
+
     /// The PS2 disc, opened on first use (a build where every job is
     /// unchanged never opens it).
     pub fn disc<T>(&self, f: impl FnOnce(&mut Disc) -> Result<T>) -> Result<T> {
         let mut d = self.disc.lock().expect("disc lock");
         if d.is_none() {
-            let disc = Disc::open(&self.iso, self.pc)?;
-            eprintln!("disc: {} (region {}, {} files)", self.iso.display(), disc.region, disc.file_count());
+            let iso = self.iso.as_deref().context("this build has no PS2 disc")?;
+            let disc = Disc::open(iso, self.pc)?;
+            eprintln!("disc: {} (region {}, {} files)", iso.display(), disc.region, disc.file_count());
             *d = Some(disc);
         }
         f(d.as_mut().expect("opened"))

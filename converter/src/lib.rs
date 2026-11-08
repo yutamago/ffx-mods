@@ -1,7 +1,8 @@
-//! The converter as a library: the `demaster` binary (`main.rs`) and FFX
-//! Music Studio (`studio/`) use these modules. The studio needs the disc
-//! reader (`disc`), the settings (`config`, `build::find_vbf`) and the music
-//! engine (`sqseq`, `spu2`, `musicjob`).
+//! The converter as a library: the `demaster` binary (`main.rs`), the live
+//! music engine (`live/`), FFX Demaster and FFX Music Studio use these
+//! modules. The studio needs the disc reader (`disc`), the settings
+//! (`config`, `build::find_vbf`) and the music engine (`sqseq`, `spu2`,
+//! `musicjob`); keep their public API.
 
 pub mod bake;
 pub mod bgjob;
@@ -22,6 +23,7 @@ pub mod livejob;
 pub mod mapjob;
 pub mod mataudit;
 pub mod models;
+pub mod mods;
 pub mod moviejob;
 pub mod musicjob;
 pub mod phyretex;

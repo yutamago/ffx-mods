@@ -1,0 +1,7 @@
+# PS2 aspect ratio settings. After changing anything here, restart the game.
+
+[render]
+# "ps2": 4:3 with black bars and the PS2 projection; the menus, windows and
+# battle HUD the game places in PS2 coordinates land where the PS2 had them.
+# "hd": 16:9.
+aspect = "ps2"

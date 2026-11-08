@@ -1,0 +1,14 @@
+# PS2 game feel settings. After changing anything here, restart the game.
+#
+# "ps2": as on the PS2 (the default). "hd": as on the PC.
+
+[timing]
+# "ps2": Tidus runs at the PS2's speed (34 a frame x 0.05). "hd": the PC's 38,
+# 12 % faster (a little more ground between encounters).
+run_speed = "ps2"
+
+[ui]
+# "ps2": the battle menu reacts at once (the PC adds 0.3-0.45 s delays).
+battle_menu_delay = "ps2"
+# Subtitles for battle dialogue, as in the PS2 International version.
+battle_subtitles = "ps2"

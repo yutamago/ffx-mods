@@ -2,13 +2,13 @@
 
 using System.Runtime.InteropServices;
 
-namespace Yuta.Demaster;
+namespace Yuta.FfxMods;
 
 /// <summary>
 /// FFX.exe's memory, addressed by the VAs of ffx-rust's symbols/ffx.sym (image base 0x00400000).
 /// Fahrenheit takes offsets from the module base instead: <see cref="off"/>.
 /// </summary>
-internal static unsafe class Native {
+public static unsafe class Native {
     private const nint IMAGE_BASE = 0x00400000;
     private const uint PAGE_EXECUTE_READWRITE = 0x40;
 
@@ -86,7 +86,7 @@ internal static unsafe class Native {
 }
 
 /// <summary>Function shapes of the hooked and called game functions (all cdecl).</summary>
-internal static class Fn {
+public static class Fn {
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] public delegate void Void();
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] public delegate byte RetByte();
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] public delegate byte AnalogHist(int pad, int port, int axis, int hist);
