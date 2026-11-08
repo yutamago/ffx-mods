@@ -264,6 +264,31 @@ crest altogether.
 `DM_CLOTH=1 demaster models-debug ...` prints each piece's pinned and
 moving runs with their bind-pose extent.
 
+**Draw order** (job version 7). A piece's triangles can lie in several of
+the PS2 model's groups, and the PS2 draws the groups in order. Kimahri's
+mane (c004 (0, 6)) has 39 of its 48 triangles in group 0 with the body,
+but its bottom row (6 triangles, the half-transparent fringe) in groups
+59-60, after all of the fur collar ((0, 10), groups 26-58). The PC draws a
+cloth segment where it stands in the list: the mane in the HD's segment 7,
+the collar in a new segment after the HD's. Drawn first, with depth
+written, the fringe hid the collar behind it, and the openings the PS2
+head has beside the neck showed through it with the fire behind them: the
+mane's lower edge seemed to stand off his head. So a cloth triangle the
+PS2 draws after every triangle of another piece of the same model whose
+segment comes later goes into a **tail segment** of its piece (a new
+segment with the piece's tag and material); the tail segments follow all
+others, in the PS2's group order. c004: the mane's bottom row, piece 9's
+groups 61-64 and pieces 0-4 (after piece 5); 98 triangles.
+
+What it was not: the simulation. The PC runs the cloth step on the PS2
+data in the intro (map `0x15d`, wind 0); kept skinned (all piece
+vertices skin-coloured, a test build) the mane sticks out backwards in
+its bind pose, so the simulation is what hangs it. The PC's collision
+radius scale (`Ch_UseLargeCollisionRad`, 1.03, not in the PS2 ELF)
+returned as 1.0 for the party by a test hook changed nothing visible
+(the mane's sphere, shape 3 on bone 6, radius 2800, touches 4 of its 18
+moving vertices in the bind pose); not kept.
+
 ## Texture animation (eyes, mouths)
 
 Code: `converter/src/texanim.rs`; `models.rs` (`plan_face`); `chrjob.rs`
@@ -639,6 +664,21 @@ blended segments drawn), `msaa` (MSAA on: no change), `cull` and `alog`
 (chr `+0x194` and the MaterialColour inputs read with
 `C:\shots\fix-alpha\holes\chralpha.ps1`).
 
+**Kimahri's mane** (2026-11-08, job version 7, same install and
+settings; PS2 | version 6 | version 7, in `/mnt/c/shots/fix-alpha/mane/cmp/`):
+
+| Image | What | Result |
+|---|---|---|
+| `kimahri-mane.png`, `kimahri.png` | Kimahri from behind ("Scenario") | version 6: under the mane's bottom row the openings of the head and the fire; now its fringe lies over the fur collar as on the PS2 (the mane's tail segment, "Draw order") |
+
+The same run (`mane/r4`) shows Wakka, Rikku and Lulu at the fire, Yuna's
+close-ups (hair ornament) and Tidus as in version 6 (`holes/final4`).
+Tests on the way: `mane/r1` (collision radius 1.0 for the party: no
+change), `mane/r3` (all cloth skinned: the bind pose, mane sticking out
+backwards). 28 of the 165 converted models get tail segments (the
+party's c001-c008, c043-c045, c1xx; m248, n100, n219, n222, n224, n225,
+n233); the others were not looked at in the game.
+
 Debugging switches: `DM_DROP_BODY=1` (models: the opaque body left out,
 one triangle per segment kept; `2`: the cloth too), `IMPORTS=1` and
 `PARAMS=1` with `materials-debug` (who refers to each import; every
@@ -690,13 +730,9 @@ Second pass (texture animation, cloth, NPCs, monsters), comparisons in
   keep static faces; the plan takes one `Mat_CTA` segment per character.
 - **Cloth**: pieces are simulated by the PC's port of the PS2 code on the
   PS2 data; a sway was not compared frame by frame with the PS2.
-- **Kimahri's mane** (boot intro, from behind): its lower edge stands off
-  the back of his head, so its darker underside and two openings the PS2
-  mesh has at the back of the head beside the neck show (the fire behind
-  him shows through); on the PS2 the mane lies flat over them
-  (`holes/cmp/kimahri-mane.png`). Not a missing part (a render of the
-  converted model without the mane shows the openings); the cloth pose of
-  piece (0, 6) differs. Not fixed.
+- **Cloth draw order** across pieces follows the PS2 only where a tail
+  segment puts it right (see "Draw order"); the order of a piece's own
+  triangles against the body's blended segments was not compared.
 - **Blended twins without an import to take over**: n145, n232, n242,
   w082 keep one see-through part each on its opaque material (the report
   says "no import to spare"). The kept meshes (`chr.*`) take over the
