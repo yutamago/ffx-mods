@@ -2,7 +2,6 @@
 # Pushing a tag such as v0.2.0 builds everything as CI does (build.yml), with
 # that version in the converter and the mods, and publishes a GitHub release
 # with the mod zips (each unpacks straight into the Fahrenheit folder). A tag with a "-" (v0.2.0-alpha) makes a prerelease.
-# Needs the FFX_RUST_TOKEN secret (docs/ci.md).
 name: Release
 
 on:
@@ -17,7 +16,6 @@ jobs:
     uses: ./.github/workflows/build.yml
     with:
       tag: ${{ github.ref_name }}
-    secrets: inherit
 
   publish:
     name: Publish the release

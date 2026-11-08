@@ -125,9 +125,20 @@ every HD placement as it is and costs a filtered horizontal downscale.
 
 ## Not done
 
-- **HD movies with `movies = "hd"`** (or the 4 movies the job does not
-  convert when it fails): a 1280 x 720 movie fills the target and is
-  squeezed to 4:3. Use `movies = "ps2"` with `render.aspect = "ps2"`.
+- **HD movies with `movies = "hd"`** (or without FFX Demaster's `movies`
+  job, as with the PS2 aspect ratio mod alone): a 1280 x 720 movie fills
+  the target and would be squeezed to 4:3. The aspect patch now watches
+  for it (`mods/ps2-aspect-ratio/AspectPatches.cs`, "HD movies at 16:9"):
+  hooks on `mkvparser_VideoTrack_GetWidth`/`GetHeight` (`0x00428db0`,
+  `0x00428dc0`, thiscall -> i64) record the size of the movie being
+  opened, and once a frame (the module's `render_imgui`, from the Present
+  hook) the output aspect `0x00c34154` is 16/9 while
+  `graphicIsVideoPlaying` (`0x00641cf0`) says a movie plays, the movie is
+  not 4:3 and `g_MoviePictureOn` (`0x0112a00c`) is clear (movie pictures
+  under the 3D scene keep 4:3); else 4/3. **Not seen in the game**: the
+  hooks install (log), but no movie played in the test boots (the boot
+  intro has none). Use `movies = "ps2"` with `render.aspect = "ps2"` for
+  the PS2's 4:3 movies.
 - **Mouse** on the PS2-placed menus (`GuiTouch_*` pointer zones): not
   checked; their rectangles may still assume the full window.
 - **Animated parts of re-framed rooms** get the one PS2 picture in every

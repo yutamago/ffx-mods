@@ -1,30 +1,30 @@
 // SPDX-License-Identifier: MIT
 
-namespace Yuta.FfxMods.RoundMinimap;
+namespace Yuta.FfxMods.ModernMinimap;
 
 /// <summary>
-/// Round minimap (mod yuta.round-minimap): the field minimap round, always centred on the
+/// Modern Minimap (mod yuta.modern-minimap): the field minimap round, always centred on the
 /// player and turned with the camera, in the game's colours on a small CRT screen
 /// (docs/minimap.md). The settings and their defaults are those of settings.toml in this
 /// folder; the converter's list of this mod (converter/src/mods.rs) must agree (a converter
 /// test checks).
 /// </summary>
 [FhLoad(FhGameId.FFX)]
-public sealed class RoundMinimapModule : FhModule {
+public sealed class ModernMinimapModule : FhModule {
     public static readonly SettingInfo[] SETTINGS = [
         new("minimap.style",  AppliedBy.Mod, "crt"),
         new("minimap.size",   AppliedBy.Mod, "medium"),
         new("minimap.corner", AppliedBy.Mod, "top_right"),
     ];
 
-    // Size and corner have no "off": they only place the round minimap.
+    // Size and corner have no "off": they only place the Modern Minimap.
     public static readonly CodePatch[] PATCHES = [
-        new("minimap.size",   "", "round minimap size",  MinimapPatches.size),
-        new("minimap.corner", "", "round minimap place", MinimapPatches.corner),
-        new("minimap.style",  "game", "the round minimap in place of the game's", MinimapPatches.style),
+        new("minimap.size",   "", "minimap size",  MinimapPatches.size),
+        new("minimap.corner", "", "minimap place", MinimapPatches.corner),
+        new("minimap.style",  "game", "the Modern Minimap in place of the game's", MinimapPatches.style),
     ];
 
-    public static readonly ModInfo INFO = new("round-minimap", "Round minimap", SETTINGS, PATCHES, Builds: false);
+    public static readonly ModInfo INFO = new("modern-minimap", "Modern Minimap", SETTINGS, PATCHES, Builds: false);
 
     private bool _draw_failed, _drawn;
 

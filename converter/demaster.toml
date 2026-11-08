@@ -130,7 +130,7 @@ lulu_fury = true
 # CRT screen; markers beyond its edge sit on the rim and fade in as you come
 # nearer. "plain": the same without the CRT screen. "game": the game's own.
 style = "crt"
-# How big the round minimap is: "small", "medium" or "large".
+# How big the minimap is: "small", "medium" or "large".
 size = "medium"
 # Where it sits on the picture: "top_right", "top_left", "bottom_right" or
 # "bottom_left".

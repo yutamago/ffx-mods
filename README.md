@@ -1,10 +1,10 @@
 # FFX mods
 
-[Fahrenheit](https://github.com/fahrenheit-crew/fahrenheit) mods for
-FINAL FANTASY X HD Remaster (Steam, Windows): seven that bring back parts
-of the original PS2 game, with the PC version's game logic underneath, and
-two that are not PS2 parts (a round minimap, and the frame rate unlocked).
-Install any of them, alone or together; each is a separate zip.
+All of Yutamago's [Fahrenheit](https://github.com/fahrenheit-crew/fahrenheit)
+mods for FINAL FANTASY X HD Remaster (Steam, Windows). Most bring back parts
+of the original PS2 game, with the PC version's game logic underneath (the
+PS2 mods); others change the game in their own way. Install any of them,
+alone or together; each is a separate zip.
 
 | Mod | What it changes | PS2 disc | Installed size | Needs |
 |---|---|---|---|---|
@@ -15,8 +15,8 @@ Install any of them, alone or together; each is a separate zip.
 | [PS2 aspect ratio](#ps2-aspect-ratio) (`yuta.ps2-aspect-ratio`) | the 4:3 picture with the PS2 camera | no | <1 MB | — |
 | [PS2 game feel](#ps2-game-feel) (`yuta.ps2-game-feel`) | PS2 run speed, battle menu without input delay, battle subtitles | no | <1 MB | — |
 | [Bug fixes](#bug-fixes) (`yuta.bug-fixes`) | NPC mouths, the Farplane video, Lulu's Fury spins | no | <1 MB | — |
-| [Round minimap](#round-minimap) (`yuta.round-minimap`) | not a PS2 part: a round field minimap, centred on you and turned with the camera | no | <1 MB | — |
-| [FPS unlock](#fps-unlock) (`yuta.fps-unlock`) | not a PS2 part: the game drawn at your monitor's refresh rate (or uncapped) at its own speed, slow motion and fast-forward | no | <1 MB | — |
+| [Modern Minimap](#modern-minimap) (`yuta.modern-minimap`) | a round field minimap, centred on you and turned with the camera | no | <1 MB | — |
+| [FPS unlock](#fps-unlock) (`yuta.fps-unlock`) | the game drawn at your monitor's refresh rate (or uncapped) at its own speed; slow motion and fast-forward | no | <1 MB | — |
 
 Every mod needs the shared library `yuta.ffx-mods` (in every zip; its
 manifest dependency). Sizes are the files `install.cmd` builds with the
@@ -29,7 +29,7 @@ it (`.iso`), or the disc itself in a disc drive. After that they need
 neither.
 
 [FFX Demaster](https://github.com/yutamago/ffx-demaster) is the whole
-package (these seven plus the PS2 movies, maps, effects and more).
+package (the PS2 mods here plus the PS2 movies, maps, effects and more).
 
 ## Install
 
@@ -169,9 +169,9 @@ plays (`fixes.farplane_video`), Lulu's Fury spins that often don't count
 
 - PS2 disc: not needed. Code only.
 
-### Round minimap
+### Modern Minimap
 
-Not a part of the PS2 game: the field minimap becomes round, always centred
+The field minimap becomes round, always centred
 on you and turned with the camera, so that up on the map is where the
 camera looks. Your character is an arrow showing where they face; the
 walkable area sits over a grid fixed to the world, in the game's minimap
@@ -187,7 +187,7 @@ clears as you walk. Size and corner are settings (`minimap.size`,
 
 ### FPS unlock
 
-Not a part of the PS2 game: the 30 fps limit goes, the game's speed stays.
+The 30 fps limit goes, the game's speed stays.
 The game draws at your monitor's refresh rate, at a rate you choose, or
 uncapped, with vsync on or off; the world keeps its 30 ticks a second, and
 the camera and the characters (their bones, cloth and hair) are drawn
@@ -217,17 +217,17 @@ stay at their own speed.
   [`docs/screen.md`](docs/screen.md), [`docs/ui.md`](docs/ui.md),
   [`docs/models.md`](docs/models.md), [`docs/music.md`](docs/music.md):
   how each change works and how it was checked.
-- [`docs/minimap.md`](docs/minimap.md): the round minimap.
+- [`docs/minimap.md`](docs/minimap.md): the Modern Minimap.
 - [`docs/fps-unlock.md`](docs/fps-unlock.md): FPS unlock, and how FFX.exe
   times its frames (what a tick is, the limiter, fast-forward).
 - [`docs/disc.md`](docs/disc.md): how the PS2 disc stores its files.
-- [`docs/ci.md`](docs/ci.md): CI, releases and the `FFX_RUST_TOKEN` secret.
+- [`docs/ci.md`](docs/ci.md): CI and releases.
 
 ## Build
 
 | Path | What |
 |---|---|
-| `converter/` | `demaster`, the converter (Rust; library and program). Needs the ffx-rust crates (private, `github.com/yutamago/ffx-rust`, pinned in `Cargo.toml`). |
+| `converter/` | `demaster`, the converter (Rust; library and program). Uses the ffx-rust crates (`github.com/yutamago/ffx-rust`, public, pinned in `Cargo.toml`). |
 | `live/` | `demaster_live.dll`, the live music engine (Rust, 32-bit like FFX.exe) |
 | `common/` | `yuta.ffx-mods`, the shared C# library (a Fahrenheit mod): settings, build status, code patch helpers, the F8 window |
 | `mods/<name>/` | the mods (C#, .NET 10, `Fahrenheit.Sdk/1.0.0-alpha12`), each with its `settings.toml` and players' `README.txt` |
@@ -258,11 +258,63 @@ into aligned memory (`converter/src/disc.rs`, `SectorReader`); images are
 read the same way.
 
 CI (`.github/workflows/build.yml`) builds the mods and runs their tests,
-runs the converter tests on Linux, builds `demaster.exe` and
-`demaster_live.dll` on Windows, packages the zips and checks that they hold no game data, on every
+runs the converter tests on Linux, builds `demaster.exe` and `demaster_live.dll` on Windows,
+packages every mod's zip and checks that they hold no game data, on every
 push and pull request; a tag `v*` publishes a release with the zips
-(`release.yml`). The Rust jobs need the repository secret `FFX_RUST_TOKEN`
-([`docs/ci.md`](docs/ci.md)).
+(`release.yml`); no secrets are needed ([`docs/ci.md`](docs/ci.md)).
+
+## Contributing: adding a mod
+
+A new mod is a folder `mods/<name>/` (its Fahrenheit id is `yuta.<name>`):
+
+1. **Project.** `yuta.<name>.csproj` with `Sdk="Fahrenheit.Sdk/1.0.0-alpha12"`,
+   `AssemblyName` `yuta.<name>`, `RootNamespace`, `AssemblyTitle` and
+   `Description` (no `;` in it: it goes into the manifest).
+   `mods/Directory.Build.props` adds the rest: the version, a reference to
+   the shared library `common/` (not copied: Fahrenheit loads it once from
+   `mods/yuta.ffx-mods` and shares it), its global usings, and
+   `yuta.ffx-mods` as the manifest's dependency; `settings.toml` and
+   `README.txt` are copied into the build. Add the project to
+   `ffx-mods.slnx`.
+2. **Module.** `Mod.cs`: an `FhModule` with `[FhLoad(FhGameId.FFX)]`, its
+   `SETTINGS` (`SettingInfo`: key, who applies it, default), its `PATCHES`
+   (`CodePatch`: the setting, its "off" value, a description and the apply
+   function) and a `ModInfo`; `init` calls `ModHost.start(this, _logger,
+   mod_context, INFO)`. That reads the mod's `settings.toml`, checks its
+   build stamp, applies the patches and puts the mod into the one F8
+   window. An apply function gets the `ModHost` (its log, its folder; it
+   converts to the `FhModule` for `Native.fn<T>(va).hook(m, ...)`).
+   Copy `mods/ps2-game-feel/` for a code-only mod.
+3. **Shared code** goes into `common/` (`Native` for FFX.exe addresses and
+   byte patches, `Fn` for function shapes, `ModFiles` for the PS2 files of
+   every installed mod), never copied into a mod. A hook on a function
+   another mod may hook too must call the next one (`chain_from`). A mod
+   whose settings change while the game runs draws them in its part of the
+   F8 window (`ModInfo.Section`; `FamilyWindow.toggle` for a key of its own)
+   and writes them back with `ModSettings.write` (as FPS unlock does).
+4. **Settings.** Each setting is in `converter/src/config.rs` (`Config`,
+   `SETTINGS`), the mod's entry in `converter/src/mods.rs`, its `Mod.cs`,
+   its `settings.toml` (with comments; `[source]` only if it has PS2 files)
+   and `docs/config.md`. `cargo test -p demaster` checks they agree, and
+   that no setting or job belongs to two mods.
+5. **PS2 files.** A mod that builds files lists its jobs in its `mods.rs`
+   entry (`jobs`, `disc`: needed, optional or none); the jobs are
+   `jobs::Job`s in `jobs::registry()` (`docs/` and the existing jobs show
+   how). A job may read only its own mod's settings, writes with
+   `out.put(...)` into the mod's `efl/x` and says `needs_disc() = false`
+   if it builds from the PC game alone. `demaster build --mod <name>` and a
+   `demaster.exe` in the mod's folder then build exactly those jobs, and
+   `tools/install/install.ps1` (shipped as the mod's `install.cmd`) runs
+   it: it finds the mod by its manifest, asks for the disc only when the
+   mod has disc jobs (`demaster mods`), and adds the mod to `mods\loadorder`.
+6. **Package and CI.** Add the mod to `MODS` in `tools/package.cs` (whether
+   it ships `demaster.exe`) and to the zip check in
+   `.github/workflows/build.yml`; describe it in this README (what it
+   changes for the player, disc, size, dependencies) and in its
+   `README.txt`. Tests of a mod's portable code go in `tests/<name>/`
+   (in `ffx-mods.slnx`; CI runs them).
+7. **Test in the game** before calling it done (`CLAUDE.md`, "Testing in
+   the game"): alone, and with the other mods.
 
 Never commit disc images, extracted files or anything from the game's
 archives.

@@ -1,15 +1,14 @@
-Round minimap
+Modern Minimap
 =============
 
 A Fahrenheit mod for FINAL FANTASY X HD Remaster (Steam, Windows), one of
-the FFX mods (https://github.com/yutamago/ffx-mods): yuta.round-minimap.
+the FFX mods (https://github.com/yutamago/ffx-mods): yuta.modern-minimap.
 
 What it changes
 ---------------
 
-Not a part of the PS2 game: the field minimap becomes round, always
-centred on you and turned with the camera, so that up on the map is where
-the camera looks.
+The field minimap becomes round, always centred on you and turned with
+the camera, so that up on the map is where the camera looks.
 - your character is an arrow showing where they face;
 - the walkable area sits over a grid fixed to the world, in the game's
   minimap colours on a small CRT screen;
@@ -37,13 +36,13 @@ Install
 -------
 
 1. Unpack this zip into your Fahrenheit folder (the folder with
-   Fahrenheit's "bin" folder). It holds two folders: mods\yuta.round-minimap\
+   Fahrenheit's "bin" folder). It holds two folders: mods\yuta.modern-minimap\
    (this mod) and mods\yuta.ffx-mods\ (the shared library every mod of the
    family needs; unpacking another mod's zip over it is fine).
-2. Double-click mods\yuta.round-minimap\install.cmd. It adds yuta.ffx-mods
-   and yuta.round-minimap to mods\loadorder. This mod builds no files: it
+2. Double-click mods\yuta.modern-minimap\install.cmd. It adds yuta.ffx-mods
+   and yuta.modern-minimap to mods\loadorder. This mod builds no files: it
    needs no PS2 disc. (Or add the two lines to mods\loadorder yourself:
-   first yuta.ffx-mods, then yuta.round-minimap.)
+   first yuta.ffx-mods, then yuta.modern-minimap.)
 3. Start the game through Fahrenheit (bin\fhstage0.exe with the path of
    FFX.exe).
 
@@ -65,14 +64,14 @@ changing one, restart the game.
 Uninstall
 ---------
 
-Delete mods\yuta.round-minimap\ and its line in mods\loadorder. When no
+Delete mods\yuta.modern-minimap\ and its line in mods\loadorder. When no
 other mod of the family is left, also delete mods\yuta.ffx-mods\ and its
 line.
 
 Files
 -----
 
-  yuta.round-minimap.dll, .manifest.json, ...   the mod
+  yuta.modern-minimap.dll, .manifest.json, ...   the mod
   settings.toml   its settings
   install.cmd, install.ps1   the installer (load order)
   LICENSES.txt    licences of this mod and of the code it includes

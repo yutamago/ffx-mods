@@ -1,10 +1,11 @@
 # ffx-mods
 
-Seven Fahrenheit mods for the FFX HD Remaster (Steam) that restore parts of
-the PS2 version, each working alone and in any combination, plus the
-converter (`demaster`) that builds their PS2 files from the player's own
-disc. Presentation from the PS2, logic from the PC; every change is a
-setting. Split out of ffx-demaster (github.com/yutamago/ffx-demaster,
+All of the user's Fahrenheit mods for the FFX HD Remaster (Steam), each
+working alone and in any combination, plus the converter (`demaster`) that
+builds the PS2 mods' files from the player's own disc. Most are PS2 mods
+(they restore parts of the PS2 version: presentation from the PS2, logic
+from the PC); others are the user's own changes (`modern-minimap`, `fps-unlock`). Every
+change is a setting. The PS2 mods were split out of ffx-demaster (github.com/yutamago/ffx-demaster,
 history kept up to its 314bbfc); ffx-demaster becomes a bundle of these
 mods plus its own parts (movies, maps, effects, glow, shadows, the music
 bank), which builds with this repo's converter. README.md describes each
@@ -19,7 +20,7 @@ mod for players.
   commit messages, PR descriptions or other messages.
 - Pushing straight to `main` is fine. Agents working in a worktree commit on
   their branch; the orchestrator merges.
-- ffx-rust (`../ffx-decomp`, private, github.com/yutamago/ffx-rust) is ours:
+- ffx-rust (`../ffx-decomp`, public, github.com/yutamago/ffx-rust) is ours:
   use its crates and docs freely (git dependency, pinned rev in `Cargo.toml`).
   Its `docs/formats/*.md` and `symbols/ffx.sym` are the reference for FFX.exe.
 - Decompilation findings go back into ffx-rust: every new FFX.exe
@@ -48,7 +49,7 @@ mod for players.
 | `tools/package.cs` | one zip per mod |
 | `docs/` | moved from ffx-demaster: the research and design docs of every feature (also of the parts that stay in ffx-demaster) |
 
-The seven mods and what is in each: README.md and `converter/src/mods.rs`.
+The mods and what is in each: README.md and `converter/src/mods.rs`.
 
 ## Rules for the mods
 
@@ -85,10 +86,10 @@ RUSTC_WRAPPER= cargo test --release -p demaster -p demaster-live   # disc tests 
 tools/build-windows.sh && tools/build-live.sh       # demaster.exe, demaster_live.dll
 dotnet build -c Release ffx-mods.slnx               # artifacts/deploy/rel/mods/yuta.*/
 dotnet test -c Release --no-build ffx-mods.slnx     # C# tests; FFX_GAME_DIR=<game folder> for the FFX.exe ones
-dotnet run tools/package.cs -- <out dir> <version>  # the seven zips
+dotnet run tools/package.cs -- <out dir> <version>  # one zip per mod
 ```
 
-CI, tag releases and the `FFX_RUST_TOKEN` secret: `docs/ci.md`.
+CI and tag releases: `docs/ci.md` (no secrets needed).
 
 ## Data (never in git)
 

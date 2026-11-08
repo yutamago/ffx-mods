@@ -229,7 +229,7 @@ pub enum MinimapSize {
     Large,
 }
 
-/// `minimap.corner`: where on the picture the round minimap sits.
+/// `minimap.corner`: where on the picture the Modern Minimap sits.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum MinimapCorner {
@@ -240,7 +240,7 @@ pub enum MinimapCorner {
     BottomRight,
 }
 
-/// The round minimap (mod `round-minimap`, all applied by the mod).
+/// The Modern Minimap (mod `modern-minimap`, all applied by the mod).
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Minimap {
@@ -776,7 +776,7 @@ mod tests {
             } else if k == "render.texture_filter" {
                 v == "game"
             } else if k.starts_with("minimap.") {
-                // not a PS2 part: the round minimap is the mod's point
+                // not a PS2 part: the Modern Minimap is the mod's point
                 matches!(k.as_str(), "minimap.style" if v == "crt")
                     || matches!(k.as_str(), "minimap.size" if v == "medium")
                     || matches!(k.as_str(), "minimap.corner" if v == "top_right")
