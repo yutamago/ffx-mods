@@ -1,6 +1,6 @@
-# Round minimap
+# Modern Minimap
 
-`yuta.round-minimap` replaces the field minimap with a round one: always
+`yuta.modern-minimap` replaces the field minimap with a round one: always
 centred on the player, turned so that up is where the camera looks, the
 character's facing as an arrow, the walkable area over a grid fixed to the
 world, the game's markers in their shapes and colours, markers beyond the
@@ -19,7 +19,7 @@ and ported in its `crates/ffx-field/src/guide_update.rs`.
 `Yn_GuideMapProcEx` (`0x00919d00`) every field frame, fades the game's
 minimap, reveals its fog of war and draws it. `MinimapPatches.cs` hooks it
 (Fahrenheit chains it with other hooks; the next one runs whenever the
-game's own minimap is wanted). With the round minimap on it does what the
+game's own minimap is wanted). With the Modern Minimap on it does what the
 original does besides drawing, in the original's order:
 
 1. `g_GuideEnabled` (`0x00c5e478`) 0, no guide, or no mesh
@@ -47,7 +47,7 @@ original does besides drawing, in the original's order:
    minimap does not hide the unrevealed parts.
 6. The blink counter, guide `+0x74`, goes up by one.
 
-An exception inside the hook turns the round minimap off and the game's
+An exception inside the hook turns the Modern Minimap off and the game's
 back on for the rest of the run (logged).
 
 ## The camera

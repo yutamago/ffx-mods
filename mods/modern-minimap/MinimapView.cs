@@ -2,10 +2,10 @@
 
 using System.Diagnostics;
 
-namespace Yuta.FfxMods.RoundMinimap;
+namespace Yuta.FfxMods.ModernMinimap;
 
 /// <summary>
-/// The round minimap, drawn with ImGui over the game's picture: always centred on the player,
+/// The Modern Minimap, drawn with ImGui over the game's picture: always centred on the player,
 /// turned so that where the camera looks is up; the walkable area of the map's minimap mesh
 /// over a grid fixed to the world, the player as an arrow of the character's facing, the
 /// game's markers in their shapes and colours; markers beyond the edge sit on the rim, fading

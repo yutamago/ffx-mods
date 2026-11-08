@@ -38,7 +38,7 @@ const string COMMON = "yuta.ffx-mods";
     ("ps2-aspect-ratio", false, false),
     ("ps2-game-feel",    false, false),
     ("bug-fixes",        false, false),
-    ("round-minimap",    false, false),
+    ("modern-minimap",    false, false),
 ];
 
 string root    = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(this_file())!, ".."));

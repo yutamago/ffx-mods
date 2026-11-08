@@ -157,12 +157,12 @@ pub const PROFILES: &[Profile] = &[
         without_disc: "",
     },
     Profile {
-        name: "round-minimap",
-        title: "Round minimap",
+        name: "modern-minimap",
+        title: "Modern Minimap",
         settings: &["minimap.style", "minimap.size", "minimap.corner"],
         jobs: &[],
         disc: DiscUse::None,
-        default_toml: include_str!("../../mods/round-minimap/settings.toml"),
+        default_toml: include_str!("../../mods/modern-minimap/settings.toml"),
         without_disc: "",
     },
 ];
