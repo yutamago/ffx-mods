@@ -3,11 +3,11 @@
 using System.Runtime.InteropServices;
 using System.Threading;
 
-namespace Yuta.FfxMods.RoundMinimap;
+namespace Yuta.FfxMods.ModernMinimap;
 
 /// <summary>
 /// The hook on the field minimap's frame, rcbgGuideUpdateEx (0x0091da80, cdecl(guide, show),
-/// called by Yn_GuideMapProcEx 0x00919d00 every field frame). With the round minimap on it
+/// called by Yn_GuideMapProcEx 0x00919d00 every field frame). With the Modern Minimap on it
 /// keeps what the game's minimap does besides drawing (its fade, the fog of war it reveals,
 /// the blink counter), switches the game's drawing off, and hands the player, the camera,
 /// the markers and the map's mesh to <see cref="MinimapView"/> (docs/minimap.md; the
@@ -62,7 +62,7 @@ internal static unsafe class MinimapPatches {
     private static ActorPos? _actor_start, _actor_end;
     private static RevealFog? _reveal_fog;
 
-    /// <summary>Whether the round minimap replaces the game's (minimap.style is not "game").</summary>
+    /// <summary>Whether the Modern Minimap replaces the game's (minimap.style is not "game").</summary>
     public static bool active { get; private set; }
     public static bool crt { get; private set; } = true;
     /// <summary>The diameter, a share of the picture's height.</summary>
@@ -121,7 +121,7 @@ internal static unsafe class MinimapPatches {
         catch (Exception e) {
             // Never let an exception into the game's frame: back to the game's minimap.
             active = false;
-            _log?.Error($"The round minimap failed and the game's is back: {e}");
+            _log?.Error($"The Modern Minimap failed and the game's is back: {e}");
             MinimapView.hide();
             return _next(guide, show);
         }

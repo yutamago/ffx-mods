@@ -16,7 +16,7 @@ its `demaster.exe` (the same keys and defaults). Every row of
 | `yuta.ps2-aspect-ratio` | `render.aspect` |
 | `yuta.ps2-game-feel` | `timing.run_speed`, `ui.battle_menu_delay`, `ui.battle_subtitles` |
 | `yuta.bug-fixes` | `fixes.npc_mouths`, `fixes.farplane_video`, `fixes.lulu_fury` |
-| `yuta.round-minimap` | `minimap.style`, `minimap.size`, `minimap.corner` (not a PS2 part; see [Minimap](#minimap)) |
+| `yuta.modern-minimap` | `minimap.style`, `minimap.size`, `minimap.corner` (not a PS2 part; see [Minimap](#minimap)) |
 | FFX Demaster only | `movies`, `maps.*`, `effects.textures`, `render.glow`, `render.shadows`, `audio.soundtrack`, `audio.music_engine = "ps2"` (the rendered bank) |
 
 The converter's list is `converter/src/mods.rs`; each mod's own is its
@@ -153,7 +153,7 @@ Kimahri's Spirit Lance comes with `models.party`.
 
 ## Minimap
 
-The round minimap (`yuta.round-minimap`) is not a part of the PS2 game: it
+The Modern Minimap (`yuta.modern-minimap`) is not a part of the PS2 game: it
 replaces the field minimap of both versions with a round one
 ([`minimap.md`](minimap.md)). All three settings are applied by the mod.
 

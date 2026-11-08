@@ -15,7 +15,7 @@ alone or together; each is a separate zip.
 | [PS2 aspect ratio](#ps2-aspect-ratio) (`yuta.ps2-aspect-ratio`) | the 4:3 picture with the PS2 camera | no | <1 MB | — |
 | [PS2 game feel](#ps2-game-feel) (`yuta.ps2-game-feel`) | PS2 run speed, battle menu without input delay, battle subtitles | no | <1 MB | — |
 | [Bug fixes](#bug-fixes) (`yuta.bug-fixes`) | NPC mouths, the Farplane video, Lulu's Fury spins | no | <1 MB | — |
-| [Round minimap](#round-minimap) (`yuta.round-minimap`) | a round field minimap, centred on you and turned with the camera | no | <1 MB | — |
+| [Modern Minimap](#modern-minimap) (`yuta.modern-minimap`) | a round field minimap, centred on you and turned with the camera | no | <1 MB | — |
 
 Every mod needs the shared library `yuta.ffx-mods` (in every zip; its
 manifest dependency). Sizes are the files `install.cmd` builds with the
@@ -168,7 +168,7 @@ plays (`fixes.farplane_video`), Lulu's Fury spins that often don't count
 
 - PS2 disc: not needed. Code only.
 
-### Round minimap
+### Modern Minimap
 
 The field minimap becomes round, always centred
 on you and turned with the camera, so that up on the map is where the
@@ -193,7 +193,7 @@ clears as you walk. Size and corner are settings (`minimap.size`,
   [`docs/screen.md`](docs/screen.md), [`docs/ui.md`](docs/ui.md),
   [`docs/models.md`](docs/models.md), [`docs/music.md`](docs/music.md):
   how each change works and how it was checked.
-- [`docs/minimap.md`](docs/minimap.md): the round minimap.
+- [`docs/minimap.md`](docs/minimap.md): the Modern Minimap.
 - [`docs/disc.md`](docs/disc.md): how the PS2 disc stores its files.
 - [`docs/ci.md`](docs/ci.md): CI and releases.
 
