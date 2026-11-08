@@ -20,6 +20,7 @@ pub mod gsmem;
 pub mod jobs;
 pub mod livejob;
 pub mod mapjob;
+pub mod mataudit;
 pub mod models;
 pub mod moviejob;
 pub mod musicjob;

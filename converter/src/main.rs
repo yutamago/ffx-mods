@@ -1,4 +1,4 @@
-use demaster::{bgjob, build, chralpha, chrjob, config, disc, fxjob, jobs, mapjob, models, moviejob, musicjob, ps2fx, ps2movie, texanim, uijob};
+use demaster::{bgjob, build, chralpha, chrjob, config, disc, fxjob, jobs, mapjob, mataudit, models, moviejob, musicjob, ps2fx, ps2movie, texanim, uijob};
 
 use std::path::{Path, PathBuf};
 
@@ -6,7 +6,7 @@ use anyhow::{Context, Result, bail};
 
 fn usage() -> ! {
     eprintln!(
-        "FFX Demaster converter {}\nusage:\n{}\n  demaster chr <iso> <FFX_Data.vbf> <out dir> <kind/name>...\n      bake character textures (PNG previews + .dds.phyre)\n  demaster models <iso> <FFX_Data.vbf> <out dir> all|<kind/name>...\n      PS2 meshes into the remodelled characters (run after chr; docs/models.md)\n  demaster models-debug <chr file> <FFX_Data.vbf> <kind/name>\n      print a PS2 mesh against its HD model\n  demaster materials-debug <FFX_Data.vbf> <kind/name>|<.dae.phyre file>|--variants|--states <variant path>\n      each segment's material, shader variant switches, passes and alpha threshold; every character variant; one variant's pass states\n  demaster fx <iso> <FFX_Data.vbf> <out dir> all|<id>...\n      effect textures; id: 7, magic_0007, map/bika/bika00, btlmap/bika/bika00_a, chr/mon/m028\n  demaster maps <iso> <FFX_Data.vbf> <out dir> <map|area|kind>...|all\n      field and battle map textures (PNG previews, maps.tsv + .dds.phyre)\n  demaster ui <iso> <FFX_Data.vbf> <out dir>\n      menus, portraits, title, loading screen, button glyphs, font (PNG previews + .dds.phyre, base.ftc)\n  demaster movies <iso> <FFX_Data.vbf> <mod dir> all|<name>...\n      PS2 movies as WebM (name: opn, sak, ...; ffmpeg: $FFMPEG, else found or downloaded as by build; docs/movies.md)\n  demaster movie-debug <iso> <FFX_Data.vbf> <out dir> <name> [frame]...\n      decode one PS2 movie: statistics, PNGs of the frames, the sound as WAV\n  demaster music <iso> <FFX_Data.vbf> <out dir> all|<id|name>...\n      render PS2 music tracks (musicNNN.bgm) as 48 kHz WAVs (docs/music.md)\n  demaster music-bank <bank.fsb> <out dir> [name...]\n      decode a music bank (FSB5, IMA ADPCM) to WAVs\n  demaster texanim-debug <chr file> <FFX_Data.vbf> <kind/name>\n      print a PS2 texture animation against the HD .ags",
+        "FFX Demaster converter {}\nusage:\n{}\n  demaster chr <iso> <FFX_Data.vbf> <out dir> <kind/name>...\n      bake character textures (PNG previews + .dds.phyre)\n  demaster models <iso> <FFX_Data.vbf> <out dir> all|<kind/name>...\n      PS2 meshes into the remodelled characters (run after chr; docs/models.md)\n  demaster models-debug <chr file> <FFX_Data.vbf> <kind/name>\n      print a PS2 mesh against its HD model\n  demaster materials-debug <FFX_Data.vbf> <kind/name>|<.dae.phyre file>|--variants|--states <variant path>\n      each segment's material, shader variant switches, passes and alpha threshold; every character variant; one variant's pass states\n  demaster materials-audit <FFX_Data.vbf> <efl/x dir> [--known <file>] [kind/name...]\n      check the built character materials against the texels their segments sample (docs/models.md, \"Alpha\")\n  demaster fx <iso> <FFX_Data.vbf> <out dir> all|<id>...\n      effect textures; id: 7, magic_0007, map/bika/bika00, btlmap/bika/bika00_a, chr/mon/m028\n  demaster maps <iso> <FFX_Data.vbf> <out dir> <map|area|kind>...|all\n      field and battle map textures (PNG previews, maps.tsv + .dds.phyre)\n  demaster ui <iso> <FFX_Data.vbf> <out dir>\n      menus, portraits, title, loading screen, button glyphs, font (PNG previews + .dds.phyre, base.ftc)\n  demaster movies <iso> <FFX_Data.vbf> <mod dir> all|<name>...\n      PS2 movies as WebM (name: opn, sak, ...; ffmpeg: $FFMPEG, else found or downloaded as by build; docs/movies.md)\n  demaster movie-debug <iso> <FFX_Data.vbf> <out dir> <name> [frame]...\n      decode one PS2 movie: statistics, PNGs of the frames, the sound as WAV\n  demaster music <iso> <FFX_Data.vbf> <out dir> all|<id|name>...\n      render PS2 music tracks (musicNNN.bgm) as 48 kHz WAVs (docs/music.md)\n  demaster music-bank <bank.fsb> <out dir> [name...]\n      decode a music bank (FSB5, IMA ADPCM) to WAVs\n  demaster texanim-debug <chr file> <FFX_Data.vbf> <kind/name>\n      print a PS2 texture animation against the HD .ags",
         build::VERSION,
         build::USAGE
     );
@@ -192,6 +192,25 @@ fn main() -> Result<()> {
                 Err(_) => pc.read(pc.find(&p).context("no HD model")?)?,
             };
             chralpha::debug(&hd, |q| pc.find(q).map(|e| pc.read(e)).transpose().map_err(Into::into))?;
+        }
+        "materials-audit" => {
+            if a.len() < 4 {
+                usage();
+            }
+            let pc = ffx_vbf::Archive::open(&a[2])?;
+            let mut known = std::collections::BTreeSet::new();
+            let mut specs = Vec::new();
+            let mut rest = a[4..].iter();
+            while let Some(x) = rest.next() {
+                if x == "--known" {
+                    let f = rest.next().context("--known <file>")?;
+                    let text = std::fs::read_to_string(f).with_context(|| f.clone())?;
+                    known.extend(text.split_whitespace().filter(|w| w.contains('/')).map(str::to_owned));
+                } else {
+                    specs.push(x.clone());
+                }
+            }
+            print!("{}", mataudit::run(&pc, Path::new(&a[3]), &specs, &known)?);
         }
         "texanim-debug" => {
             if a.len() < 5 {
