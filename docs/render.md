@@ -388,17 +388,7 @@ intro; all match, and the cause of the brighter lit areas is still open.
   clears are full-screen), fog on but F 249-255 at the characters (fog
   colour `0x49689e`), and the c101 CLUTs are uploaded byte for byte as in
   `c101.chr` (no runtime recolour).
-- **Point lights.** `Ch_PLightCalc` puts the nearby point lights into
-  the character's light slots (`+0x384..`, `+0x3c4..`; colour x 2, at most
-  2) and passes the last to the shader's extra light (`LgtMatVec` /
-  `LgtMatClr`, applied as `max(colour x half-Lambert^2, 1)`). The PS2 uses
-  the slots only where chr `+0x188` has the slot's bit
-  (`Sg_LightSetChr`), else the global lights. In the opening every
-  character has `+0x188` = 0, so the PS2 shows no point light, while ours
-  brightens Wakka, Lulu and the others on the campfire side by up to
-  x 1.14 (Tidus and Yuna get none). Neutralising it in a `Ch_PLightCalc`
-  hook crashed the game twice in three runs (the hook probably runs on the
-  job threads), so it is not in the mod: still to do.
+- **Point lights.** See "Point lights in the opening" below.
 
 Measured again with main of 2026-11-08 (pose-matched frames, the same
 ellipses as above):
@@ -410,21 +400,133 @@ ellipses as above):
 | Tidus face, PS2 `s153` | 147.5 / 163 / 186 | 42/138/173 | 24/62/78 |
 | Tidus, ours (`t168`) | 157.2 / 173 / 200 | 43/152/194 | 24/69/90 |
 
-So ours is still 7-10% brighter in the textured result while the lighting
-alone is within a few per cent. What is left between them is the texel
-(atlas texel against the PS2's CLUT texel at the same spot, not compared
-per position yet) and the animation: at the same credit the heads in our
-runs are turned differently from the PS2's (the PS2 credit and the scene
-are not in step on the PC), so the pose-matched frames compare a lit
-cheek with a half-lit one. The next check is per position: the PS2's
-texel (`s143 x 128 / vcol`, which line up 1:1 at 512 x 416) against the
-atlas texel the same face point samples.
+The "lighting alone within a few per cent" above compared percentiles of
+frames in different poses; measured per position (next section) the
+lighting alone carries the whole surplus.
 
 Pictures (never in git): `C:\shots\fix-alpha\runtime\` `ps2\s*.png`
 (PS2 boot to title, every 2 s; `d143.gs.zst`, the GS dump of the Tidus close-up), `diag3\t*.png` (ours,
 every 10 s), `cmp-tidus.png`, `cmp-yuna.png`, `cmp-party.png` (PS2 left,
 ours right), `vcol-tidus.png` (the PS2's lit vertex colours, left, and
 the PS2 frame).
+
+### Per position against the PS2 (2026-11-08)
+
+The Tidus close-up ("CG Supervisor", PS2 GS dump `d143`) compared pixel by
+pixel. Scripts in `~/ffx-work/demaster/scratch/texel/` (game data, not in
+git): `texel.py` replays the dump (VRAM from the frozen GS state at byte
+380 of the state block, every host-to-local transfer of the dump) and
+rasterises the context-2 draws with their vertex colour, texture
+coordinate, TEX0 and the texel the GS samples there; `match.py` finds each
+decoded texture in our atlas; `register.py` fits our frame onto the PS2's
+(scale 0.995 x 0.943, shift 11, 22.5 px on the 960 x 720 4:3 picture;
+residual 0.025-0.034) and compares on the PS2's face page, eroded by 3 px.
+Our frames come from a capture loop (`C:\shots\fix-alpha\texel\caploop.ps1`,
+about 4 frames/s), so a frame within about 0.1 s of the dump's pose exists.
+
+1. **Texels: identical.** All eight c101 pages the PS2 draws (TBP
+   `0x3c00`/`0x3e00`, PSMT8, CLUTs `0x2ee0`..`0x2ef4` as uploaded that
+   frame) are bit-exact in our `p101` atlas (`ps2chr.rs` colour
+   conversion, CSM1, CLUT choice), and our face triangles use page 9
+   (CLUT `0x2ee0`) like the PS2's. The dump's texel x vertex colour / 128
+   reproduces the PS2 frame.
+2. **The PC's path from texel to screen: linear.** An atlas of 3-texel
+   stripes of grey `0x40` and `0x80` gives a dark / bright ratio of
+   0.475-0.48 on the face at every brightness from 100 to 250, in R, G
+   and B (the lighting gradient across the 25 px window makes it a little
+   under 0.5): no gamma, tone curve or offset after the shader. (Map
+   colour correction: `znkd06` has no `_colorcorrection` texture;
+   `Brightness` 50 gives `g_brightPara` 0.)
+3. **Same pose, textured:** ours / PS2 on the face, median R 1.059, G
+   1.088, B 1.090; by the PS2's lit level (vertex colour G): 1.016 below
+   150, 1.081 at 150-190, 1.103 at 190-215, 1.109 above.
+4. **Same pose, lighting alone** (atlas grey `0x80`, ours = 128 x lit
+   against the PS2's vertex colours): G 1.085 (1.008 / 1.076 / 1.101 /
+   1.105 by the same bins); the Gouraud shaders of job version 2 give
+   1.081. Fitted per pixel: ours = 1.20 x PS2 - 22 (G; R 1.21 x - 27,
+   B 1.33 x - 36): our lighting has about 1.2 times the PS2's contrast.
+   The ratio maps of 3 and 4 are the same picture (brighter on the lit
+   cheek and forehead, darker under the chin): the surplus is all in the
+   lit value, none in the texels or after the shader.
+5. **Per light.** Light 0 (1, 0.88, 0.58) and light 1 (0.52, 0.41, 0.16)
+   differ in colour, so each pixel's RGB gives both N.L terms (ambient
+   and light 2 known; residual rms under 0.009 on both sides). Light 0:
+   PS2 p5/50/95 0.12/0.55/0.75, ours 0.00/0.61/0.88 (ours = 1.37 x PS2 -
+   0.15, correlation 0.92); light 1 alike (1.31 x - 0.07, 0.76). The
+   colours and levels are right (3 and 4 agree in the shadow); the
+   angles between our normals and the lights are not the PS2's.
+6. **Ruled out for the N.L:** the light directions' signs (z flipped as
+   well, `(-x, -y, -z)`, lights the back of the head: the faces go dark,
+   ratio 0.4); the per-pixel renormalisation (job version 2's Gouraud
+   shaders: 1.085 -> 1.081); unskinned normals on the PS2 (the PS2 skins
+   c101's normals every frame: its envelope `0x00107ec8` does when chr
+   `+0x1a0` bit 0 is set, which Tidus's is, and renormalises them; a
+   write watchpoint on his normal buffer breaks in `0x00124260`).
+   Still open: how the PS2 weights the normals (the normal skin lists of
+   `.chr` model `+0x24`, used by `0x00124058`/`0x00124260`, are separate
+   from the vertex lists; our conversion gives each normal its vertex's
+   four bones), and how its normal-light matrix (VU1 qw 20-22, light
+   matrix x base bone) orients the lights against them. The next step
+   is to read the PS2's skinned normals of the face (`0x013e5c80` in
+   save state 7) and its qw 20-22 at the dump's frame, and to compute
+   N.L per vertex for both.
+
+Not a cause, found on the way: the test install's character shaders
+(2026-11-07 22:23) are still `render.lighting` job version 1 (the `rsq`
+renormalisation in place; 131 bytes differ in `#c0ebfbfe…`, all 199
+files differ): its stamp says the job was "not run". The measurements
+above with job version 2 swapped in change by under 1%.
+
+Pictures: `C:\shots\fix-alpha\texel\tidus-per-pixel.png` (PS2, ours
+registered, ratio map; textured on top, lighting alone below),
+`pose-d143-vs-ours.png`, the runs in `texel\after1`, `grey2`,
+`stripes`.
+
+### Point lights in the opening (2026-11-08)
+
+The PC's opening has one point light, the campfire (point light 0:
+position (-17, -1.5, 30), grey 0.60-0.66 flickering, range 30, exponent
+2, slot 0; read in the game). `Ch_PLightCalc` (`0x008305a0`, from
+`Ch_DrawMain`) sums the lights in range into the character's slots
+(colour x 2, `0x00c496f0`; largest component at most 2, `0x00c49700`)
+and hands the last one's slot to the shader's extra light (`LgtMatVec` /
+`LgtMatClr`, applied as `max(colour x half-Lambert^2, 1)`).
+
+**The PS2:** its `Sg_LightSetChr` (`0x00106810` in SCES_504.92) puts slot
+i in place of global light i only where bit i of the character's
+point-light byte (chr `+0x194`; PC `+0x188`) is set. A conditional
+breakpoint there (`s1 != 0`) never fired from boot through the opening to
+the title, while the same site is reached for every character: the PS2
+lights no character in the opening with a point light. Elsewhere it does
+(effects, `pppFpPointLightProc`, and two script natives set the byte), so
+the change follows the PS2's rule instead of removing point lights.
+
+**Patch** (`RenderPatches.point_lights`, under `render.lighting = "ps2"`):
+the 13 bytes at `0x008309b4` (`cmp [ebp-0x9c], 0; je 0x00830a80`, the
+"any light in range" test before the slot goes to the shader) become a
+`jmp` to a 46-byte native stub in memory of its own (`Native.alloc_code`):
+the original test, then slot = (colour pointer `edi` - chr `ebx` -
+`0x384`) / 16 and `bt` of `byte [chr + 0x188]`; without the bit, the
+no-light branch (`0x00830a80`, white from above: changes nothing). No
+managed code runs in it, so it is safe wherever `Ch_DrawMain` runs.
+
+**Checked in the game** (Fahrenheit install, 6 runs with the patch, none
+crashed: `texel\after1`, `stripes`, `grey` twice, `grey2`, `flipz`, plus a
+logging run): the log line `render.lighting: point lights only where the
+character's slot bit is set`. Before / after on pose-matched frames of the
+same build with only this patch off (`texel\before2` against `after1`):
+the campfire shot ("Art Directors", Wakka nearest the fire) Wakka 51.6 /
+51.7, Rikku 68.6 / 68.8, Kimahri 45.1 / 45.2 (L mean; per-pixel ratio
+median 1.00); "Field Programmers" the same within 0.4%. So the campfire
+light changes nothing visible in the opening on the PC either (the x 1.14
+reported earlier does not show in the rendered frames); the patch matters
+where a point light does reach a character. Pictures:
+`texel\plight-fire.png`, `plight-before-after.png`.
+
+One run with the test install's DLL as found (another agent's build) crashed
+50 s in, inside `Phyre_PRendering_PRendererBase_generateMaterialParameterCaptureBuffer`
+(`0x005b7f30`, from `PhyreScene_render` on the main thread): not this
+patch, and maybe what was blamed on the earlier `Ch_PLightCalc` hook.
 
 ## `render.texture_filter = "nearest"`
 
