@@ -163,6 +163,18 @@ the mod's init) and the start-up went on: the new-game save was built 2 s
 later and the game ran until the 60 s timeout without errors. Not looked at
 on screen (no window capture of the Fahrenheit game).
 
+**The window's backdrop.** `PhyreFramework`'s window class
+(`PhyreFrameworkClass`, registered at `0x00626cb0`) has `hbrBackground` =
+`COLOR_WINDOW + 1` (`mov dword [ebp-0xf4], 6` at `0x00626d48`): Windows fills
+the new window with the system window colour (white) until the first frame is
+presented, a white flash at every start. The PS2 starts from black. With
+`ui.loading` the immediate at `0x00626d4e` becomes the stock black brush
+(`GetStockObject(BLACK_BRUSH)`), written from the mod's `init`, which
+Fahrenheit's stage 1 runs before FFX.exe's entry point.
+
+**Checked:** in the game (2026-11-08): log "window backdrop black", and the
+first captured frame of the window is all 0 where it was all 255 before.
+
 ## `timing.run_speed` (row 23)
 
 `Sg_PlayerInitDefault` (`0x0082d8d0`, at every event jump) sets the run

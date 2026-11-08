@@ -29,7 +29,7 @@ internal static class Patches {
         new("render.texture_quality", "hd",   "PS2 textures at full size at every texture quality", RenderPatches.texture_quality),
         new("ui.menus",              "hd",    "PS2 message, battle command windows, main menu, items and abilities", MenuPatches.menus),
         new("ui.title",              "hd",    "title menu cursor, no water band",        TitlePatches.title),
-        new("ui.loading",            "hd",    "splash videos skipped at start-up",       GamePatches.skip_splash),
+        new("ui.loading",            "hd",    "splash videos skipped, black window at start-up",       GamePatches.skip_splash),
         new("ui.battle_subtitles",   "hd",    "battle dialogue subtitles",               GamePatches.battle_subtitles),
         new("ui.battle_menu_delay",  "hd",    "battle menu without input delays",        GamePatches.battle_menu_delay),
         new("audio.soundtrack",      "hd",    "original soundtrack for new games",       GamePatches.soundtrack),
