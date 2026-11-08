@@ -205,6 +205,50 @@ impl Default for Fixes {
     }
 }
 
+/// `minimap.style`: the field minimap (`docs/minimap.md`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum MinimapStyle {
+    /// Round, centred on the player, turned with the camera, in the game's
+    /// colours on a small CRT screen.
+    #[default]
+    Crt,
+    /// The same without the CRT screen (no scanlines, band or sheen).
+    Plain,
+    /// The game's own minimap.
+    Game,
+}
+
+/// `minimap.size`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum MinimapSize {
+    Small,
+    #[default]
+    Medium,
+    Large,
+}
+
+/// `minimap.corner`: where on the picture the round minimap sits.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MinimapCorner {
+    TopLeft,
+    #[default]
+    TopRight,
+    BottomLeft,
+    BottomRight,
+}
+
+/// The round minimap (mod `round-minimap`, all applied by the mod).
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Minimap {
+    pub style: MinimapStyle,
+    pub size: MinimapSize,
+    pub corner: MinimapCorner,
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Config {
@@ -220,6 +264,7 @@ pub struct Config {
     pub audio: Audio,
     pub timing: Timing,
     pub fixes: Fixes,
+    pub minimap: Minimap,
 }
 
 /// Who applies a setting.
@@ -272,6 +317,9 @@ pub const SETTINGS: &[(&str, AppliedBy)] = {
         ("fixes.npc_mouths", Mod),
         ("fixes.farplane_video", Mod),
         ("fixes.lulu_fury", Mod),
+        ("minimap.style", Mod),
+        ("minimap.size", Mod),
+        ("minimap.corner", Mod),
     ]
 };
 
@@ -497,6 +545,11 @@ mod tests {
                 v == "true"
             } else if k == "render.texture_filter" {
                 v == "game"
+            } else if k.starts_with("minimap.") {
+                // not a PS2 part: the round minimap is the mod's point
+                matches!(k.as_str(), "minimap.style" if v == "crt")
+                    || matches!(k.as_str(), "minimap.size" if v == "medium")
+                    || matches!(k.as_str(), "minimap.corner" if v == "top_right")
             } else if k == "ui.boot_logo" {
                 // an extra screen at every start: off unless asked for
                 v == "hd"

@@ -16,6 +16,7 @@ its `demaster.exe` (the same keys and defaults). Every row of
 | `yuta.ps2-aspect-ratio` | `render.aspect` |
 | `yuta.ps2-game-feel` | `timing.run_speed`, `ui.battle_menu_delay`, `ui.battle_subtitles` |
 | `yuta.bug-fixes` | `fixes.npc_mouths`, `fixes.farplane_video`, `fixes.lulu_fury` |
+| `yuta.round-minimap` | `minimap.style`, `minimap.size`, `minimap.corner` (not a PS2 part; see [Minimap](#minimap)) |
 | FFX Demaster only | `movies`, `maps.*`, `effects.textures`, `render.glow`, `render.shadows`, `audio.soundtrack`, `audio.music_engine = "ps2"` (the rendered bank) |
 
 The converter's list is `converter/src/mods.rs`; each mod's own is its
@@ -149,6 +150,18 @@ a second) is not implemented; `timing.md` says what it would take.
 | `fixes.lulu_fury` | Lulu's Fury spins register: a diagonal the PC's once-a-frame stick reading skipped is filled in | mod | done, not yet tested with a stick (`docs/patches.md`) |
 
 Kimahri's Spirit Lance comes with `models.party`.
+
+## Minimap
+
+The round minimap (`yuta.round-minimap`) is not a part of the PS2 game: it
+replaces the field minimap of both versions with a round one
+([`minimap.md`](minimap.md)). All three settings are applied by the mod.
+
+| Setting | Values | Default | Status |
+|---|---|---|---|
+| `minimap.style` | `"crt"`: round, centred on the player, turned with the camera, in the game's colours on a small CRT screen; `"plain"`: the same without the CRT screen; `"game"`: the game's own minimap | `"crt"` | done, seen in the game (Thunder Plains; `"plain"` and `"game"` too) |
+| `minimap.size` | `"small"`, `"medium"`, `"large"`: 14, 18 or 24 % of the picture's height across | `"medium"` | done (`"large"` seen in the game) |
+| `minimap.corner` | `"top_right"`, `"top_left"`, `"bottom_right"`, `"bottom_left"` of the 16:9 picture | `"top_right"` | done (`"bottom_left"` seen in the game) |
 
 ## Unknown keys
 

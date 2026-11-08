@@ -136,7 +136,8 @@ jobs:
       run: |
         Add-Type -AssemblyName System.IO.Compression.FileSystem
         $builds = @{ 'ps2-music-engine' = $true; 'ps2-characters' = $true; 'ps2-lighting' = $true; 'ps2-interface' = $true;
-                     'ps2-aspect-ratio' = $false; 'ps2-game-feel' = $false; 'bug-fixes' = $false }
+                     'ps2-aspect-ratio' = $false; 'ps2-game-feel' = $false; 'bug-fixes' = $false;
+                     'round-minimap' = $false }
         $zips = @(Get-ChildItem dist -Filter '*.zip')
         if ($zips.Count -ne $builds.Count) { throw "expected $($builds.Count) zips, found $($zips.Count)" }
         foreach ($name in $builds.Keys) {

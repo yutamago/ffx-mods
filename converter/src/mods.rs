@@ -59,7 +59,7 @@ impl Profile {
     }
 }
 
-/// The seven mods. Their settings and defaults are FFX Demaster's, except
+/// The mods. The seven PS2 ones' settings and defaults are FFX Demaster's, except
 /// `audio.music_engine`, whose default is `"live"` here: the mod is the live
 /// engine (the rendered bank, `"ps2"`, stays FFX Demaster's).
 pub const PROFILES: &[Profile] = &[
@@ -154,6 +154,15 @@ pub const PROFILES: &[Profile] = &[
         jobs: &[],
         disc: DiscUse::None,
         default_toml: include_str!("../../mods/bug-fixes/settings.toml"),
+        without_disc: "",
+    },
+    Profile {
+        name: "round-minimap",
+        title: "Round minimap",
+        settings: &["minimap.style", "minimap.size", "minimap.corner"],
+        jobs: &[],
+        disc: DiscUse::None,
+        default_toml: include_str!("../../mods/round-minimap/settings.toml"),
         without_disc: "",
     },
 ];
