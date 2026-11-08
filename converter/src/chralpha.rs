@@ -83,9 +83,8 @@ fn variant_fixup(edit: &ClusterEdit, m: u32) -> Result<(usize, usize)> {
     Ok((l, k))
 }
 
-/// The effect variant import id of every `PMaterial`.
-pub fn material_variants(edit: &ClusterEdit) -> Result<Vec<String>> {
-    let ids = imports(edit)?;
+/// The import index of every `PMaterial`'s effect variant.
+pub fn material_variant_indices(edit: &ClusterEdit) -> Result<Vec<u16>> {
     let l = list(edit, "PMaterial")?;
     (0..edit.lists[l].count())
         .map(|m| {
@@ -93,9 +92,17 @@ pub fn material_variants(edit: &ClusterEdit) -> Result<Vec<String>> {
             let r = edit.lists[l].pointer_fixups[k].user_fixup().context("effect variant is not a user fixup")?;
             let [_, len, at] = edit.user_records[r as usize];
             anyhow::ensure!(len == 2, "effect variant fixup of {len} bytes");
-            let i = u16::from_be_bytes([edit.user_data[at as usize], edit.user_data[at as usize + 1]]);
-            ids.get(usize::from(i)).cloned().with_context(|| format!("import {i}"))
+            Ok(u16::from_be_bytes([edit.user_data[at as usize], edit.user_data[at as usize + 1]]))
         })
+        .collect()
+}
+
+/// The effect variant import id of every `PMaterial`.
+pub fn material_variants(edit: &ClusterEdit) -> Result<Vec<String>> {
+    let ids = imports(edit)?;
+    material_variant_indices(edit)?
+        .into_iter()
+        .map(|i| ids.get(usize::from(i)).cloned().with_context(|| format!("import {i}")))
         .collect()
 }
 

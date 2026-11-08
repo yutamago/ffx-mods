@@ -696,6 +696,68 @@ parameter of every material), `DM_DUMP=<class>` with `materials-debug
 --states <file>` (that list's objects as words; the file may be a local
 path), `DM_DEBUG=1` with `models` (which import a twin took over).
 
+**Auditing the output** (`demaster materials-audit <FFX_Data.vbf> <efl/x
+dir> [--known <file>] [kind/name...]`, `converter/src/mataudit.rs`). It
+reads the written models, the textures their materials bind (the output's,
+else the HD's), the asset lists and the HD originals, not the converter's
+decisions, and checks every drawn segment (one with a triangle of non-zero
+area; hidden HD segments keep a degenerate one) at its triangles' UVs on
+the page (texel centres inside the triangle, wrapped; the centroid's texel
+for tiny ones):
+
+1. all texels opaque (alpha >= 240) but the variant blends: split into
+   materials the HD blended already and ones the output made blend;
+2. 1 % or more see-through texels but the variant neither blends nor alpha
+   tests (or tests at 0): solid cards. For a written page it also reads the
+   HD page under each see-through texel (the mean of the HD texels it
+   covers): texels within 8 of it are the HD's, left unpainted. An HD
+   material whose painted see-through texels are under 1 % draws as the HD
+   did and counts as HD behaviour;
+3. every material's variant import is one of the HD model's effect variant
+   imports (an appended one is not resolved: "The twin's import"), the
+   variant exists, and the character's `.ahwin32` lists it.
+
+`--known` takes the characters whose leftovers the converter reported
+(`chr`/`models` lines "left as they were", "left:"); their rule 2 findings
+count as known. `DM_AUDIT_SEGS=1` prints every drawn segment's numbers,
+`DM_AUDIT_PNG=<dir>` writes each finding's page with the segment's texels
+marked (alpha 0 magenta, other see-through cyan) and the page's RGB.
+Unit tests cover the sampler and the rules; `appended_variant_import`
+(ignored, `DM_VBF=<vbf>`) appends a variant import to c001 and expects
+rule 3.
+
+**Audit of 2026-11-08** (the test install, built from main `95b7e25`; 788
+characters, 4,013 drawn segments, 19-42 s wall; report in
+`~/ffx-work/demaster/research/materials-audit-2026-11-08.txt`):
+
+- Rule 3: none. Every variant resolves and is listed.
+- Rule 1: none on the remodelled models (83 segments blend in materials
+  the HD blended already). Kept meshes: 135 segments in 42 materials made
+  blended. 40 of the materials also hold a segment with 1 % or more
+  see-through texels: the converter blends a material in place, so its
+  opaque segments go along. They draw the same (alpha 1, threshold 0.1)
+  but in the `Transparent` pass. Two (m094 material 4, m132 material 1)
+  have 0.4 % and 0.7 % here against 1 % or more in the converter's count
+  (PS2 texels of the exact matches, corners left out).
+- Rule 2: 18 findings on the converter's reported leftovers (kept: m106,
+  m232, n056, n115, s019, s022; remodelled: n186, c002, c043), 2 that are
+  HD behaviour (m136, m283), and 6 new ones. m129 (material 6, the
+  flame-shaped fin: 7 % painted see-through, 20.9 % in the converter's
+  count) and f079 (material 2, 3.0 %) are leftovers the converter does not
+  report: their variant's import is shared with other drawn materials
+  (m129 import 3 by materials 4, 6, 7; f079 import 1 by 2, 3), so there is
+  no import to spare. `chrjob::bake` keeps the model, and so the note,
+  only when a material was switched or lowered. m339 (material 5, one
+  island of alpha 0 at 0.47 % in the converter's count), n085 (0.94 %),
+  m042 and s026 (a few edge texels, 0 % in the converter's count) are under
+  the converter's 1 % and look the same as the HD in the game.
+- Not caught by rule 2, because those materials do show alpha: the
+  converter's remodelled leftovers f093-f096 (blended at the HD's 0.3:
+  "mesh without a material set"), c101 segment 17 and c104 segment 33
+  (alpha tested at 0.4 and 0.3, no blended twin). The "no import to spare"
+  of n145, n232, n242 and w082 (2026-11-08 morning) is gone: all four now
+  blend.
+
 ## Checked in the game
 
 Replays through `tools/shotrun` (max graphics settings) with the mod
