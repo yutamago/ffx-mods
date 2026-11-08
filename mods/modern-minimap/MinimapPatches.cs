@@ -184,8 +184,7 @@ internal static unsafe class MinimapPatches {
             Shown:   Math.Min(fade, 128u) / 128f,
             Player:  player,
             Markers: markers,
-            Camera:  camera(),
-            Blink:   *(uint*)(guide + 0x74)), mesh, _log);
+            Camera:  camera()), mesh, _log);
         return r;
     }
 
