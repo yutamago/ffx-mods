@@ -27,6 +27,7 @@
         <Compile Include="../../mods/fps-unlock/FrameSettings.cs" Link="mod/FrameSettings.cs" />
         <Compile Include="../../mods/fps-unlock/FramePacing.cs" Link="mod/FramePacing.cs" />
         <Compile Include="../../mods/fps-unlock/FrameDirector.cs" Link="mod/FrameDirector.cs" />
+        <Compile Include="../../mods/fps-unlock/SceneClock.cs" Link="mod/SceneClock.cs" />
         <Compile Include="../../mods/fps-unlock/CameraInterpolator.cs" Link="mod/CameraInterpolator.cs" />
         <Compile Include="../../mods/fps-unlock/FrameStats.cs" Link="mod/FrameStats.cs" />
         <Compile Include="../../mods/fps-unlock/TimeScaleSteps.cs" Link="mod/TimeScaleSteps.cs" />

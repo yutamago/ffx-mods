@@ -56,6 +56,8 @@ internal sealed unsafe class FrameHooks {
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] internal delegate int PtrPtrFn(nint p, nint q);
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] internal delegate int PtrPtrIntFn(nint p, nint q, int a);
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] internal delegate int SegmentBufferFn(nint renderData, int segment, int vertices, int indices);
+    [UnmanagedFunctionPointer(CallingConvention.StdCall)] internal delegate int StdFloatFn(float dt);
+    [UnmanagedFunctionPointer(CallingConvention.ThisCall)] internal delegate int ThisFloatFn(nint self, float dt);
 
     private static FhCallHandle<T> At<T>(uint va) where T : Delegate => new(new FhCallLocation("FFX.exe", Game.Offset(va)));
 
@@ -98,6 +100,12 @@ internal sealed unsafe class FrameHooks {
     private static FhCallHandle<VoidFn> BattleStatus => At<VoidFn>(0x007816f0);
     private static FhCallHandle<VoidFn> SphereGrid => At<VoidFn>(0x00641060);
     private static FhCallHandle<SegmentBufferFn> SegmentBuffer => At<SegmentBufferFn>(0x0063fdb0);
+    // The scene's clock (SceneClock): what FFXApplication_animate and PhyreScene_animate hand the app's real-time step.
+    private static FhCallHandle<ThisFn> UpdateGlobalTime => At<ThisFn>(0x0042fa00);
+    private static FhCallHandle<StdFloatFn> TextureAnimate => At<StdFloatFn>(0x00672000);
+    private static FhCallHandle<ThisFloatFn> LightFlash => At<ThisFloatFn>(0x006ab630);
+    private static FhCallHandle<ThisFloatFn> RadialBlur => At<ThisFloatFn>(0x006c3d40);
+    private static FhCallHandle<ThisFloatFn> ChrFogFade => At<ThisFloatFn>(0x006e3f40);
 
     private readonly Game _game;
     private readonly FhLogger _log;
@@ -223,6 +231,16 @@ internal sealed unsafe class FrameHooks {
     private ByteIntFn? _mapExcluded;
     private ByteFn? _magicExcluded;
 
+    // The scene's clock (game thread): the game time of the app frame BeginFrame decided (its AppFrames), whether the
+    // scene's animations get it, and GlobalTime kept in double precision.
+    private ThisFn? _nextGlobalTime;
+    private StdFloatFn? _nextTextureAnimate;
+    private ThisFloatFn? _nextLightFlash, _nextRadialBlur, _nextChrFogFade;
+    private bool _sceneOn;
+    private int _sceneFrame;
+    private double _sceneStep;
+    private readonly GlobalTimeClock _globalTime = new();
+
     public FrameHooks(Game game, FhLogger log, Func<FrameSettings> settings) {
         _game = game;
         _log = log;
@@ -334,6 +352,11 @@ internal sealed unsafe class FrameHooks {
         Hook(ClothUpload.hook(owner, h_cloth_upload), "graphicCharacterInstanceSetClothVertexBuffers");
         Hook(CameraResetMove.hook(owner, h_camera_reset_move), "MsCameraResetMove");
         Hook(CameraCheckChange.hook(owner, h_camera_check_change), "MsSetCheckChange");
+        Hook(UpdateGlobalTime.hook(owner, h_update_global_time), "FFXApplication_updateGlobalTime");
+        Hook(TextureAnimate.hook(owner, h_texture_animate), "TextureAnimation_Animate");
+        Hook(LightFlash.hook(owner, h_light_flash), "CharacterLighting_updateFlash");
+        Hook(RadialBlur.hook(owner, h_radial_blur), "BlurEffect_update");
+        Hook(ChrFogFade.hook(owner, h_chr_fog_fade), "FogEffectManager_updateChrFogFade");
         return ok;
     }
 
@@ -486,6 +509,10 @@ internal sealed unsafe class FrameHooks {
         ExcludedReason = excluded;
         FrameInput input = new(dt, vsyncs, _worldActive, movie, excluded is not null, s.Enabled ? _game.Booster : 1, scale);
         _frame = _director.Next(input, s);
+        // The scene's animations run after updateFFX in this app frame (FFXApplication_animate), Repeat frames included.
+        _sceneOn = s.Enabled && s.SceneTime && _frame.Kind != FrameKind.Vanilla;
+        _sceneFrame = _game.AppFrames;
+        _sceneStep = _frame.GameStep;
         if (_frame.Kind is FrameKind.Tick or FrameKind.Redraw && _worldActive && !movie) _guard.WorldFrame(dt, excluded is null ? scale : 1);
         _execSaved = _game.ExecFrames;
         if (_execSaved < 1) _execSaved = 1;
@@ -1552,6 +1579,100 @@ internal sealed unsafe class FrameHooks {
         finally {
             _settingCamera = false;
         }
+    }
+
+    // ------------------------------------------------------------------ the scene's clock
+
+    /// <summary>
+    ///     The game time the scene's animations get in this app frame (<see cref="SceneClock"/>), or false: the mod is off,
+    ///     the setting is off, or the call is not the one after this frame's <c>updateFFX</c> on the game thread.
+    /// </summary>
+    private bool SceneStep(out double step) {
+        step = 0;
+        if (!_sceneOn || Failed || _game.AppFrames != _sceneFrame || Environment.CurrentManagedThreadId != _gameThread) return false;
+        step = _sceneStep;
+        return true;
+    }
+
+    /// <summary>
+    ///     <c>PhyreScene_animate</c>'s world animations: the game time, 0 while the game is paused (the world stands still;
+    ///     <c>updateGlobalTime</c> stops on its own).
+    /// </summary>
+    private bool WorldStep(out float dt) {
+        dt = 0;
+        if (!SceneStep(out double step)) return false;
+        dt = _game.PauseOn ? 0 : (float)step;
+        return true;
+    }
+
+    /// <summary>
+    ///     The shaders' <c>GlobalTime</c>: the game's update runs with a probe step of 1 (so it decides, as before, whether
+    ///     the time runs: not paused, the free camera not holding it), then the mod writes its own value, the last one plus
+    ///     the frame's game time, kept in double precision (<see cref="GlobalTimeClock"/>).
+    /// </summary>
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvThiscall)])]
+    private byte h_update_global_time(nint app) {
+        ThisFn? next = _nextGlobalTime ??= Chain(UpdateGlobalTime, h_update_global_time, 0x0042fa00);
+        if (next is null) return 0;
+        if (app == 0 || !SceneStep(out double step)) {
+            _globalTime.Forget();
+            return next(app);
+        }
+        float* dt = (float*)(app + Game.AppStep);
+        float* time = (float*)(app + Game.AppGlobalTime);
+        float real = *dt, held = *time;
+        byte result;
+        *dt = 1;
+        try {
+            result = next(app);
+        }
+        finally {
+            *dt = real;
+        }
+        float now = _globalTime.Next(held, *time != held, step);
+        *time = now;
+        *(float*)(app + Game.AppSceneTime) = now;
+        return result;
+    }
+
+    /// <summary>The PC's texture animations (<c>TextureAnimationManager</c>: each animation's timer and frame).</summary>
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvStdcall)])]
+    private int h_texture_animate(float dt) {
+        StdFloatFn? next = _nextTextureAnimate ??= Chain(TextureAnimate, h_texture_animate, 0x00672000);
+        if (next is null) return 0;
+        return next(WorldStep(out float game) ? game : dt);
+    }
+
+    /// <summary>The characters' light flash (<c>Sg_PLightSetColor</c> from a timer it adds the step to).</summary>
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvThiscall)])]
+    private int h_light_flash(nint self, float dt) {
+        ThisFloatFn? next = _nextLightFlash ??= Chain(LightFlash, h_light_flash, 0x006ab630);
+        if (next is null) return 0;
+        return next(self, WorldStep(out float game) ? game : dt);
+    }
+
+    /// <summary>The character fog's fade in or out (a timer from 0 to 1 it adds the step to).</summary>
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvThiscall)])]
+    private int h_chr_fog_fade(nint self, float dt) {
+        ThisFloatFn? next = _nextChrFogFade ??= Chain(ChrFogFade, h_chr_fog_fade, 0x006e3f40);
+        if (next is null) return 0;
+        return next(self, WorldStep(out float game) ? game : dt);
+    }
+
+    /// <summary>
+    ///     The radial blur (<c>graphicActivateRadialBlur</c>): its time steps 0.098 per call, whatever the step, so it ran
+    ///     faster with the frame rate. Its time is set so that the call leaves it 0.098 × the frame's ticks of game time on
+    ///     (<see cref="SceneClock.RadialBlurBefore"/>).
+    /// </summary>
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvThiscall)])]
+    private int h_radial_blur(nint self, float dt) {
+        ThisFloatFn? next = _nextRadialBlur ??= Chain(RadialBlur, h_radial_blur, 0x006c3d40);
+        if (next is null) return 0;
+        if (self != 0 && *(byte*)(self + Game.BlurRunning) != 0 && WorldStep(out float game)) {
+            float* time = (float*)(self + Game.BlurTime);
+            *time = SceneClock.RadialBlurBefore(*time, game);
+        }
+        return next(self, dt);
     }
 
     // ------------------------------------------------------------------ vsync (render thread)

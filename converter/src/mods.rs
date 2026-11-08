@@ -181,6 +181,7 @@ pub const PROFILES: &[Profile] = &[
             "frames.speed.slow",
             "frames.speed.mute_when_fast",
             "frames.speed.booster_limits",
+            "frames.speed.scene_time",
             "frames.interpolate.camera",
             "frames.interpolate.characters",
             "frames.interpolate.bones",

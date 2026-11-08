@@ -42,6 +42,12 @@ public static class HookSites {
         (0x0063b740, "graphicCharacterInstanceSetClothVertexBuffers", "55 8b ec 83 ec 08 8b 0d ?? ?? ?? ?? 53 56 57", 0x90),
         (0x007bed60, "MsCameraResetMove", "55 8b ec 56 57 8b 7d 08", 0xf0),
         (0x007c0790, "MsSetCheckChange", "55 8b ec 8b 55 08 8b 45 0c", 0x180),
+        // The scene's clock (SceneClock): the consumers of the application's real-time step after updateFFX.
+        (0x0042fa00, "FFXApplication_updateGlobalTime", "56 8b f1 80 be ac 03 00 00 00", 0x70),
+        (0x00672000, "TextureAnimation_Animate", "55 8b ec d9 45 08 51", 0x70),
+        (0x006ab630, "CharacterLighting_updateFlash", "55 8b ec 83 ec 0c 56 8b f1", 0xf0),
+        (0x006c3d40, "BlurEffect_update", "55 8b ec 51 56 8b f1 80 7e 0c 00", 0x290),
+        (0x006e3f40, "FogEffectManager_updateChrFogFade", "55 8b ec 56 8b f1 8b 86 b4 00 00 00", 0xe0),
     ];
 
     /// <summary>

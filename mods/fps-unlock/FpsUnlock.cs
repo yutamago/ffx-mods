@@ -199,7 +199,7 @@ internal static class FpsUnlock {
             if (ImGui.Combo("Target", ref target, Targets, Targets.Length)) set(s with { Target = (FpsTarget)target });
             if (s.Target == FpsTarget.Fixed) {
                 float fps = (float)s.FixedFps;
-                if (ImGui.SliderFloat("fps", ref fps, (float)FrameSettings.MinFps, 360f, "%.0f")) set(s with { FixedFps = fps });
+                if (ImGui.SliderFloat("fps", ref fps, (float)FrameSettings.MinFps, 360f, "%.0f")) set(s with { FixedFps = FrameSettings.FromFloat(fps) });
             }
             int vsync = (int)s.Vsync;
             if (ImGui.Combo("Vsync", ref vsync, Vsyncs, Vsyncs.Length)) set(s with { Vsync = (VsyncMode)vsync });
@@ -219,7 +219,7 @@ internal static class FpsUnlock {
 
         if (header("Time scale")) {
             float scale = (float)s.TimeScale;
-            if (ImGui.SliderFloat("×", ref scale, (float)FrameSettings.MinScale, (float)FrameSettings.MaxScale, "%.2f", ImGuiSliderFlags.Logarithmic)) set(s with { TimeScale = scale });
+            if (ImGui.SliderFloat("×", ref scale, (float)FrameSettings.MinScale, (float)FrameSettings.MaxScale, "%.2f", ImGuiSliderFlags.Logarithmic)) set(s with { TimeScale = FrameSettings.FromFloat(scale) });
             if (ImGui.Button("×0.25")) set(s with { TimeScale = 0.25 });
             ImGui.SameLine();
             if (ImGui.Button("×0.5")) set(s with { TimeScale = 0.5 });
@@ -236,6 +236,8 @@ internal static class FpsUnlock {
             ImGui.SameLine();
             bool booster = s.RespectBoosterLimits;
             if (ImGui.Checkbox("Keep the booster's limits", ref booster)) set(s with { RespectBoosterLimits = booster });
+            bool scene = s.SceneTime;
+            if (ImGui.Checkbox("Water, sky and other scene animations follow the scale", ref scene)) set(s with { SceneTime = scene });
             ImGui.PushTextWrapPos(0);
             ImGui.TextColored(Grey, $"Ctrl+F9 ×{s.FastScale:0.##} / ×1, Shift+F9 ×{s.SlowScale:0.##} / ×1, Ctrl+Shift+F9 ×1, Ctrl+PgUp/PgDn step, Alt+F9 vsync on/off.");
             ImGui.PopTextWrapPos();
@@ -268,18 +270,18 @@ internal static class FpsUnlock {
 
         if (header("Advanced", open: false)) {
             float cap = (float)s.CapSeconds;
-            if (ImGui.SliderFloat("Most real time per frame (s)", ref cap, 0.05f, 2f, "%.2f")) set(s with { CapSeconds = cap });
+            if (ImGui.SliderFloat("Most real time per frame (s)", ref cap, 0.05f, 2f, "%.2f")) set(s with { CapSeconds = FrameSettings.FromFloat(cap) });
             int max_ticks = s.MaxTicksPerFrame;
             if (ImGui.SliderInt("Most ticks per frame", ref max_ticks, 1, FrameSettings.MaxTicks)) set(s with { MaxTicksPerFrame = max_ticks });
             float budget_ms = (float)(s.FrameBudgetSeconds * 1000);
             if (ImGui.SliderFloat("Most update time per frame (ms)", ref budget_ms, (float)(FrameSettings.MinBudget * 1000), (float)(FrameSettings.MaxBudget * 1000), "%.0f", ImGuiSliderFlags.Logarithmic)) {
-                set(s with { FrameBudgetSeconds = budget_ms / 1000.0 });
+                set(s with { FrameBudgetSeconds = FrameSettings.FromFloat(budget_ms) / 1000.0 });
             }
             int max_updates = s.MaxUpdatesPerFrame;
             if (ImGui.SliderInt("Whole updates per frame", ref max_updates, 1, 10)) set(s with { MaxUpdatesPerFrame = max_updates });
             float fast = (float)s.FastScale, slow = (float)s.SlowScale;
-            if (ImGui.SliderFloat("Ctrl+F9 scale", ref fast, 1f, (float)FrameSettings.MaxScale, "%.1f", ImGuiSliderFlags.Logarithmic)) set(s with { FastScale = fast });
-            if (ImGui.SliderFloat("Shift+F9 scale", ref slow, (float)FrameSettings.MinScale, 1f, "%.2f", ImGuiSliderFlags.Logarithmic)) set(s with { SlowScale = slow });
+            if (ImGui.SliderFloat("Ctrl+F9 scale", ref fast, 1f, (float)FrameSettings.MaxScale, "%.1f", ImGuiSliderFlags.Logarithmic)) set(s with { FastScale = FrameSettings.FromFloat(fast) });
+            if (ImGui.SliderFloat("Shift+F9 scale", ref slow, (float)FrameSettings.MinScale, 1f, "%.2f", ImGuiSliderFlags.Logarithmic)) set(s with { SlowScale = FrameSettings.FromFloat(slow) });
             ImGui.Separator();
             ImGui.TextColored(Grey, "Held on redrawn frames (things that would otherwise run once per drawn frame):");
             bool chars = s.HoldCharacters, field = s.HoldFieldAnimation, fades = s.HoldFades, cloth = s.HoldCloth;
@@ -293,13 +295,13 @@ internal static class FpsUnlock {
             bool cloth_lerp = s.InterpolateCloth;
             if (ImGui.Checkbox("Interpolate the characters' cloth (hair, shorts, coats); needs the cloth held", ref cloth_lerp)) set(s with { InterpolateCloth = cloth_lerp });
             float cdist = (float)s.CharacterCutDistance, cdeg = (float)s.CharacterCutDegrees;
-            if (ImGui.SliderFloat("Character warp: moved more than", ref cdist, 1f, 2000f, "%.0f units", ImGuiSliderFlags.Logarithmic)) set(s with { CharacterCutDistance = cdist });
-            if (ImGui.SliderFloat("Character warp: turned more than", ref cdeg, 1f, 180f, "%.0f°")) set(s with { CharacterCutDegrees = cdeg });
+            if (ImGui.SliderFloat("Character warp: moved more than", ref cdist, 1f, 2000f, "%.0f units", ImGuiSliderFlags.Logarithmic)) set(s with { CharacterCutDistance = FrameSettings.FromFloat(cdist) });
+            if (ImGui.SliderFloat("Character warp: turned more than", ref cdeg, 1f, 180f, "%.0f°")) set(s with { CharacterCutDegrees = FrameSettings.FromFloat(cdeg) });
             bool repeats = s.InterpolateRepeats;
             if (ImGui.Checkbox("Move the camera on repeated frames", ref repeats)) set(s with { InterpolateRepeats = repeats });
             float dist = (float)s.CutDistance, deg = (float)s.CutDegrees;
-            if (ImGui.SliderFloat("Cut: moved more than", ref dist, 1f, 2000f, "%.0f units", ImGuiSliderFlags.Logarithmic)) set(s with { CutDistance = dist });
-            if (ImGui.SliderFloat("Cut: turned more than", ref deg, 1f, 180f, "%.0f°")) set(s with { CutDegrees = deg });
+            if (ImGui.SliderFloat("Cut: moved more than", ref dist, 1f, 2000f, "%.0f units", ImGuiSliderFlags.Logarithmic)) set(s with { CutDistance = FrameSettings.FromFloat(dist) });
+            if (ImGui.SliderFloat("Cut: turned more than", ref deg, 1f, 180f, "%.0f°")) set(s with { CutDegrees = FrameSettings.FromFloat(deg) });
             bool snaps = s.ScriptCameraCuts;
             if (ImGui.Checkbox("The game's instant camera sets are cuts", ref snaps)) set(s with { ScriptCameraCuts = snaps });
             if (ImGui.Button("Defaults")) set(new FrameSettings { Enabled = s.Enabled });

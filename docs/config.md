@@ -192,6 +192,7 @@ in the game there (2026-11-07, 2026-11-08); as `yuta.fps-unlock`, with
 | `frames.speed.slow` | the scale Shift+F9 switches to | `0.25` |
 | `frames.speed.mute_when_fast` | sound off above 1.0 | `true` |
 | `frames.speed.booster_limits` | 1.0 where the PC booster won't speed up | `true` |
+| `frames.speed.scene_time` | the scene's own animations (the shaders' `GlobalTime`: water, scrolling clouds, UV-animated surfaces; texture animations, the radial blur, light flash, character fog fade) follow game time and the pause; `false`: real time, as the game has them | `true` |
 | `frames.interpolate.camera` | the camera between ticks | `true` |
 | `frames.interpolate.characters` | the characters' place and facing between ticks | `true` |
 | `frames.interpolate.bones` | their bones too | `true` |

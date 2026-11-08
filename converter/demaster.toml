@@ -175,6 +175,10 @@ mute_when_fast = true
 # Also 1.0 where the game's booster won't speed up (its maps and spells, the
 # sphere grid, a load).
 booster_limits = true
+# The scene's own animations follow the time scale and the pause: the water, the
+# scrolling clouds and other scrolling or animated surfaces, the radial blur, light
+# flashes. false: they run in real time, as in the game.
+scene_time = true
 
 [frames.interpolate]
 # Draw the camera between its last two ticks (the picture is one tick, 33 ms, behind).

@@ -104,3 +104,60 @@ public class TomlWriterTests {
         Assert.Equal("[t]\nk = \"x\" # c\n", MiniToml.set("[t]\nk = \"a#b\" # c\n", "t.k", "\"x\""));
     }
 }
+
+/// <summary>
+///     The window's sliders give floats: written back as doubles they were "time_scale = 0.05000000074505806" (2026-11-08).
+///     A value is written in the shortest text that reads back as itself.
+/// </summary>
+public class FloatTextTests {
+    [Theory]
+    [InlineData(0.05f, "0.05")]
+    [InlineData(0.25f, "0.25")]
+    [InlineData(18.42f, "18.42")]
+    [InlineData(120f, "120.0")]
+    [InlineData(37.3f, "37.3")]
+    [InlineData(100f, "100.0")]
+    public void A_sliders_float_is_written_as_its_shortest_text(float slider, string text) {
+        Assert.Equal(text, FrameSettings.Float(slider));
+        Assert.Equal(text, FrameSettings.Float(FrameSettings.FromFloat(slider)));
+    }
+
+    [Theory]
+    [InlineData(0.1, "0.1")]
+    [InlineData(18.42, "18.42")]
+    [InlineData(0.3, "0.3")]
+    [InlineData(1e-7, "1E-07")]
+    [InlineData(1.0000000000000002, "1.0000000000000002")]
+    public void A_double_keeps_its_own_shortest_text(double value, string text) {
+        Assert.Equal(text, FrameSettings.Float(value));
+        Assert.Equal(value, double.Parse(text, System.Globalization.CultureInfo.InvariantCulture));
+    }
+
+    [Fact]
+    public void The_slider_values_are_the_doubles_they_show() {
+        Assert.Equal(0.05, FrameSettings.FromFloat(0.05f));
+        Assert.Equal(37.3, FrameSettings.FromFloat(37.3f));
+        Assert.Equal(0.0373, FrameSettings.FromFloat(37.3f) / 1000.0);
+    }
+
+    [Fact]
+    public void Time_scale_from_the_slider_is_saved_as_0_05_and_reads_back() {
+        // What the window did: TimeScale = scale (a float), then save.
+        FrameSettings widened = new() { TimeScale = 0.05f, FixedFps = 143.7f, SlowScale = 0.35f };
+        string text = Toml.Text(widened);
+        Assert.Contains("time_scale = 0.05\n", text);
+        Assert.Contains("fixed_fps = 143.7\n", text);
+        Assert.Contains("slow = 0.35\n", text);
+        FrameSettings read = Toml.Settings(text);
+        Assert.Equal(0.05, read.TimeScale);
+        Assert.Equal(143.7, read.FixedFps);
+        // Saving what was read gives the same text: nothing changes on the next save.
+        Assert.Equal(text, Toml.Text(read));
+    }
+
+    [Fact]
+    public void The_budget_from_its_slider_is_saved_in_milliseconds_as_shown() {
+        FrameSettings s = new() { FrameBudgetSeconds = FrameSettings.FromFloat(37.3f) / 1000.0 };
+        Assert.Contains("max_update_ms = 37.3\n", Toml.Text(s));
+    }
+}
