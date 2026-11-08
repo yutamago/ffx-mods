@@ -345,6 +345,81 @@ Pictures: `C:\shots\fix-alpha\light\cmp-final.png` (PS2, before, after;
 Yuna then Tidus, with the measured ellipses), the runs in `final-before\`,
 `final-after\`.
 
+### The lit areas checked light by light (2026-11-08)
+
+Every input of the lit colour was compared between the PS2 and ours in the
+intro; all match, and the cause of the brighter lit areas is still open.
+
+- **The PS2's matrices, read in PCSX2** (debug build, intro "Field
+  Programmers" shot). The character draw uploads its VU1 constants at
+  `0x0010fa94` (`UNPACK 0x6c23...`): qw 16-19 from `0x00303650` (light
+  colour matrix: (1, 0.816, 0.490), (0.302, 0.247, 0.169), (0.506, 0.412,
+  0.114), ambient (0.078, 0.055, 0.071), the script bytes / 255 that our
+  log shows for the same shot), qw 20-22 from `0x003036b0` (normal light
+  matrix x bone: every light's column has length 1.0000). Program 1 has no
+  `ITOF`: the normals arrive as floats, unit length (the `.chr` stores
+  them at 32767). `LOI 255.0` feeds the `MINIi` clamp. So the PS2 computes
+  exactly `vcol = 254 x (sum c_i max(0, L_i.N) + ambient)`, and its own
+  vertex colours in `d143` fit that with N.L up to 1.0.
+- **Ours, read in the game** (diagnostic hooks under Fahrenheit, not
+  kept): every light's PLight `+0x24` stays 254/128 after
+  `applyIntensityMultiplier`; the colours are the script's; the record
+  `+0xac` is the ambient x 254/128; glow factors 0.01, unused. Tidus's and
+  Yuna's shade `+0x360`, light value `+0x36c`, shade colour `+0x330..` and
+  shade colour effect `+0xbc..` are all 1, so `MaterialColour` is 1, as on
+  the PS2 (`Ch_DrawCalcShade`). The Zanarkand saturation only touches the
+  luminances `+0x1d0..` and the ambient on znkd08/09/10/14, not the opening's
+  map `0x15d`.
+- **Lighting alone, same moment** ("CG Supervisor" credit; PS2 frame
+  `s143` = dump `d143`): the c101 atlas replaced by flat grey 0x80 (so the
+  pixel is 128 x lit, the PS2's vertex colour on the same scale), face
+  G p5/50/90/99: ours 104/197/218/235, the PS2's rasterised vertex
+  colours 110/187/213/218. The difference (+2 to +5% in the middle, more
+  at the top, where ours is per pixel) is within the head's pose
+  difference between the runs. Pictures:
+  `C:\shots\fix-alpha\light2\vcol-vs-grey.png`.
+- **Light directions.** `setLightDir` stores the script vector as
+  (-x, -y, z). Passing the vector as the PS2 has it (stored (x, y, z))
+  lights the face from the wrong side, lights 0 and 1 on the same cheek
+  (face G p50 229 against the PS2's 187;
+  `vcol-grey-greyflip.png`): the port's convention is right.
+- **The PS2's texturing** (`d143`): character draws are `MODULATE` (TFX
+  0, TCC 1, TEXA 0x80/0x80), no overlay after them (only the two
+  clears are full-screen), fog on but F 249-255 at the characters (fog
+  colour `0x49689e`), and the c101 CLUTs are uploaded byte for byte as in
+  `c101.chr` (no runtime recolour).
+- **Point lights.** `Ch_PLightCalc` puts the nearby point lights into
+  the character's light slots (`+0x384..`, `+0x3c4..`; colour x 2, at most
+  2) and passes the last to the shader's extra light (`LgtMatVec` /
+  `LgtMatClr`, applied as `max(colour x half-Lambert^2, 1)`). The PS2 uses
+  the slots only where chr `+0x188` has the slot's bit
+  (`Sg_LightSetChr`), else the global lights. In the opening every
+  character has `+0x188` = 0, so the PS2 shows no point light, while ours
+  brightens Wakka, Lulu and the others on the campfire side by up to
+  x 1.14 (Tidus and Yuna get none). Neutralising it in a `Ch_PLightCalc`
+  hook crashed the game twice in three runs (the hook probably runs on the
+  job threads), so it is not in the mod: still to do.
+
+Measured again with main of 2026-11-08 (pose-matched frames, the same
+ellipses as above):
+
+| Region | L mean / p50 / p95 | G p5/50/95 | B p5/50/95 |
+|---|---|---|---|
+| Yuna face, PS2 `s094` | 97.3 / 94 / 179 | 20/80/162 | 20/57/82 |
+| Yuna, ours (`light2\before\t118`) | 106.6 / 97 / 194 | 25/79/183 | 24/58/93 |
+| Tidus face, PS2 `s153` | 147.5 / 163 / 186 | 42/138/173 | 24/62/78 |
+| Tidus, ours (`t168`) | 157.2 / 173 / 200 | 43/152/194 | 24/69/90 |
+
+So ours is still 7-10% brighter in the textured result while the lighting
+alone is within a few per cent. What is left between them is the texel
+(atlas texel against the PS2's CLUT texel at the same spot, not compared
+per position yet) and the animation: at the same credit the heads in our
+runs are turned differently from the PS2's (the PS2 credit and the scene
+are not in step on the PC), so the pose-matched frames compare a lit
+cheek with a half-lit one. The next check is per position: the PS2's
+texel (`s143 x 128 / vcol`, which line up 1:1 at 512 x 416) against the
+atlas texel the same face point samples.
+
 Pictures (never in git): `C:\shots\fix-alpha\runtime\` `ps2\s*.png`
 (PS2 boot to title, every 2 s; `d143.gs.zst`, the GS dump of the Tidus close-up), `diag3\t*.png` (ours,
 every 10 s), `cmp-tidus.png`, `cmp-yuna.png`, `cmp-party.png` (PS2 left,
