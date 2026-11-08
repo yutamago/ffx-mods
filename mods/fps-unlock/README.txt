@@ -14,8 +14,9 @@ the game up.
 - the world keeps its 30 ticks a second; the camera and the characters
   (their bones, cloth and hair) are drawn between ticks;
 - a time scale gives slow motion and fast-forward (x0.05 to x100) without
-  drawing more frames; voice-synced scenes, movies and loads stay at their
-  own speed;
+  drawing more frames (the water, the scrolling skies and other animated
+  surfaces follow it too); voice-synced scenes, movies and loads stay at
+  their own speed;
 - a small counter in the top-right corner shows the frame rate, the
   world's ticks a second (about 30 at x1), vsync and the time scale.
 
@@ -80,7 +81,9 @@ made in the file while the game runs is read at the next start.
                         "fixed" (frames.fixed_fps) or "unlimited"
   frames.vsync          "game" (as the game has it), "on" or "off"
   frames.overlay        the fps counter
-  frames.speed.*        the time scale and the Ctrl/Shift+F9 scales
+  frames.speed.*        the time scale and the Ctrl/Shift+F9 scales;
+                        scene_time = false leaves the water and the skies
+                        in real time, as in the game
   frames.interpolate.*  what is drawn between ticks
   frames.effects, frames.between_ticks, frames.cuts.*, frames.hold.*,
   frames.budget.*       finer settings; the window's "Advanced" part

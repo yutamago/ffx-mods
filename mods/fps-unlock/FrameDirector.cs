@@ -32,7 +32,8 @@ public readonly record struct FrameInput(double Dt, int GameVsyncs, bool WorldAc
 /// <param name="Scale">The time scale applied (1 where excluded), booster included.</param>
 /// <param name="Mute">The sound should be off.</param>
 /// <param name="Dropped">Ticks the frame owed but did not run (the CPU could not keep up with the scale): the reached speed is <c>Scale × Plan.Ticks / (Plan.Ticks + Dropped)</c>.</param>
-public readonly record struct FrameDecision(FrameKind Kind, TickPlan Plan, double Alpha, double Scale, bool Mute, double Dropped = 0);
+/// <param name="GameStep">The game time the frame advanced, seconds (<see cref="SceneClock.Step"/>): its ticks plus the change of the part of a tick; the frame's real time when the mod is off.</param>
+public readonly record struct FrameDecision(FrameKind Kind, TickPlan Plan, double Alpha, double Scale, bool Mute, double Dropped = 0, double GameStep = 0);
 
 /// <summary>
 ///     Decides, at the start of each drawn frame, how many ticks it runs and what a frame without one does. Pure: the
@@ -62,18 +63,20 @@ public sealed class FrameDirector {
         if (!s.Enabled) {
             _acc.Reset();
             _budget.Reset();
-            return new FrameDecision(FrameKind.Vanilla, TickPlan.None, 1, 1, false);
+            return new FrameDecision(FrameKind.Vanilla, TickPlan.None, 1, 1, false, 0, double.IsFinite(input.Dt) && input.Dt > 0 ? input.Dt : 0);
         }
         double user = input.ScaleExcluded ? 1 : input.Scale ?? s.TimeScale;
         double scale = user * (input.Booster > 0 ? input.Booster : 1);
+        double carry = _acc.Carry;
         int ticks = _acc.Advance(input.Dt, scale, TickRate(input.GameVsyncs), s.CapSeconds, MaxTicks(s));
+        double step = SceneClock.Step(ticks, _acc.Rate, carry, _acc.Carry);
         bool mute = s.MuteWhenFast && user > 1;
         double alpha = DrawsBetweenTicks(s, scale) ? _acc.Fraction : 1;
-        if (ticks > 0) return new FrameDecision(FrameKind.Tick, TickPlan.For(ticks, s.MaxUpdatesPerFrame), alpha, scale, mute, _acc.Dropped);
+        if (ticks > 0) return new FrameDecision(FrameKind.Tick, TickPlan.For(ticks, s.MaxUpdatesPerFrame), alpha, scale, mute, _acc.Dropped, step);
         // Redraw only where there is a world to draw again: not the menus, a pause, a load (their logic runs once per
         // update, so a second update would speed them up) and not a movie (its picture steps per update and per draw).
         bool redraw = s.DrawOnly == DrawOnlyMode.Redraw && input.WorldActive && !input.Movie && input.GameVsyncs >= 2;
-        return new FrameDecision(redraw ? FrameKind.Redraw : FrameKind.Repeat, TickPlan.None, alpha, scale, mute, _acc.Dropped);
+        return new FrameDecision(redraw ? FrameKind.Redraw : FrameKind.Repeat, TickPlan.None, alpha, scale, mute, _acc.Dropped, step);
     }
 
     /// <summary>

@@ -17,6 +17,9 @@ interpolation and the cloth hold answer that. In the test of 2026-11-08 the char
 bones, hair and cloth were smooth and sat right, hard cuts snapped them, and ×100 and the title's
 water were fine, so the characters are interpolated by default. As `yuta.fps-unlock`, with its
 settings in `settings.toml` and its window in the F8 window, it has not been run in the game yet.
+In that test (2026-11-08) the scrolling clouds and the water of the opening campfire kept real-time
+speed at ×0.1: they run on the scene's own clock, which the mod now drives with game time ("The
+scene's clock" below; not yet run in the game).
 
 ## Use
 
@@ -69,6 +72,11 @@ drawing faster ran the game faster. The mod changes that:
 6. **The time budget.** The mod measures what a tick costs and gives each frame only as many ticks
    as fit into 40 ms of update time. A scale the CPU cannot keep up with then runs as fast as it
    can at about 25 fps, instead of each frame taking longer than the last.
+7. **The scene's clock.** The renderer's own animations (the shaders' `GlobalTime`, by which the
+   water and the scrolling skies move, the PC's texture animations, the radial blur, light flashes
+   and the character fog's fades) used the frame's real time. They now get the accumulator's game
+   time: the ticks run plus the change of the part of a tick, so they follow the scale and the
+   pause, stay smooth between ticks, and keep their speed at any frame rate (`frames.speed.scene_time`).
 
 ## Limits
 
@@ -443,6 +451,7 @@ are at the end of this section.
 | `TkUpdateEventJump` (`0x0088d3d0`) | Hook (counts) | The world ticks that ran, for the window's "ticks/s" |
 | `graphicCameraSetWorldMatrix` (`0x00639860`) | Hook | See "The camera" below |
 | `MsCameraResetMove` (`0x007bed60`), `MsSetCheckChange` (`0x007c0790`) | Hooks (notes) | The game's instant camera sets: noted for the update's camera sample ("Cuts" below); `MsSetCheckChange` only while the event scripts run |
+| `FFXApplication_updateGlobalTime_0042fa00` (thiscall app), `TextureAnimation_Animate_00672000` (stdcall), `CharacterLighting_updateFlash_006ab630`, `FogEffectManager_updateChrFogFade_006e3f40`, `BlurEffect_update_006c3d40` (thiscall) | Hooks (switch `frames.speed.scene_time`, on) | Game time instead of the real-time step after `updateFFX` ("The scene's clock" below) |
 | `Renderer_PresentFlip` (`0x00593760`, thiscall, render thread) | Hook | Counts presents (the drawn fps). For vsync on or off it sets the renderer's byte `+0x131c` around the call (the present's sync interval is 1 when it is not 0) and puts it back |
 
 The main menu runs at 60 fps in the game (`g_FrameVsyncs` 1), one update per frame. There the
@@ -842,6 +851,7 @@ What each `Sg_MainLoop` runs once besides the ticks, and what the mod does with 
 | Sound queue (`TkSndUpdate2`, after `AtelDrawNoTrans`), `graphicMenuUpdate`, `SaveManagerUpdate` | the draw | run: real-time or idempotent as far as read; not checked in the game |
 | The title's water: `PhyreScene_drawMainMenuWaveEffect` (`0x0065b5b0`, via `graphicDrawMainMenuWaterEffect` `0x0063e920` while `0x025d5ebc` is set) draws `menu/titl/Water_%02d`, one of 70, then steps the frame byte `0x00ccba09` and a count byte `0x00ccba0a` | the draw | drawn from the last tick's frame, counters put back (new: before, it ran 200 / 30 times too fast at 200 fps) |
 | The dream and recall scenes' noise: `graphicDrawDream` (`0x0063df70`, via `recallSceneEffect` `0x00822580` / `recallSceneEffect2` `0x00822620` in `drawDreamEffect`) steps `0x00ccb46c` (16 bits) 0, 1, 2 and draws its speckles at 0 | the draw | drawn with the last tick's cycle, put back (new). It calls `rand()` for the speckles, so a Redraw still draws them at new places |
+| The scene's own animations: the shaders' `GlobalTime`, texture animations, light flash, character fog fade (step: the frame's real time), the radial blur (+0.098 per frame) | `FFXApplication_animate` after `updateFFX`, every drawn frame, Repeats too | game time ("The scene's clock" below) |
 | Screen effects (`yiDrawScrEffect` → `yiScreff_entry` `0x009131d0`), `graphicMenuUpdate` (`MenuManager_UpdateMenu` `0x0067faa0`: swaps the menu's buffer chain or sets up its instances) | the draw | run: no counter of their own found |
 
 The title (New Game, Load) runs at 30 fps on the world path (it reaches `Sg_MainCalcRate`), so its
@@ -852,6 +862,67 @@ the Sphere Grid (`eiAbmCalc` from the menu controller `TkMenuCtrlAbilityMap2` `0
 update and the draw (`LAB_008215f4`). Their frames between ticks are Repeats and run nothing of
 the game. A menu that opens on a Redraw frame runs once on that frame (the mod sees the menu only
 after it): one extra step when it opens.
+
+### The scene's clock
+
+**The bug (2026-11-08).** At ×0.1 everything slowed down but the scrolling clouds in the sky and the
+moving reflections on the water at the opening's campfire; at ×1 and high fps they looked right.
+So they ran on real time, not on draws or ticks.
+
+**What drives them.** `PApplication::frame` (`0x00627940`) sets the application's step
+(`FFXApplication +0x24`, f32) to the frame's real time (`QueryPerformanceCounter`, through
+`Phyre_PTimerWin32_GetTime` `0x0042fd80`). `FFXApplication_animate` (`0x0042f520`) passes it to
+`updateFFX` (which the mod's tick plan replaces) and then to two more functions the plan never
+touched:
+
+- `FFXApplication_updateGlobalTime_0042fa00`: `GlobalTime` (`+0x3b0`) += step while the game is not
+  paused, not loading and the free camera does not hold it; 0 again from 2400 s on; copied to
+  `+0x120`, the shaders' `scene.GlobalTime`. The shaders hold only scroll speeds and multiply them by
+  it: `PhyreUVAnimationShader` (`ScrollSpeed_X/Y`; the clouds and the other UV-animated surfaces of
+  the maps and battle backgrounds), `PhyreWaterShader` (`ScrollSpeed_tex0/nml1/tex1/nml2_X/Y`, set by
+  the water's `WaterWaveController_setScrollSpeed`; the campfire's water, the sea, rivers,
+  waterfalls), `PhyreIceShader`, `PhyreWaveShader` and two VFX water shaders (their reflection
+  names in the D3D11 shaders). This is the bug.
+- `PhyreScene_animate` (`0x00657140`) reads the step once and hands it on: to the PC's texture
+  animations (`TextureAnimation_Animate_00672000`: each `TextureAnimationInfo`'s timer and frame,
+  the maps' and characters' `G<n>`/`Animation<n>` materials), the morph manager (whose step only
+  feeds a sum nothing reads; its UV offsets come from the field code per tick), the light flash
+  (`CharacterLighting_updateFlash_006ab630`), the character fog's fade
+  (`FogEffectManager_updateChrFogFade_006e3f40`), and the UI: the loading screen, the boot text,
+  the debug text, the free camera.
+- `BlurEffect_update_006c3d40`, the radial blur (`graphicActivateRadialBlur`), ignores the step and
+  adds 0.098 to its time per call, ending past 10.0: 3.4 s at 30 fps, but 0.5 s at 200 fps. A
+  high-frame-rate bug of the same path (`BlurEffectEx_update` counts calls too, but only its first
+  frame matters).
+
+`updateGlobalTime` and `PhyreScene_animate` run on every drawn frame, Repeats included. Nothing else
+reads the step (the base `PApplication::animate` is `xor eax, eax; ret`).
+
+**What the mod does** (`frames.speed.scene_time`, on). For each drawn frame the director computes
+the game time it advanced (`SceneClock.Step`): the ticks it ran at the tick rate plus the change of
+the accumulator's carry. Summed, that is the mod's clock, ticks + alpha: smooth between ticks
+(at ×0.1 and 240 fps every frame moves 0.42 ms, no step at the ticks), the time scale and the
+booster included, ×1 where the scale is held (voice-synced scenes, movies), and the world's speed
+when the CPU drops ticks. Five hooks hand it on, only in the app frame whose `updateFFX` the mod
+saw (`0x012fb8c4`, the application's frame count, ties them) and on the game thread:
+
+| Hook | What it gets |
+|---|---|
+| `FFXApplication_updateGlobalTime_0042fa00` | The game's update runs with a probe step of 1, so the game still decides whether the time runs (pause, load, free camera). Then the mod writes its own `GlobalTime` (and the `+0x120` copy): the last value plus the frame's game time, kept in double precision (`GlobalTimeClock`). A value the mod did not write (a map change's 0) is taken over; 2400 still wraps to 0. As an f32 sum, past 2048 s one step of ×0.05 at 360 fps (0.14 ms) would round to a whole 0.24 ms |
+| `TextureAnimation_Animate_00672000`, `CharacterLighting_updateFlash_006ab630`, `FogEffectManager_updateChrFogFade_006e3f40` | The game time as their step; 0 while `g_PauseOn` (the world stands still; `GlobalTime` already stops there) |
+| `BlurEffect_update_006c3d40` | While it runs (`+0xc`), its time `+0x84` is set before the call so that the call's own +0.098 leaves it 0.098 × (game time × 30) on: 3.4 s of game time at any frame rate (34 s at ×0.1) |
+
+The loading screen, the boot and debug text, the tips and the free camera keep the real step. With
+the setting off, or the mod off, all five pass the game's step through.
+
+**Other surfaces.** `GlobalTime` is one value for the whole scene, field maps and battle
+backgrounds alike, so every material on a shader that scrolls by it (water, UV animation, ice,
+wave) follows the same clock: lava, waterfalls or fog layers drawn with them included. Which map
+uses which shader was not listed map by map; a surface that still runs in real time at ×0.1 is
+on another path (report it). Surfaces animated by the field code (`yiAnimMain`, the morph manager's
+UV offsets, the characters' texture animations in `Ch_CalcMiddle`) were already on ticks. Not
+covered: the effects' own programs (held and replayed, "Effects between ticks"), the title's water
+and the dream noise (their counters, above), FMOD and movies (real time).
 
 ### Open questions for the in-game test
 
@@ -869,3 +940,6 @@ after it): one extra step when it opens.
   camera can move there (`graphicCameraSetWorldMatrix` alone, with the rest of the frame left).
 - The cut thresholds in world units.
 - How many ticks a second one core manages at ×100.
+- The scene's clock: at ×0.1 the opening campfire's water and the sky's clouds (Besaid, Kilika's
+  sea, the Moonflow) should crawl with the characters; at ×1 and 144+ fps they should move as at
+  30 fps; paused, they stand. The radial blur into a battle should take as long at any frame rate.

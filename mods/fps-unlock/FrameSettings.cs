@@ -69,6 +69,12 @@ public sealed record FrameSettings {
     public bool MuteWhenFast { get; init; } = true;
     /// <summary>Also keep ×1 where the PC booster refuses to speed up (its maps, spells, the sphere grid, a load).</summary>
     public bool RespectBoosterLimits { get; init; } = true;
+    /// <summary>
+    ///     The scene's own animations follow game time (<see cref="SceneClock"/>): the shaders' <c>GlobalTime</c> (water,
+    ///     scrolling clouds and the other UV-animated, ice and wave surfaces), the PC's texture animations, the radial blur,
+    ///     the light flash and the character fog fade. Off: the frame's real time, as the game has it.
+    /// </summary>
+    public bool SceneTime { get; init; } = true;
 
     /// <summary>The most real time one frame counts, in seconds (the game's own is 0.3).</summary>
     public double CapSeconds { get; init; } = 0.3;
@@ -178,11 +184,23 @@ public sealed record FrameSettings {
         new(key, s => get(s).ToString().ToLowerInvariant(),
             (s, v) => v.Length > 0 && char.IsLower(v[0]) && Enum.TryParse(v, ignoreCase: true, out T e) && Enum.IsDefined(e) ? set(s, e) : null, true);
 
-    /// <summary>A float as the converter writes it (TOML): "120.0", "0.25".</summary>
-    private static string Float(double d) {
+    /// <summary>
+    ///     A float as the converter writes it (TOML): "120.0", "0.25", in the shortest text that reads back as the same value.
+    ///     A value that is exactly a <c>float</c> (the window's sliders give floats) is written as that float's shortest text:
+    ///     the slider's 0.05f is 0.05000000074505806 as a double, and is written "0.05".
+    /// </summary>
+    public static string Float(double d) {
         string t = d.ToString("R", CultureInfo.InvariantCulture);
+        if (double.IsFinite(d) && (double)(float)d == d) {
+            string f = ((float)d).ToString("R", CultureInfo.InvariantCulture);
+            if (f.Length < t.Length) t = f;
+        }
         return t.Contains('.') || t.Contains('E') || !double.IsFinite(d) ? t : t + ".0";
     }
+
+    /// <summary>A slider's float as the double it shows: its shortest text read back (0.05f gives 0.05, not 0.05000000074505806).</summary>
+    public static double FromFloat(float f) =>
+        float.IsFinite(f) ? double.Parse(f.ToString("R", CultureInfo.InvariantCulture), NumberStyles.Float, CultureInfo.InvariantCulture) : f;
 
     private static readonly Entry[] Entries = [
         Flag("frames.enabled", s => s.Enabled, (s, v) => s with { Enabled = v }),
@@ -197,6 +215,7 @@ public sealed record FrameSettings {
         Number("frames.speed.slow", s => s.SlowScale, (s, v) => s with { SlowScale = v }),
         Flag("frames.speed.mute_when_fast", s => s.MuteWhenFast, (s, v) => s with { MuteWhenFast = v }),
         Flag("frames.speed.booster_limits", s => s.RespectBoosterLimits, (s, v) => s with { RespectBoosterLimits = v }),
+        Flag("frames.speed.scene_time", s => s.SceneTime, (s, v) => s with { SceneTime = v }),
         Flag("frames.interpolate.camera", s => s.Interpolate, (s, v) => s with { Interpolate = v }),
         Flag("frames.interpolate.characters", s => s.InterpolateCharacters, (s, v) => s with { InterpolateCharacters = v }),
         Flag("frames.interpolate.bones", s => s.InterpolateBones, (s, v) => s with { InterpolateBones = v }),

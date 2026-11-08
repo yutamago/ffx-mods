@@ -308,6 +308,7 @@ pub struct FrameSpeed {
     pub slow: f64,
     pub mute_when_fast: bool,
     pub booster_limits: bool,
+    pub scene_time: bool,
 }
 
 impl Default for FrameSpeed {
@@ -318,6 +319,7 @@ impl Default for FrameSpeed {
             slow: 0.25,
             mute_when_fast: true,
             booster_limits: true,
+            scene_time: true,
         }
     }
 }
@@ -532,6 +534,7 @@ pub const SETTINGS: &[(&str, AppliedBy)] = {
         ("frames.speed.slow", Mod),
         ("frames.speed.mute_when_fast", Mod),
         ("frames.speed.booster_limits", Mod),
+        ("frames.speed.scene_time", Mod),
         ("frames.interpolate.camera", Mod),
         ("frames.interpolate.characters", Mod),
         ("frames.interpolate.bones", Mod),

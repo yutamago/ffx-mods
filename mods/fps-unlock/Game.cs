@@ -195,6 +195,20 @@ internal sealed unsafe class Game(nint moduleBase) {
     public const uint LimiterPerVsyncOperand = 0x0062f31a, LimiterPerVsyncOpcode = 0x0062f318;
     public const uint FrameVsyncsVa = 0x00c30e88, PerVsyncVa = 0x00b412d8;
 
+    // ---- The scene's clock (SceneClock; docs/fps-unlock.md, "The scene's clock"). ----
+
+    /// <summary>The application frames so far: <c>PApplication::frame</c> (<c>0x00627940</c>) adds 1 before it animates.</summary>
+    public int AppFrames => *At<int>(0x012fb8c4);
+
+    /// <summary><c>g_PauseOn</c> (<c>0x01340828</c>): the game is paused (<c>Sg_MainLoop</c> runs the pause instead of the world).</summary>
+    public bool PauseOn => *At<int>(0x01340828) != 0;
+
+    /// <summary>FFXApplication: the step (f32, the frame's real time), the shaders' <c>GlobalTime</c> copy the renderer reads, and <c>GlobalTime</c> itself.</summary>
+    public const int AppStep = 0x24, AppSceneTime = 0x120, AppGlobalTime = 0x3b0;
+
+    /// <summary>The radial blur (<c>BlurEffect</c>): its running byte and its time (f32, +0.098 per <c>BlurEffect_update</c>).</summary>
+    public const int BlurRunning = 0xc, BlurTime = 0x84;
+
     public byte CodeByte(uint va) => *At<byte>(va);
     public ReadOnlySpan<byte> Code(uint va, int length) => new(At<byte>(va), length);
     public uint CodeU32(uint va) => *At<uint>(va);
