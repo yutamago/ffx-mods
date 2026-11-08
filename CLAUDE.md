@@ -19,7 +19,7 @@ mod for players.
   commit messages, PR descriptions or other messages.
 - Pushing straight to `main` is fine. Agents working in a worktree commit on
   their branch; the orchestrator merges.
-- ffx-rust (`../ffx-decomp`, private, github.com/yutamago/ffx-rust) is ours:
+- ffx-rust (`../ffx-decomp`, public, github.com/yutamago/ffx-rust) is ours:
   use its crates and docs freely (git dependency, pinned rev in `Cargo.toml`).
   Its `docs/formats/*.md` and `symbols/ffx.sym` are the reference for FFX.exe.
 - Decompilation findings go back into ffx-rust: every new FFX.exe
@@ -82,7 +82,7 @@ dotnet build -c Release ffx-mods.slnx               # artifacts/deploy/rel/mods/
 dotnet run tools/package.cs -- <out dir> <version>  # the seven zips
 ```
 
-CI, tag releases and the `FFX_RUST_TOKEN` secret: `docs/ci.md`.
+CI and tag releases: `docs/ci.md` (no secrets needed).
 
 ## Data (never in git)
 

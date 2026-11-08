@@ -1,17 +1,14 @@
 # SPDX-License-Identifier: MIT
 # CI: builds and tests everything, and packages the release zips (one per mod) as an artifact.
-#   mod        the shared library and the seven C# mods (Linux; needs no secret)
+#   mod        the shared library and the seven C# mods (Linux)
 #   linux      converter and live engine tests (Linux)
 #   windows    demaster.exe (MSVC, static CRT) and demaster_live.dll (32-bit), the
 #              release zips (tools/package.cs) with a check that they hold no
 #              game data
 # release.yml calls this workflow with the tag, so a release is built the same way.
 #
-# The converter depends on ffx-rust (github.com/yutamago/ffx-rust, private):
-# the jobs that build Rust need the repository secret FFX_RUST_TOKEN, a
-# fine-grained personal access token with read access to the contents of
-# yutamago/ffx-rust (docs/ci.md). Without it they stop at "ffx-rust access"
-# with a message saying so.
+# The converter's ffx-rust crates (github.com/yutamago/ffx-rust, public) come
+# from git at the rev pinned in Cargo.toml; no secret is needed.
 name: Build
 
 on:
@@ -68,11 +65,6 @@ jobs:
     steps:
     - uses: actions/checkout@v7
 
-    - name: ffx-rust access
-      uses: ./.github/actions/ffx-rust-access
-      with:
-        token: ${{ secrets.FFX_RUST_TOKEN }}
-
     - uses: dtolnay/rust-toolchain@stable
 
     - uses: Swatinem/rust-cache@v2
@@ -89,11 +81,6 @@ jobs:
         shell: bash
     steps:
     - uses: actions/checkout@v7
-
-    - name: ffx-rust access
-      uses: ./.github/actions/ffx-rust-access
-      with:
-        token: ${{ secrets.FFX_RUST_TOKEN }}
 
     - uses: dtolnay/rust-toolchain@stable
       with:

@@ -1,4 +1,4 @@
-# ffx-rust is private: fetch through the git CLI so its credential helper is used.
+# Git dependencies (ffx-rust) are fetched through the git CLI, with the system's git config.
 [net]
 git-fetch-with-cli = true
 

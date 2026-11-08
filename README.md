@@ -194,13 +194,13 @@ clears as you walk. Size and corner are settings (`minimap.size`,
   how each change works and how it was checked.
 - [`docs/minimap.md`](docs/minimap.md): the round minimap.
 - [`docs/disc.md`](docs/disc.md): how the PS2 disc stores its files.
-- [`docs/ci.md`](docs/ci.md): CI, releases and the `FFX_RUST_TOKEN` secret.
+- [`docs/ci.md`](docs/ci.md): CI and releases.
 
 ## Build
 
 | Path | What |
 |---|---|
-| `converter/` | `demaster`, the converter (Rust; library and program). Needs the ffx-rust crates (private, `github.com/yutamago/ffx-rust`, pinned in `Cargo.toml`). |
+| `converter/` | `demaster`, the converter (Rust; library and program). Uses the ffx-rust crates (`github.com/yutamago/ffx-rust`, public, pinned in `Cargo.toml`). |
 | `live/` | `demaster_live.dll`, the live music engine (Rust, 32-bit like FFX.exe) |
 | `common/` | `yuta.ffx-mods`, the shared C# library (a Fahrenheit mod): settings, build status, code patch helpers, the F8 window |
 | `mods/<name>/` | the seven mods (C#, .NET 10, `Fahrenheit.Sdk/1.0.0-alpha12`), each with its `settings.toml` and players' `README.txt` |
@@ -232,8 +232,56 @@ CI (`.github/workflows/build.yml`) builds the mods, runs the converter
 tests on Linux, builds `demaster.exe` and `demaster_live.dll` on Windows,
 packages the seven zips and checks that they hold no game data, on every
 push and pull request; a tag `v*` publishes a release with the zips
-(`release.yml`). The Rust jobs need the repository secret `FFX_RUST_TOKEN`
-([`docs/ci.md`](docs/ci.md)).
+(`release.yml`); no secrets are needed ([`docs/ci.md`](docs/ci.md)).
+
+## Contributing: adding a mod
+
+A new mod is a folder `mods/<name>/` (its Fahrenheit id is `yuta.<name>`):
+
+1. **Project.** `yuta.<name>.csproj` with `Sdk="Fahrenheit.Sdk/1.0.0-alpha12"`,
+   `AssemblyName` `yuta.<name>`, `RootNamespace`, `AssemblyTitle` and
+   `Description` (no `;` in it: it goes into the manifest).
+   `mods/Directory.Build.props` adds the rest: the version, a reference to
+   the shared library `common/` (not copied: Fahrenheit loads it once from
+   `mods/yuta.ffx-mods` and shares it), its global usings, and
+   `yuta.ffx-mods` as the manifest's dependency; `settings.toml` and
+   `README.txt` are copied into the build. Add the project to
+   `ffx-mods.slnx`.
+2. **Module.** `Mod.cs`: an `FhModule` with `[FhLoad(FhGameId.FFX)]`, its
+   `SETTINGS` (`SettingInfo`: key, who applies it, default), its `PATCHES`
+   (`CodePatch`: the setting, its "off" value, a description and the apply
+   function) and a `ModInfo`; `init` calls `ModHost.start(this, _logger,
+   mod_context, INFO)`. That reads the mod's `settings.toml`, checks its
+   build stamp, applies the patches and puts the mod into the one F8
+   window. An apply function gets the `ModHost` (its log, its folder; it
+   converts to the `FhModule` for `Native.fn<T>(va).hook(m, ...)`).
+   Copy `mods/ps2-game-feel/` for a code-only mod.
+3. **Shared code** goes into `common/` (`Native` for FFX.exe addresses and
+   byte patches, `Fn` for function shapes, `ModFiles` for the PS2 files of
+   every installed mod), never copied into a mod. A hook on a function
+   another mod may hook too must call the next one (`chain_from`).
+4. **Settings.** Each setting is in `converter/src/config.rs` (`Config`,
+   `SETTINGS`), the mod's entry in `converter/src/mods.rs`, its `Mod.cs`,
+   its `settings.toml` (with comments; `[source]` only if it has PS2 files)
+   and `docs/config.md`. `cargo test -p demaster` checks they agree, and
+   that no setting or job belongs to two mods.
+5. **PS2 files.** A mod that builds files lists its jobs in its `mods.rs`
+   entry (`jobs`, `disc`: needed, optional or none); the jobs are
+   `jobs::Job`s in `jobs::registry()` (`docs/` and the existing jobs show
+   how). A job may read only its own mod's settings, writes with
+   `out.put(...)` into the mod's `efl/x` and says `needs_disc() = false`
+   if it builds from the PC game alone. `demaster build --mod <name>` and a
+   `demaster.exe` in the mod's folder then build exactly those jobs, and
+   `tools/install/install.ps1` (shipped as the mod's `install.cmd`) runs
+   it: it finds the mod by its manifest, asks for the disc only when the
+   mod has disc jobs (`demaster mods`), and adds the mod to `mods\loadorder`.
+6. **Package and CI.** Add the mod to `MODS` in `tools/package.cs` (whether
+   it ships `demaster.exe`) and to the zip check in
+   `.github/workflows/build.yml`; describe it in this README (what it
+   changes for the player, disc, size, dependencies) and in its
+   `README.txt`.
+7. **Test in the game** before calling it done (`CLAUDE.md`, "Testing in
+   the game"): alone, and with the other mods.
 
 Never commit disc images, extracted files or anything from the game's
 archives.
