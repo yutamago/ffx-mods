@@ -414,6 +414,73 @@ pub fn set_value(edit: &mut ClusterEdit, material: u32, parameter: &str, values:
     Ok(false)
 }
 
+/// The D3D11 section of an asset list (`.ahwin32`) with `files` put right
+/// before the model (`.dae.phyre`), the ones listed already left out; the
+/// count and the named indices of the files after them move up.
+///
+/// The game takes a character's animation textures by position, the n-th
+/// file of the list for subtexture n (`PhyreScene_doOnCharacterAllAssetsLoaded`),
+/// so nothing may go before `textureAnimationChar`:
+/// `ffx_phyre::assets::add_files` puts its files first, and the two shader
+/// variants it put before Lulu's list made them her animation textures 0
+/// and 1. (The game loads the whole list before it resolves the model's
+/// imports, `PApplication_FixupClusters`, so the place after
+/// `textureAnimationChar` does not matter otherwise; `DM_LIST_AT=end`
+/// appends instead.)
+pub fn insert_files(list: &[u8], files: &[String]) -> Result<Vec<u8>> {
+    const SECTION: &[u8] = b"#ifdef PHYRE_RENDERING_PLATFORM_D3D11";
+    let start = list.windows(SECTION.len()).position(|w| w == SECTION).context("no D3D11 section")?;
+    let end = list[start..].windows(6).position(|w| w == b"#endif").map_or(list.len(), |e| start + e);
+    let section = String::from_utf8_lossy(&list[start..end]).into_owned();
+    let new: Vec<String> = files.iter().filter(|f| !section.contains(&format!("\"{f}\""))).cloned().collect();
+    if new.is_empty() {
+        return Ok(list.to_vec());
+    }
+    let eol = if section.contains("\r\n") { "\r\n" } else { "\n" };
+    let lines: Vec<&str> = section.split(eol).collect();
+    let open = lines.iter().position(|l| l.trim_end().ends_with("g_fileNames[] = {")).context("no file list")?;
+    let close = open + lines[open..].iter().position(|l| l.trim() == "};").context("no file list end")?;
+    let old: Vec<String> = lines[open + 1..close]
+        .iter()
+        .map(|l| l.trim().trim_start_matches(',').trim_matches('"').to_owned())
+        .collect();
+    let lower: Vec<String> = old.iter().map(|f| f.to_ascii_lowercase()).collect();
+    let after_anim = lower.iter().position(|f| f.ends_with("/textureanimationchar.ags.phyre")).map_or(0, |k| k + 1);
+    let at = match std::env::var("DM_LIST_AT").as_deref() {
+        Ok("end") => old.len(),
+        _ => lower.iter().position(|f| f.ends_with(".dae.phyre")).map_or(old.len(), |k| k.max(after_anim)),
+    };
+    let mut names = old.clone();
+    names.splice(at..at, new.iter().cloned());
+    let mut out: Vec<String> = Vec::with_capacity(lines.len() + new.len());
+    for (i, line) in lines.iter().enumerate() {
+        if i > open && i < close {
+            continue;
+        }
+        if i == open {
+            out.push((*line).to_owned());
+            for (k, f) in names.iter().enumerate() {
+                out.push(format!("{}\"{f}\"", if k == 0 { "" } else { "," }));
+            }
+            continue;
+        }
+        let text = line.trim_end();
+        if let Some(rest) = text.strip_prefix("const Phyre::PUInt32 ")
+            && let Some((name, value)) = rest.split_once(" = ")
+            && let Ok(v) = value.trim_end_matches(';').parse::<usize>()
+        {
+            let v = if name.trim() == "g_fileNamesCount" || v >= at { v + new.len() } else { v };
+            out.push(format!("const Phyre::PUInt32 {name} = {v};"));
+            continue;
+        }
+        out.push((*line).to_owned());
+    }
+    let mut bytes = list[..start].to_vec();
+    bytes.extend(out.join(eol).into_bytes());
+    bytes.extend_from_slice(&list[end..]);
+    Ok(bytes)
+}
+
 /// The D3D11 section of an asset list (`.ahwin32`) with the files before
 /// `textureAnimationChar` (the animation textures) replaced by `anim`, and
 /// `extra` put right after `textureAnimationChar` (outside the range the
@@ -545,6 +612,25 @@ const Phyre::PChar *g_fileNames[] = {\r\n\"/a_n0.dds.phyre\"\r\n,\"/a_n1.dds.phy
             "{out}"
         );
         assert!(out.ends_with("#endif //! PHYRE_64BIT_PTR\r\n#endif\r\n"), "{out}");
+    }
+
+    #[test]
+    fn inserted_files_go_before_the_model() {
+        let list = b"#ifdef PHYRE_RENDERING_PLATFORM_D3D11 // 32 Bit\r\n#ifndef PHYRE_64BIT_PTR\r\n\
+const Phyre::PUInt32  = 0;\r\nconst Phyre::PUInt32 textureAnimationChar = 1;\r\nconst Phyre::PUInt32 c006 = 2;\r\n\
+const Phyre::PUInt32 g_fileNamesCount = 4;\r\nconst Phyre::PChar *g_fileNamesPrefix = \"/FFX_Data/\";\r\n\
+const Phyre::PChar *g_fileNames[] = {\r\n\"/a_n0.dds.phyre\"\r\n\
+,\"/x/textureAnimationChar.ags.phyre\"\r\n,\"/c006.dae.phyre\"\r\n,\"/s#F2E8.phyre\"\r\n};\r\n\
+#endif //! PHYRE_64BIT_PTR\r\n#endif\r\n";
+        let add = ["/s#3BF9.phyre".to_owned(), "/s#F2E8.phyre".to_owned()];
+        let out = String::from_utf8(insert_files(list, &add).unwrap()).unwrap();
+        assert!(out.contains("const Phyre::PUInt32  = 0;\r\nconst Phyre::PUInt32 textureAnimationChar = 1;\r\nconst Phyre::PUInt32 c006 = 3;\r\nconst Phyre::PUInt32 g_fileNamesCount = 5;"), "{out}");
+        assert!(
+            out.contains("{\r\n\"/a_n0.dds.phyre\"\r\n,\"/x/textureAnimationChar.ags.phyre\"\r\n,\"/s#3BF9.phyre\"\r\n,\"/c006.dae.phyre\"\r\n,\"/s#F2E8.phyre\"\r\n};\r\n#endif //! PHYRE_64BIT_PTR\r\n#endif\r\n"),
+            "{out}"
+        );
+        // listed already: unchanged
+        assert_eq!(insert_files(out.as_bytes(), &add).unwrap(), out.as_bytes());
     }
 
     #[test]
