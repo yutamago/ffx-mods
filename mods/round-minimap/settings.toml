@@ -1,0 +1,13 @@
+# Round minimap settings. After changing anything here, restart the game.
+
+[minimap]
+# The field minimap. "crt": round, always centred on you and turned with the
+# camera (up is where the camera looks), in the game's colours on a small
+# CRT screen; markers beyond its edge sit on the rim and fade in as you come
+# nearer. "plain": the same without the CRT screen. "game": the game's own.
+style = "crt"
+# How big the round minimap is: "small", "medium" or "large".
+size = "medium"
+# Where it sits on the picture: "top_right", "top_left", "bottom_right" or
+# "bottom_left".
+corner = "top_right"

@@ -14,6 +14,7 @@ any of them, alone or together; each is a separate zip.
 | [PS2 aspect ratio](#ps2-aspect-ratio) (`yuta.ps2-aspect-ratio`) | the 4:3 picture with the PS2 camera | no | <1 MB | — |
 | [PS2 game feel](#ps2-game-feel) (`yuta.ps2-game-feel`) | PS2 run speed, battle menu without input delay, battle subtitles | no | <1 MB | — |
 | [Bug fixes](#bug-fixes) (`yuta.bug-fixes`) | NPC mouths, the Farplane video, Lulu's Fury spins | no | <1 MB | — |
+| [Round minimap](#round-minimap) (`yuta.round-minimap`) | not a PS2 part: a round field minimap, centred on you and turned with the camera | no | <1 MB | — |
 
 Every mod needs the shared library `yuta.ffx-mods` (in every zip; its
 manifest dependency). Sizes are the files `install.cmd` builds with the
@@ -166,6 +167,22 @@ plays (`fixes.farplane_video`), Lulu's Fury spins that often don't count
 
 - PS2 disc: not needed. Code only.
 
+### Round minimap
+
+Not a part of the PS2 game: the field minimap becomes round, always centred
+on you and turned with the camera, so that up on the map is where the
+camera looks. Your character is an arrow showing where they face; the
+walkable area sits over a grid fixed to the world, in the game's minimap
+colours on a small CRT screen (`minimap.style = "plain"` leaves the screen
+effects out, `"game"` brings the game's own minimap back). The game's
+markers keep their shapes and colours; those beyond the edge sit on the rim
+and fade in as you come nearer, and where you are headed stays on the rim.
+It shows and hides when the game's minimap would, and the fog of war still
+clears as you walk. Size and corner are settings (`minimap.size`,
+`minimap.corner`). [`docs/minimap.md`](docs/minimap.md) explains it.
+
+- PS2 disc: not needed. Code only.
+
 ## Documents
 
 - [`docs/config.md`](docs/config.md): every setting, and which mod has it.
@@ -175,6 +192,7 @@ plays (`fixes.farplane_video`), Lulu's Fury spins that often don't count
   [`docs/screen.md`](docs/screen.md), [`docs/ui.md`](docs/ui.md),
   [`docs/models.md`](docs/models.md), [`docs/music.md`](docs/music.md):
   how each change works and how it was checked.
+- [`docs/minimap.md`](docs/minimap.md): the round minimap.
 - [`docs/disc.md`](docs/disc.md): how the PS2 disc stores its files.
 - [`docs/ci.md`](docs/ci.md): CI, releases and the `FFX_RUST_TOKEN` secret.
 

@@ -1,0 +1,8 @@
+<Project Sdk="Fahrenheit.Sdk/1.0.0-alpha12">
+    <!-- Version, the shared library and the manifest's dependency: ../Directory.Build.props -->
+    <PropertyGroup>
+        <AssemblyName>yuta.round-minimap</AssemblyName>
+        <RootNamespace>Yuta.FfxMods.RoundMinimap</RootNamespace>
+        <AssemblyTitle>Round minimap</AssemblyTitle>
+        <Description>The field minimap round, always centred on you and turned with the camera, in the game's colours on a small CRT screen, with markers on its rim.</Description>    </PropertyGroup>
+</Project>
