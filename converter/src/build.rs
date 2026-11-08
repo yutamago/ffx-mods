@@ -664,7 +664,7 @@ pub fn run(args: &Args) -> Result<bool> {
     write_json(&stamp_path, &stamp)?;
 
     println!();
-    println!("{files} files in {}, {removed} old files removed", efl.display());
+    println!("{files} files in {}, {removed} old files removed", mod_dir.display());
     if !missing.is_empty() {
         println!("not built yet (no converter job): {}", missing.join(", "));
     }

@@ -92,6 +92,11 @@ if (-not (Test-Path -LiteralPath $exe)) {
 # ---- 2. the disc ----------------------------------------------------------------------------
 $optional = [bool](& $exe mods | Where-Object { $_ -like "$ModId (*optional*" })
 
+# A native program's output as one line (Windows PowerShell wraps its stderr lines in error records).
+function Text($lines) {
+    return (@($lines) | ForEach-Object { "$_".Trim() } | Where-Object { $_ -and $_ -ne 'System.Management.Automation.RemoteException' }) -join ' '
+}
+
 function Test-Disc([string]$path) {
     & $exe disc-check $path 2>$null | Out-Null
     return $LASTEXITCODE -eq 0
@@ -174,7 +179,7 @@ elseif (-not $NoDisc) {
 if ($NoDisc -and -not $optional) { Fail "$ModId needs the PS2 disc." }
 if ($source) {
     $check = & $exe disc-check $source 2>&1
-    if ($LASTEXITCODE -ne 0) { Fail "$source is not a Final Fantasy X PS2 disc: $check" }
+    if ($LASTEXITCODE -ne 0) { Fail "$source can't be used: $(Text $check)" }
     Write-Host "Disc: $source"
 }
 
@@ -193,7 +198,7 @@ if ($LASTEXITCODE -ne 0 -and -not $Game) {
 }
 if ($LASTEXITCODE -ne 0) {
     Write-Host ''
-    Write-Host "The game was not found ($found)."
+    Write-Host "The game was not found ($(Text $found))."
     $folder = $null
     try {
         Add-Type -AssemblyName System.Windows.Forms
@@ -207,9 +212,9 @@ if ($LASTEXITCODE -ne 0) {
     if (-not $folder) { Fail 'no game folder chosen' }
     $gameArgs = @('--game', $folder)
     $found = & $exe find-game --config $settings @gameArgs 2>&1
-    if ($LASTEXITCODE -ne 0) { Fail "$found" }
+    if ($LASTEXITCODE -ne 0) { Fail (Text $found) }
 }
-Write-Host "Game: $found"
+Write-Host "Game: $(Text $found)"
 
 # ---- 4. the build ---------------------------------------------------------------------------
 $buildArgs = @('build', '--mod', $Name, '--mod-dir', $ModDir, '--config', $settings, '--save-source') + $gameArgs
