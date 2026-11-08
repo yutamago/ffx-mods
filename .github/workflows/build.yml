@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: MIT
 # CI: builds and tests everything, and packages the release zips (one per mod) as an artifact.
-#   mod        the shared library and the seven C# mods (Linux)
+#   mod        the shared library and the C# mods, and the C# tests (Linux)
 #   linux      converter and live engine tests (Linux)
 #   windows    demaster.exe (MSVC, static CRT) and demaster_live.dll (32-bit), the
 #              release zips (tools/package.cs) with a check that they hold no
@@ -51,6 +51,10 @@ jobs:
       run: |
         version="${TAG#v}"
         dotnet build -c Release ${version:+-p:Version="$version"} ffx-mods.slnx
+
+    # The C# tests (tests/: fps-unlock's portable part); those that need the game skip themselves.
+    - name: Test
+      run: dotnet test -c Release --no-build ffx-mods.slnx
 
     - uses: actions/upload-artifact@v7
       with:
@@ -124,7 +128,7 @@ jobs:
         Add-Type -AssemblyName System.IO.Compression.FileSystem
         $builds = @{ 'ps2-music-engine' = $true; 'ps2-characters' = $true; 'ps2-lighting' = $true; 'ps2-interface' = $true;
                      'ps2-aspect-ratio' = $false; 'ps2-game-feel' = $false; 'bug-fixes' = $false;
-                     'modern-minimap' = $false }
+                     'modern-minimap' = $false; 'fps-unlock' = $false }
         $zips = @(Get-ChildItem dist -Filter '*.zip')
         if ($zips.Count -ne $builds.Count) { throw "expected $($builds.Count) zips, found $($zips.Count)" }
         foreach ($name in $builds.Keys) {

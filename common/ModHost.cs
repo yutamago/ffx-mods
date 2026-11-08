@@ -10,7 +10,11 @@ namespace Yuta.FfxMods;
 /// <param name="Settings">Every setting of its settings.toml, with the default.</param>
 /// <param name="Patches">Its code patches, one per setting applied by the mod.</param>
 /// <param name="Builds">Whether demaster.exe builds files for it (it has converter jobs and an install script).</param>
-public sealed record ModInfo(string Name, string Title, SettingInfo[] Settings, CodePatch[] Patches, bool Builds);
+/// <param name="Section">
+/// Optional: draws the mod's own part of its F8 section (live settings, what it does now), after
+/// its build status and before its code patches. Render thread; an exception turns it off.
+/// </param>
+public sealed record ModInfo(string Name, string Title, SettingInfo[] Settings, CodePatch[] Patches, bool Builds, Action<ModHost>? Section = null);
 
 /// <summary>
 /// The shared start of every mod of the family: reads the mod's settings.toml, checks its build

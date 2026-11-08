@@ -23,6 +23,9 @@ public static class FamilyWindow {
     private static readonly List<ModHost> _mods = [];
     private static readonly Lock _lock = new();
     private static bool _open;
+    /// <summary>The mod whose section <see cref="toggle"/> asked to open and show.</summary>
+    private static ModHost? _show;
+    private static readonly HashSet<string> _failed_sections = [];
 
     /// <summary>The mods that started, in load order.</summary>
     public static IReadOnlyList<ModHost> mods { get { lock (_lock) return [.. _mods]; } }
@@ -30,6 +33,19 @@ public static class FamilyWindow {
     internal static void register(ModHost h) {
         lock (_lock) _mods.Add(h);
         if (problem(h)) _open = true;
+    }
+
+    /// <summary>
+    /// Opens the window with <paramref name="h"/>'s section open and in view, or closes the window
+    /// when it is open: a mod's own key for its part of the window (FPS unlock's F9). Render thread.
+    /// </summary>
+    public static void toggle(ModHost h) {
+        if (_open) {
+            _open = false;
+            return;
+        }
+        _open = true;
+        _show = h;
     }
 
     private static bool problem(ModHost h) =>
@@ -59,7 +75,13 @@ public static class FamilyWindow {
                     _                     => (RED, "rebuild needed"),
                 };
                 ImGui.PushID(h.Info.Name);
+                bool show = _show == h;
+                if (show) ImGui.SetNextItemOpen(true);
                 bool open = ImGui.CollapsingHeader($"{h.Info.Title}  ({state})###{h.Info.Name}", problem(h) ? ImGuiTreeNodeFlags.DefaultOpen : 0);
+                if (show) {
+                    ImGui.SetScrollHereY(0);
+                    _show = null;
+                }
                 if (open) draw_mod(h, c, log);
                 ImGui.PopID();
             }
@@ -95,7 +117,17 @@ public static class FamilyWindow {
         if (!h.Settings.Found) coloured(YELLOW, $"{ModSettings.FILE} is missing: the defaults are used.");
         foreach (string p in h.Settings.Problems) coloured(YELLOW, $"{ModSettings.FILE}: {p}");
         foreach (string k in h.Settings.Unknown)  coloured(YELLOW, $"{ModSettings.FILE}: unknown setting {k}");
-        if (h.Patches.Count > 0 && ImGui.TreeNodeEx("Code patches", ImGuiTreeNodeFlags.DefaultOpen)) {
+        if (h.Info.Section is { } section && !_failed_sections.Contains(h.Info.Name)) {
+            try { section(h); }
+            catch (Exception e) {
+                _failed_sections.Add(h.Info.Name);
+                log.Error($"{h.Info.Name}: its part of the window failed and is now off: {e}");
+            }
+        }
+        // A mod with its own section shows its live settings there; its patches list the values the game started with.
+        bool patches_open = h.Info.Section is null || h.Patches.Any(p => p.State == PatchState.Failed);
+        string patches_label = h.Info.Section is null ? "Code patches" : "Code patches (settings as the game started)";
+        if (h.Patches.Count > 0 && ImGui.TreeNodeEx(patches_label, patches_open ? ImGuiTreeNodeFlags.DefaultOpen : 0)) {
             foreach (var (p, value, state) in h.Patches) {
                 (Vector4 c, string label) = state switch {
                     PatchState.On             => (GREEN, "on"),

@@ -4,7 +4,7 @@ All of the user's Fahrenheit mods for the FFX HD Remaster (Steam), each
 working alone and in any combination, plus the converter (`demaster`) that
 builds the PS2 mods' files from the player's own disc. Most are PS2 mods
 (they restore parts of the PS2 version: presentation from the PS2, logic
-from the PC); others are the user's own changes (`modern-minimap`). Every
+from the PC); others are the user's own changes (`modern-minimap`, `fps-unlock`). Every
 change is a setting. The PS2 mods were split out of ffx-demaster (github.com/yutamago/ffx-demaster,
 history kept up to its 314bbfc); ffx-demaster becomes a bundle of these
 mods plus its own parts (movies, maps, effects, glow, shadows, the music
@@ -44,6 +44,7 @@ mod for players.
 | `live/` | crate `demaster-live`: `demaster_live.dll` (32-bit, the live PS2 music engine, `tools/build-live.sh`) |
 | `common/` | `yuta.ffx-mods`, the shared C# library (itself a Fahrenheit mod): `Native`/`Fn`, `ModHost` (settings.toml, build status, patches), the one F8 window (`FamilyWindow`), `ModFiles` (the PS2 files of every installed mod) |
 | `mods/<name>/` | the mods, `yuta.<name>`: `Mod.cs` (settings with defaults, code patches), the patch code, `settings.toml` (defaults), `README.txt` (for the zip) |
+| `tests/<name>/` | C# tests of a mod's portable part (its sources linked in; the mods build for win-x86 against Fahrenheit): `tests/fps-unlock`. Tests that need the game read `FFX_GAME_DIR` and skip without it |
 | `tools/install/` | `install.ps1` + `install.cmd`, shipped in every mod folder |
 | `tools/package.cs` | one zip per mod |
 | `docs/` | moved from ffx-demaster: the research and design docs of every feature (also of the parts that stay in ffx-demaster) |
@@ -58,6 +59,10 @@ The mods and what is in each: README.md and `converter/src/mods.rs`.
   function chain (Fahrenheit's `chain_from`); always call the next hook.
 - Shared state lives in `common/` (loaded once for all mods); never copy
   shared code into a mod.
+- Settings are read once at startup, except a mod's that reads them live
+  (FPS unlock): it draws them in its part of the F8 window
+  (`ModInfo.Section`, opened by its own key through `FamilyWindow.toggle`)
+  and writes changes back with `ModSettings.write` (the changed lines only).
 - A setting lives in 4 places a test keeps in sync: `converter/src/config.rs`
   (`SETTINGS`), `converter/src/mods.rs` (which mod), `mods/<name>/Mod.cs`
   (with its default, and a `CodePatch` if the mod applies it),
@@ -80,6 +85,7 @@ RUSTC_WRAPPER= cargo test --release -p demaster -p demaster-live   # disc tests 
 ./target/release/demaster build --mod ps2-lighting --mod-dir <dir> --iso /tmp/dm-ffx.iso --game ~/steam-games/FFX-X2-HD
 tools/build-windows.sh && tools/build-live.sh       # demaster.exe, demaster_live.dll
 dotnet build -c Release ffx-mods.slnx               # artifacts/deploy/rel/mods/yuta.*/
+dotnet test -c Release --no-build ffx-mods.slnx     # C# tests; FFX_GAME_DIR=<game folder> for the FFX.exe ones
 dotnet run tools/package.cs -- <out dir> <version>  # one zip per mod
 ```
 

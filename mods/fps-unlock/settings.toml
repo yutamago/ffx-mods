@@ -1,0 +1,91 @@
+# FPS unlock settings. Every one of them can also be changed in the game: F9 opens
+# them in the F8 window, where a change applies at once and is saved back into this
+# file (only the values that changed; these comments stay). A change made here while
+# the game runs is read at the next start.
+
+[frames]
+# The whole mod. false gives the game back its own timing, frame limiter and vsync
+# (the mod stays loaded, so the window can turn it on again).
+enabled = true
+# How fast the game draws: "game" (its own 30 fps), "monitor" (the refresh rate of
+# the monitor the window is on), "fixed" (fixed_fps) or "unlimited" (no limiter).
+target = "monitor"
+# The frame rate of target "fixed", 10 to 1000.
+fixed_fps = 120.0
+# "game" (as the game's own setting has it), "on" or "off" for every present.
+# Alt+F9 switches between on and off.
+vsync = "game"
+# The fps counter in the top-right corner.
+overlay = true
+# What a drawn frame without a tick of the world does: "redraw" (the game draws
+# again with the world held still, so the camera and the characters can move
+# between ticks) or "repeat" (the last frame again, as the Esc menu does).
+between_ticks = "redraw"
+# The effects on frames between ticks: "replay" (what they drew at the last tick
+# is drawn again: the game's speed, drawn every frame), "run" (they run every
+# drawn frame: too fast) or "hold" (missing between ticks: they flicker).
+effects = "replay"
+
+[frames.speed]
+# Game time per real second, 0.05 to 100 (1.0 is the game's speed). A scale above
+# 1.0 is saved only after the game has run at it for 5 s, and a saved one starts at
+# 1.0 and ramps up over the first seconds.
+time_scale = 1.0
+# The scale Ctrl+F9 switches to and back to 1.0.
+fast = 10.0
+# The scale Shift+F9 switches to and back to 1.0.
+slow = 0.25
+# Sound off while faster than 1.0, as the game's own booster does.
+mute_when_fast = true
+# Also 1.0 where the game's booster won't speed up (its maps and spells, the
+# sphere grid, a load).
+booster_limits = true
+
+[frames.interpolate]
+# Draw the camera between its last two ticks (the picture is one tick, 33 ms, behind).
+camera = true
+# Draw each character's place and facing between its last two ticks.
+characters = true
+# ... and its bones (its animation).
+bones = true
+# ... and its cloth and hair (needs hold.cloth).
+cloth = true
+# Also move the camera on frames of between_ticks = "repeat".
+repeats = true
+
+[frames.cuts]
+# A camera that moved further than this in one tick (world units) cut to a new
+# shot: drawn as the tick has it, with the characters.
+camera_distance = 100.0
+# A camera that turned more than this in one tick (degrees) cut.
+camera_degrees = 45.0
+# A camera the game sets at once (scripts, magic) is a cut when its step jumps.
+game_sets = true
+# A character that moved further than this in one tick (world units) warped:
+# drawn as it is.
+character_distance = 50.0
+# A character that turned more than this in one tick (degrees) warped.
+character_degrees = 120.0
+
+[frames.hold]
+# What redrawn frames hold still, which would otherwise run once per drawn frame:
+# the characters' bones and motion events (Ch_CalcMiddle),
+characters = true
+# the field's animation (yiAnimMain),
+field_animation = true
+# the fade counters (Sg_DrawFilter),
+fades = true
+# the cloth and hair (Sg_ClothStep).
+cloth = true
+
+[frames.budget]
+# The most real time one frame counts, in seconds (the game's own is 0.3).
+max_real_time = 0.3
+# The most ticks one frame runs, 1 to 892.
+max_ticks = 100
+# The most time one frame's game update may take, in ms (5 to 300): past it the
+# frame runs fewer ticks and the game runs slower than time_scale asks.
+max_update_ms = 40.0
+# How many whole game updates one frame runs before it uses the game's exec
+# frames for more ticks, 1 to 10.
+whole_updates = 4

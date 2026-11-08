@@ -45,6 +45,59 @@ internal static class MiniToml {
         return new Result(values, problems);
     }
 
+    /// <summary>
+    /// <paramref name="text"/> with <paramref name="key"/> (its full dotted name) set to
+    /// <paramref name="literal"/> (TOML: "\"monitor\"", "true", "1.0"): the value replaced on the
+    /// key's line, keeping its indent, its spacing and its comment; else a line added after the last
+    /// key of the key's table; else the table added at the end. Line ends stay as they are.
+    /// </summary>
+    public static string set(string text, string key, string literal) {
+        string nl = text.Contains("\r\n") ? "\r\n" : "\n";
+        List<string> lines = [.. text.Replace("\r\n", "\n").Split('\n')];
+        if (lines.Count > 0 && lines[^1].Length == 0) lines.RemoveAt(lines.Count - 1);
+        int dot = key.LastIndexOf('.');
+        string want_table = dot < 0 ? "" : key[..dot], name = key[(dot + 1)..];
+        string table = "";
+        int header = want_table.Length == 0 ? -1 : -2, last_key = -1;
+        for (int n = 0; n < lines.Count; n++) {
+            string line = strip_comment(lines[n]).Trim();
+            if (line.Length == 0) continue;
+            if (line.StartsWith('[')) {
+                table = line.StartsWith("[[") || !line.EndsWith(']') ? "\0" : line[1..^1].Trim();
+                if (table == want_table) { header = n; last_key = n; }
+                continue;
+            }
+            int eq = index_outside_quotes(line, '=');
+            if (eq < 0) continue;
+            string k = string.Join('.', line[..eq].Split('.').Select(p => p.Trim().Trim('"', '\'')));
+            string full = table.Length == 0 ? k : $"{table}.{k}";
+            if (table == want_table) last_key = n;
+            if (full != key) continue;
+            string raw = lines[n];
+            int at = index_outside_quotes(raw, '=') + 1;
+            int hash = index_outside_quotes(raw, '#');
+            string rest = raw[at..(hash < 0 ? raw.Length : hash)];
+            string lead = rest[..(rest.Length - rest.TrimStart().Length)];
+            string gap = rest[rest.TrimEnd().Length..];
+            string tail = hash < 0 ? "" : (gap.Length == 0 ? " " : gap) + raw[hash..];
+            lines[n] = raw[..at] + (lead.Length == 0 ? " " : lead) + literal + tail;
+            return string.Join(nl, lines) + nl;
+        }
+        string entry = $"{name} = {literal}";
+        if (header == -2) {
+            if (lines.Count > 0 && lines[^1].Trim().Length > 0) lines.Add("");
+            lines.Add($"[{want_table}]");
+            lines.Add(entry);
+        }
+        else if (header == -1) {
+            // a top-level key goes before the first table
+            int first = lines.FindIndex(l => strip_comment(l).Trim().StartsWith('['));
+            lines.Insert(first < 0 ? lines.Count : first, entry);
+        }
+        else lines.Insert(last_key + 1, entry);
+        return string.Join(nl, lines) + nl;
+    }
+
     private static string? parse_value(string raw) {
         if (raw.Length >= 2 && raw[0] == '\'' && raw[^1] == '\'') return raw[1..^1];
         if (raw.Length >= 2 && raw[0] == '"' && raw[^1] == '"') return unescape(raw[1..^1]);

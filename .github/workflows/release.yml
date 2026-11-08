@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: MIT
 # Pushing a tag such as v0.2.0 builds everything as CI does (build.yml), with
 # that version in the converter and the mods, and publishes a GitHub release
-# with the seven mod zips (each unpacks straight into the Fahrenheit folder). A tag with a "-" (v0.2.0-alpha) makes a prerelease.
+# with the mod zips (each unpacks straight into the Fahrenheit folder). A tag with a "-" (v0.2.0-alpha) makes a prerelease.
 name: Release
 
 on:
