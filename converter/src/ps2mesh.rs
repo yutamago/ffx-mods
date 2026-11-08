@@ -102,6 +102,10 @@ pub struct Model {
     /// Per vertex: (bone, weight, position in the bone's frame). Empty for
     /// a vertex no skin list names: it follows the base bone.
     pub influences: Vec<Vec<(u16, f32, [i16; 3])>>,
+    /// Per normal: (bone, weight, normal in the bone's frame), from the
+    /// normal skin lists (mesh header `+0x24`). Empty for a normal no list
+    /// names (it follows the base bone).
+    pub normal_influences: Vec<Vec<(u16, f32, [i16; 3])>>,
     /// Corners dropped for an index past the arrays.
     pub bad_corners: usize,
 }
@@ -173,6 +177,7 @@ impl Mesh {
                 vertices: (0..nv).map(|v| triple(vp + 6 * v)).collect::<Result<_>>()?,
                 normals: (0..nn).map(|v| triple(np + 6 * v)).collect::<Result<_>>()?,
                 influences: vec![Vec::new(); nv],
+                normal_influences: vec![Vec::new(); nn],
                 ..Model::default()
             };
             let push = |model: &mut Model, group: u16, texture: u8, flags: u8, c: [Corner; 3]| {
@@ -308,7 +313,85 @@ impl Mesh {
                 }
             }
         }
+        // The normal skin lists (`+0x24`, one entry per vertex skin entry,
+        // same bone, model, base and kind; the envelope `0x00107ec8` of the
+        // PS2 ELF skins them with the vertex entry's matrix when the
+        // character's normals are skinned): the same layout as the vertex
+        // lists, but the weighted runs hold (x, y, z, weight x 10000,
+        // normal), the weight before the index (`0x00124260`; kind 0
+        // `0x00124058` as the vertices). Rotation only; the PS2
+        // renormalises the sums (`0x001243e8`).
+        // Only the debug view reads them: a list that does not parse leaves
+        // every normal without one instead of failing the mesh.
+        if esize == 40 && mesh.normal_skins(b, h, st, nskins).is_err() {
+            for m in &mut mesh.models {
+                m.normal_influences.iter_mut().for_each(Vec::clear);
+            }
+        }
         Ok(mesh)
+    }
+
+    fn normal_skins(&mut self, b: &[u8], h: usize, st: usize, nskins: usize) -> Result<()> {
+        let nt = u32_(b, h + 0x24)?;
+        if nt != 0 {
+            let nt = h + nt;
+            for s in 0..nskins {
+                let e = nt + 12 * s;
+                let bone = u16_(b, st + 12 * s)?;
+                let m = usize::from(u16_(b, e + 2)?);
+                let weighted = u16_(b, e + 6)? != 0;
+                let lp = u32_(b, e + 8)?;
+                if lp == 0 || m >= self.models.len() {
+                    continue;
+                }
+                let lp = h + lp;
+                let model = &mut self.models[m];
+                let nn = model.normals.len();
+                let add = |model: &mut Model, idx: usize, w: f32, p: [i16; 3]| -> Result<()> {
+                    ensure!(idx < nn, "normal skin list names normal {idx} of {nn}");
+                    model.normal_influences[idx].push((bone, w, p));
+                    Ok(())
+                };
+                let n1 = usize::from(u16_(b, lp)?);
+                for k in 0..n1 {
+                    let at = lp + 4 + 8 * k;
+                    let p = [i16_(b, at)?, i16_(b, at + 2)?, i16_(b, at + 4)?];
+                    add(model, usize::from(u16_(b, at + 6)?), 1.0, p)?;
+                }
+                let mut q = lp + 4 + 8 * n1;
+                if weighted {
+                    for _ in 0..2 {
+                        let n = usize::from(u16_(b, q)?);
+                        for k in 0..n {
+                            let at = q + 2 + 10 * k;
+                            let p = [i16_(b, at)?, i16_(b, at + 2)?, i16_(b, at + 4)?];
+                            let w = f32::from(u16_(b, at + 6)?) * 0.0001;
+                            add(model, usize::from(u16_(b, at + 8)?), w, p)?;
+                        }
+                        q += 2 + 10 * n;
+                    }
+                } else {
+                    for _ in 0..2 {
+                        loop {
+                            let n = u16_(b, q)?;
+                            if n == 0xffff {
+                                q += 4;
+                                break;
+                            }
+                            let hi = usize::from(u16_(b, q + 2)?) << 8;
+                            for k in 0..usize::from(n) {
+                                let at = q + 4 + 8 * k;
+                                let p = [i16_(b, at)?, i16_(b, at + 2)?, i16_(b, at + 4)?];
+                                let w = f32::from(u8_(b, at + 6)?) / 255.0;
+                                add(model, hi + usize::from(u8_(b, at + 7)?), w, p)?;
+                            }
+                            q += 4 + 8 * usize::from(n);
+                        }
+                    }
+                }
+            }
+        }
+        Ok(())
     }
 
     /// The bind pose's world matrices (column-major, PS2 units), from the
