@@ -320,6 +320,33 @@ values). The HD `.ags` and list stay. About 2,900 frames
 (`m020_anim_n0_p0` … `n7_p0`, `n040_anim_*`: the PS2 eye and mouth at
 the HD layout).
 
+**Triangles without a PS2 twin** (`bake::third_pass`, chr job version 4).
+The bake pairs each HD triangle with the PS2 triangle at the same three
+corners; the second pass pairs the ones the remaster split another way
+through the page's UV maps. What both left kept the HD texels: the
+remaster's added triangles (a corner the PS2 mesh lacks) and split ones
+whose corners no map placed. On pages that kept the PS2 layout that mixed
+the two looks on one surface. The user saw it on Brotherhood (`w001`, the
+sword on the hill in the opening, event `znkd0600`): 74 % of `w001.dds`'s
+triangles matched, 64 % of the page painted; the blade's top edge and the
+bubbles at its end stayed HD. The third pass gives each such triangle the
+UV map of a matched neighbour (a corner within one HD page pixel of a
+corner of an exact match that fits one of the page's learned maps) and
+reads the PS2 page through it; a triangle is kept only when its PS2 texels
+differ from the HD texels under it by at most twice the matched triangles'
+median (at least 24 of 765), so a page the remaster re-laid out does not
+read the wrong place. These are painted before the matched triangles,
+which win where they overlap. Brotherhood: 84 of 113 such triangles, 76 %
+of the page painted. A partial run over all kinds (301 pages, to the
+monsters): 138,945 kept of 161,343 placed of 194,898 left-over triangles,
+the most on monster pages (m048, m122: about 2,500 each; their pages a few
+per cent more PS2). Checked by eye on m048, m100 (atlases before/after) and
+in the game on Brotherhood (`C:\shots\fix-alpha\sword\new1-01.png` against
+the PS2 frame `..\sqlogo\ps2\f079.png`: the blade's fill now one PS2
+texture). The bubbles at the blade's end are on the PS2 too (cut out by
+the texture's alpha); at 3440 x 1440 their edge is soft where the PS2's 512
+x 416 picture shows it pixel-rough.
+
 ## Alpha (see-through texels)
 
 Code: `converter/src/chralpha.rs`; `demaster materials-debug <vbf>

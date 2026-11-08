@@ -15,6 +15,9 @@ use crate::ps2chr::{Chr, Triangle};
 
 type P = [i32; 3];
 
+/// A triangle's three HD UVs.
+pub type Uvs = [[f32; 2]; 3];
+
 /// An axis permutation and sign flip, then an offset: PS2 = R(HD × 1000) + t.
 #[derive(Debug, Clone, Copy)]
 pub struct Frame {
@@ -218,30 +221,28 @@ pub struct Pending {
 }
 
 /// Matches HD triangles (`positions`, `uvs`, triangle `indices`) to PS2
-/// ones. Returns the matches, the triangles left for [`second_pass`] and
-/// how many HD triangles there were.
+/// ones. Returns the matches, the triangles left for [`second_pass`], the
+/// HD UVs of the triangles with a corner the PS2 mesh lacks (for
+/// [`third_pass`]) and how many HD triangles there were.
 pub fn match_triangles(
     index: &Index,
     frame: &Frame,
     positions: &[[f32; 3]],
     uvs: &[[f32; 2]],
     indices: &[u16],
-) -> (Vec<Job>, Vec<Pending>, usize) {
+) -> (Vec<Job>, Vec<Pending>, Vec<Uvs>, usize) {
     let mut jobs = Vec::new();
     let mut pending = Vec::new();
+    let mut loose = Vec::new();
     let tris = indices.len() / 3;
     for t in indices.as_chunks::<3>().0 {
         let i = t.map(usize::from);
-        let Some(c0) = snap(&index.vertices, frame.apply(positions[i[0]])) else {
-            continue;
-        };
-        let Some(c1) = snap(&index.vertices, frame.apply(positions[i[1]])) else {
-            continue;
-        };
-        let Some(c2) = snap(&index.vertices, frame.apply(positions[i[2]])) else {
-            continue;
-        };
         let hd_uv = i.map(|k| uvs[k]);
+        let snapped = i.map(|k| snap(&index.vertices, frame.apply(positions[k])));
+        let [Some(c0), Some(c1), Some(c2)] = snapped else {
+            loose.push(hd_uv);
+            continue;
+        };
         match index.find([c0, c1, c2]) {
             Some((material, ps2_uv)) => jobs.push(Job {
                 hd_uv,
@@ -254,7 +255,7 @@ pub fn match_triangles(
             }),
         }
     }
-    (jobs, pending, tris)
+    (jobs, pending, loose, tris)
 }
 
 /// A page's UV map for one PS2 material: HD = s * PS2 / 4096 + o, per axis.
@@ -271,6 +272,24 @@ impl UvMap {
             self.s[0] * uv[0] / 4096.0 + self.o[0],
             self.s[1] * uv[1] / 4096.0 + self.o[1],
         ]
+    }
+
+    /// HD UV -> PS2 UV.
+    fn inverse(&self, hd: [f32; 2]) -> [f32; 2] {
+        [
+            (hd[0] - self.o[0]) * 4096.0 / self.s[0],
+            (hd[1] - self.o[1]) * 4096.0 / self.s[1],
+        ]
+    }
+
+    /// Whether the job's PS2 corners land on its HD corners through this
+    /// map (within the map's 1/256 rounding).
+    fn fits(&self, j: &Job) -> bool {
+        j.material == self.material
+            && (0..3).all(|k| {
+                let h = self.apply(j.ps2_uv[k]);
+                (h[0] - j.hd_uv[k][0]).abs() <= 1.0 / 256.0 && (h[1] - j.hd_uv[k][1]).abs() <= 1.0 / 256.0
+            })
     }
 }
 
@@ -385,6 +404,45 @@ pub fn second_pass(index: &Index, exact: &[Job], pending: &[Pending], tolerance:
     out
 }
 
+/// Paints the triangles the remaster added (a corner the PS2 mesh lacks)
+/// or split another way (no twin, not paired by [`second_pass`]), `loose`, from the PS2 page through the UV map of a matched neighbour:
+/// a loose triangle gets a job when one of its corners lies within `reach`
+/// page pixels (`page` = width, height) of a corner of an exact match that
+/// fits one of the page's learned maps (the PS2 layout, kept there). The
+/// remaster's extra triangles at a model's edges (Brotherhood's blade end)
+/// otherwise keep HD texels beside PS2 ones.
+pub fn third_pass(exact: &[Job], loose: &[Uvs], page: (u32, u32), reach: f32) -> Vec<Job> {
+    let maps = learn_maps(exact);
+    let px = |uv: [f32; 2]| [uv[0] * page.0 as f32, uv[1] * page.1 as f32];
+    let anchors: Vec<([[f32; 2]; 3], &UvMap)> = exact
+        .iter()
+        .filter_map(|j| maps.iter().find(|m| m.fits(j)).map(|m| (j.hd_uv.map(px), m)))
+        .collect();
+    let mut out = Vec::new();
+    for t in loose {
+        let corners = t.map(px);
+        let mut best: Option<(f32, &UvMap)> = None;
+        for (a, m) in &anchors {
+            for p in a {
+                for q in &corners {
+                    let d = (p[0] - q[0]).hypot(p[1] - q[1]);
+                    if d <= reach && best.is_none_or(|(e, _)| d < e) {
+                        best = Some((d, m));
+                    }
+                }
+            }
+        }
+        if let Some((_, m)) = best {
+            out.push(Job {
+                hd_uv: *t,
+                material: m.material,
+                ps2_uv: t.map(|uv| m.inverse(uv)),
+            });
+        }
+    }
+    out
+}
+
 /// How many HD page pixels one PS2 texel covers along each axis, rounded
 /// to a power of two: the HD page is painted at `size / scale`.
 pub fn density_scale(jobs: &[Job], page: (u32, u32)) -> u32 {
@@ -442,53 +500,69 @@ pub fn paint(chr: &Chr, jobs: &[Job], size: (u32, u32), background: Option<&Rgba
     let mut img = background.map_or_else(|| Rgba::new(w, h), |b| downscale(b, size));
     let mut done = vec![false; (w * h) as usize];
     for j in jobs {
-        // page pixel coordinates, rows top first (v up in the file)
-        let p = j.hd_uv.map(|[u, v]| [u * w as f32, (1.0 - v) * h as f32]);
-        let (x0, x1) = (
-            p.iter().map(|q| q[0]).fold(f32::MAX, f32::min),
-            p.iter().map(|q| q[0]).fold(f32::MIN, f32::max),
-        );
-        let (y0, y1) = (
-            p.iter().map(|q| q[1]).fold(f32::MAX, f32::min),
-            p.iter().map(|q| q[1]).fold(f32::MIN, f32::max),
-        );
-        let d =
-            (p[1][1] - p[2][1]) * (p[0][0] - p[2][0]) + (p[2][0] - p[1][0]) * (p[0][1] - p[2][1]);
-        if d.abs() < 1e-9 {
-            continue;
-        }
-        // half a pixel of slack so seams between triangles get covered
-        let pad = 0.5;
-        for y in ((y0 - pad).floor().max(0.0) as u32)..((y1 + pad).ceil().min(h as f32) as u32) {
-            for x in ((x0 - pad).floor().max(0.0) as u32)..((x1 + pad).ceil().min(w as f32) as u32)
-            {
-                let (px, py) = (x as f32 + 0.5, y as f32 + 0.5);
-                let a = ((p[1][1] - p[2][1]) * (px - p[2][0])
-                    + (p[2][0] - p[1][0]) * (py - p[2][1]))
-                    / d;
-                let b = ((p[2][1] - p[0][1]) * (px - p[2][0])
-                    + (p[0][0] - p[2][0]) * (py - p[2][1]))
-                    / d;
-                let c = 1.0 - a - b;
-                let inside = a >= 0.0 && b >= 0.0 && c >= 0.0;
-                let i = (y * w + x) as usize;
-                if !inside && (done[i] || a.min(b).min(c) < -0.05) {
-                    continue;
-                }
-                let u = a * j.ps2_uv[0][0] + b * j.ps2_uv[1][0] + c * j.ps2_uv[2][0];
-                let v = a * j.ps2_uv[0][1] + b * j.ps2_uv[1][1] + c * j.ps2_uv[2][1];
-                if let Some(col) = chr.sample(j.material, u, v) {
-                    img.put(x, y, col);
-                    done[i] = true;
-                }
-            }
-        }
+        raster(chr, j, size, &mut done, |x, y, col| img.put(x, y, col));
     }
     let covered = done.iter().filter(|&&d| d).count() as f32 / done.len() as f32;
     if background.is_none() {
         fill_holes(&mut img, &mut done);
     }
     (img, covered)
+}
+
+/// Rasterises one job into a page of `size`: `put(x, y, colour)` for each
+/// pixel inside the HD triangle (plus half a pixel of slack where no other
+/// triangle painted yet) that samples a PS2 texel; marks them in `done`.
+fn raster(chr: &Chr, j: &Job, size: (u32, u32), done: &mut [bool], mut put: impl FnMut(u32, u32, [u8; 4])) {
+    let (w, h) = size;
+    // page pixel coordinates, rows top first (v up in the file)
+    let p = j.hd_uv.map(|[u, v]| [u * w as f32, (1.0 - v) * h as f32]);
+    let (x0, x1) = (
+        p.iter().map(|q| q[0]).fold(f32::MAX, f32::min),
+        p.iter().map(|q| q[0]).fold(f32::MIN, f32::max),
+    );
+    let (y0, y1) = (
+        p.iter().map(|q| q[1]).fold(f32::MAX, f32::min),
+        p.iter().map(|q| q[1]).fold(f32::MIN, f32::max),
+    );
+    let d = (p[1][1] - p[2][1]) * (p[0][0] - p[2][0]) + (p[2][0] - p[1][0]) * (p[0][1] - p[2][1]);
+    if d.abs() < 1e-9 {
+        return;
+    }
+    // half a pixel of slack so seams between triangles get covered
+    let pad = 0.5;
+    for y in ((y0 - pad).floor().max(0.0) as u32)..((y1 + pad).ceil().min(h as f32) as u32) {
+        for x in ((x0 - pad).floor().max(0.0) as u32)..((x1 + pad).ceil().min(w as f32) as u32) {
+            let (px, py) = (x as f32 + 0.5, y as f32 + 0.5);
+            let a = ((p[1][1] - p[2][1]) * (px - p[2][0]) + (p[2][0] - p[1][0]) * (py - p[2][1])) / d;
+            let b = ((p[2][1] - p[0][1]) * (px - p[2][0]) + (p[0][0] - p[2][0]) * (py - p[2][1])) / d;
+            let c = 1.0 - a - b;
+            let inside = a >= 0.0 && b >= 0.0 && c >= 0.0;
+            let i = (y * w + x) as usize;
+            if !inside && (done[i] || a.min(b).min(c) < -0.05) {
+                continue;
+            }
+            let u = a * j.ps2_uv[0][0] + b * j.ps2_uv[1][0] + c * j.ps2_uv[2][0];
+            let v = a * j.ps2_uv[0][1] + b * j.ps2_uv[1][1] + c * j.ps2_uv[2][1];
+            if let Some(col) = chr.sample(j.material, u, v) {
+                put(x, y, col);
+                done[i] = true;
+            }
+        }
+    }
+}
+
+/// The mean colour difference (sum of R, G, B, 0..765) between what `job`
+/// paints and `page` (the HD page at the painted size) under it; `None`
+/// when it paints nothing.
+pub fn job_difference(chr: &Chr, job: &Job, page: &Rgba) -> Option<f32> {
+    let mut done = vec![false; (page.width * page.height) as usize];
+    let (mut sum, mut n) = (0u64, 0u64);
+    raster(chr, job, (page.width, page.height), &mut done, |x, y, col| {
+        let hd = page.get(x, y);
+        sum += (0..3).map(|k| u64::from(col[k].abs_diff(hd[k]))).sum::<u64>();
+        n += 1;
+    });
+    (n > 0).then(|| sum as f32 / n as f32)
 }
 
 /// Grows painted pixels into unpainted ones until none are left.

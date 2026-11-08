@@ -98,8 +98,9 @@ fn bake_chr_with(
     let index = bake::Index::new(&chr);
 
     // HD triangles per base-colour texture.
-    let mut by_page: BTreeMap<String, (Vec<bake::Job>, Vec<bake::Pending>, usize)> =
-        BTreeMap::new();
+    // matches, pending, added or loose triangles, total
+    type PageTris = (Vec<bake::Job>, Vec<bake::Pending>, Vec<bake::Uvs>, usize);
+    let mut by_page: BTreeMap<String, PageTris> = BTreeMap::new();
     // Segments with a triangle whose PS2 twin samples see-through texels,
     // with their page.
     let mut see_through: Vec<(usize, String)> = Vec::new();
@@ -114,7 +115,7 @@ fn bake_chr_with(
         if seg.uvs.is_empty() {
             continue;
         }
-        let (jobs, pending, total) =
+        let (jobs, pending, loose, total) =
             bake::match_triangles(&index, &frame, &seg.positions, &seg.uvs, &seg.indices);
         if paint {
             let (mut n, mut all) = (0, 0);
@@ -134,7 +135,8 @@ fn bake_chr_with(
         let e = by_page.entry(tex.archive_path()).or_default();
         e.0.extend(jobs);
         e.1.extend(pending);
-        e.2 += total;
+        e.2.extend(loose);
+        e.3 += total;
     }
 
     let mut report = Report {
@@ -143,7 +145,7 @@ fn bake_chr_with(
         model: None,
         skipped: Vec::new(),
     };
-    for (path, (mut jobs, pending, total)) in by_page {
+    for (path, (mut jobs, pending, loose, total)) in by_page {
         // within a quarter of a PS2 texel of a 256 page
         let more = bake::second_pass(&index, &jobs, &pending, 1.0 / 1024.0);
         if !paint {
@@ -192,6 +194,33 @@ fn bake_chr_with(
             height: hd.height,
             pixels: hd.to_rgba(),
         };
+        // the remaster's added triangles, through a matched neighbour's map
+        // (painted first, so the matched triangles win where they overlap),
+        // and the pending ones the second pass left (painted first too, so
+        // a second-pass match of the same triangle wins)
+        let mut rest = loose;
+        rest.extend(pending.iter().map(|p| p.hd_uv));
+        // Kept only where the PS2 texels look like the HD art they replace
+        // (the HD repainted the PS2 page; a page the remaster re-laid out
+        // would read the wrong place): a mean difference at most twice the
+        // matched triangles' median (and at least 24 of 765 allowed).
+        let page = bake::downscale(&hd_rgba, size);
+        let mut diffs: Vec<f32> = jobs.iter().filter_map(|j| bake::job_difference(&chr, j, &page)).collect();
+        diffs.sort_by(f32::total_cmp);
+        let limit = diffs.get(diffs.len() / 2).map_or(0.0, |m| 2.0 * m).max(24.0);
+        let third = bake::third_pass(&jobs, &rest, (hd.width, hd.height), 1.0);
+        let found = third.len();
+        let mut all: Vec<bake::Job> =
+            third.into_iter().filter(|j| bake::job_difference(&chr, j, &page).is_some_and(|d| d <= limit)).collect();
+        if std::env::var_os("DM_DEBUG").is_some() {
+            eprintln!(
+                "{path}: third pass {} kept of {found} of {} added or pending triangles (limit {limit:.0})",
+                all.len(),
+                rest.len()
+            );
+        }
+        all.extend(jobs);
+        let jobs = all;
         let (image, covered) = bake::paint(&chr, &jobs, size, Some(&hd_rgba));
         let file = phyretex::argb8_from(&template, &image).with_context(|| path.clone())?;
         // The HD's animation frames over this page, painted from the PS2
@@ -398,9 +427,10 @@ impl Job for ChrJob {
     /// 2: textures with mip chains (phyretex::mip_chain). 3: see-through
     /// materials get the blended twin (`chralpha::Draw::BlendKept`) instead
     /// of the alpha-to-coverage one, which is a plain alpha test without
-    /// MSAA.
+    /// MSAA. 4: the remaster's added triangles painted from the PS2 page
+    /// through a matched neighbour's UV map (`bake::third_pass`).
     fn version(&self) -> u32 {
-        3
+        4
     }
     fn name(&self) -> &'static str {
         self.name
