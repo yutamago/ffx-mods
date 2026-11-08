@@ -1,9 +1,10 @@
 # FFX mods
 
-Seven [Fahrenheit](https://github.com/fahrenheit-crew/fahrenheit) mods for
-FINAL FANTASY X HD Remaster (Steam, Windows) that bring back parts of the
-original PS2 game, with the PC version's game logic underneath. Install
-any of them, alone or together; each is a separate zip.
+All of Yutamago's [Fahrenheit](https://github.com/fahrenheit-crew/fahrenheit)
+mods for FINAL FANTASY X HD Remaster (Steam, Windows). Most bring back parts
+of the original PS2 game, with the PC version's game logic underneath (the
+PS2 mods); others change the game in their own way. Install any of them,
+alone or together; each is a separate zip.
 
 | Mod | What it changes | PS2 disc | Installed size | Needs |
 |---|---|---|---|---|
@@ -14,7 +15,7 @@ any of them, alone or together; each is a separate zip.
 | [PS2 aspect ratio](#ps2-aspect-ratio) (`yuta.ps2-aspect-ratio`) | the 4:3 picture with the PS2 camera | no | <1 MB | — |
 | [PS2 game feel](#ps2-game-feel) (`yuta.ps2-game-feel`) | PS2 run speed, battle menu without input delay, battle subtitles | no | <1 MB | — |
 | [Bug fixes](#bug-fixes) (`yuta.bug-fixes`) | NPC mouths, the Farplane video, Lulu's Fury spins | no | <1 MB | — |
-| [Round minimap](#round-minimap) (`yuta.round-minimap`) | not a PS2 part: a round field minimap, centred on you and turned with the camera | no | <1 MB | — |
+| [Round minimap](#round-minimap) (`yuta.round-minimap`) | a round field minimap, centred on you and turned with the camera | no | <1 MB | — |
 
 Every mod needs the shared library `yuta.ffx-mods` (in every zip; its
 manifest dependency). Sizes are the files `install.cmd` builds with the
@@ -27,7 +28,7 @@ it (`.iso`), or the disc itself in a disc drive. After that they need
 neither.
 
 [FFX Demaster](https://github.com/yutamago/ffx-demaster) is the whole
-package (these seven plus the PS2 movies, maps, effects and more).
+package (the PS2 mods here plus the PS2 movies, maps, effects and more).
 
 ## Install
 
@@ -169,7 +170,7 @@ plays (`fixes.farplane_video`), Lulu's Fury spins that often don't count
 
 ### Round minimap
 
-Not a part of the PS2 game: the field minimap becomes round, always centred
+The field minimap becomes round, always centred
 on you and turned with the camera, so that up on the map is where the
 camera looks. Your character is an arrow showing where they face; the
 walkable area sits over a grid fixed to the world, in the game's minimap
@@ -203,9 +204,9 @@ clears as you walk. Size and corner are settings (`minimap.size`,
 | `converter/` | `demaster`, the converter (Rust; library and program). Uses the ffx-rust crates (`github.com/yutamago/ffx-rust`, public, pinned in `Cargo.toml`). |
 | `live/` | `demaster_live.dll`, the live music engine (Rust, 32-bit like FFX.exe) |
 | `common/` | `yuta.ffx-mods`, the shared C# library (a Fahrenheit mod): settings, build status, code patch helpers, the F8 window |
-| `mods/<name>/` | the seven mods (C#, .NET 10, `Fahrenheit.Sdk/1.0.0-alpha12`), each with its `settings.toml` and players' `README.txt` |
+| `mods/<name>/` | the mods (C#, .NET 10, `Fahrenheit.Sdk/1.0.0-alpha12`), each with its `settings.toml` and players' `README.txt` |
 | `tools/install/` | `install.ps1` and `install.cmd`, in every mod's zip |
-| `tools/package.cs` | the seven zips |
+| `tools/package.cs` | one zip per mod |
 
 ```bash
 cargo build --release -p demaster                     # Linux: target/release/demaster
@@ -230,7 +231,7 @@ read the same way.
 
 CI (`.github/workflows/build.yml`) builds the mods, runs the converter
 tests on Linux, builds `demaster.exe` and `demaster_live.dll` on Windows,
-packages the seven zips and checks that they hold no game data, on every
+packages every mod's zip and checks that they hold no game data, on every
 push and pull request; a tag `v*` publishes a release with the zips
 (`release.yml`); no secrets are needed ([`docs/ci.md`](docs/ci.md)).
 

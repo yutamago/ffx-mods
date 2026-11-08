@@ -1,7 +1,7 @@
 # Settings
 
 Every difference between the HD Remaster and the PS2 original that the
-mods restore is a setting. **Each mod has its own settings file,
+PS2 mods restore is a setting, and so is every change of the other mods. **Each mod has its own settings file,
 `settings.toml` in its folder (`mods/yuta.<name>/`), with only its
 settings**; FFX Demaster has all of them in one `demaster.toml` next to
 its `demaster.exe` (the same keys and defaults). Every row of
@@ -24,7 +24,7 @@ The converter's list is `converter/src/mods.rs`; each mod's own is its
 this page in step). A key in a mod's file that isn't one of its settings
 is ignored with a warning (the converter's output and the F8 window).
 
-**The rule for defaults: presentation from the PS2, logic from the PC.**
+**The rule for defaults of the PS2 mods: presentation from the PS2, logic from the PC.**
 Presentation settings are `"ps2"` (the default) or `"hd"` (the HD
 Remaster). Fixes are `true` (fixed, the default) or `false` (as on PC).
 Game logic (balance, Eternal Calm, boosters, controls, PC text and voices,

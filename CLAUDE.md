@@ -1,10 +1,11 @@
 # ffx-mods
 
-Seven Fahrenheit mods for the FFX HD Remaster (Steam) that restore parts of
-the PS2 version, each working alone and in any combination, plus the
-converter (`demaster`) that builds their PS2 files from the player's own
-disc. Presentation from the PS2, logic from the PC; every change is a
-setting. Split out of ffx-demaster (github.com/yutamago/ffx-demaster,
+All of the user's Fahrenheit mods for the FFX HD Remaster (Steam), each
+working alone and in any combination, plus the converter (`demaster`) that
+builds the PS2 mods' files from the player's own disc. Most are PS2 mods
+(they restore parts of the PS2 version: presentation from the PS2, logic
+from the PC); others are the user's own changes (`round-minimap`). Every
+change is a setting. The PS2 mods were split out of ffx-demaster (github.com/yutamago/ffx-demaster,
 history kept up to its 314bbfc); ffx-demaster becomes a bundle of these
 mods plus its own parts (movies, maps, effects, glow, shadows, the music
 bank), which builds with this repo's converter. README.md describes each
@@ -42,12 +43,12 @@ mod for players.
 | `converter/` | crate `demaster` (lib + binary): the jobs, the build, the disc reader. `mods.rs` lists each mod's settings and jobs. |
 | `live/` | crate `demaster-live`: `demaster_live.dll` (32-bit, the live PS2 music engine, `tools/build-live.sh`) |
 | `common/` | `yuta.ffx-mods`, the shared C# library (itself a Fahrenheit mod): `Native`/`Fn`, `ModHost` (settings.toml, build status, patches), the one F8 window (`FamilyWindow`), `ModFiles` (the PS2 files of every installed mod) |
-| `mods/<name>/` | the seven mods, `yuta.<name>`: `Mod.cs` (settings with defaults, code patches), the patch code, `settings.toml` (defaults), `README.txt` (for the zip) |
+| `mods/<name>/` | the mods, `yuta.<name>`: `Mod.cs` (settings with defaults, code patches), the patch code, `settings.toml` (defaults), `README.txt` (for the zip) |
 | `tools/install/` | `install.ps1` + `install.cmd`, shipped in every mod folder |
-| `tools/package.cs` | the seven zips |
+| `tools/package.cs` | one zip per mod |
 | `docs/` | moved from ffx-demaster: the research and design docs of every feature (also of the parts that stay in ffx-demaster) |
 
-The seven mods and what is in each: README.md and `converter/src/mods.rs`.
+The mods and what is in each: README.md and `converter/src/mods.rs`.
 
 ## Rules for the mods
 
@@ -79,7 +80,7 @@ RUSTC_WRAPPER= cargo test --release -p demaster -p demaster-live   # disc tests 
 ./target/release/demaster build --mod ps2-lighting --mod-dir <dir> --iso /tmp/dm-ffx.iso --game ~/steam-games/FFX-X2-HD
 tools/build-windows.sh && tools/build-live.sh       # demaster.exe, demaster_live.dll
 dotnet build -c Release ffx-mods.slnx               # artifacts/deploy/rel/mods/yuta.*/
-dotnet run tools/package.cs -- <out dir> <version>  # the seven zips
+dotnet run tools/package.cs -- <out dir> <version>  # one zip per mod
 ```
 
 CI and tag releases: `docs/ci.md` (no secrets needed).
