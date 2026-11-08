@@ -11,6 +11,7 @@ pub mod chrjob;
 pub mod config;
 pub mod disc;
 pub mod dxbc;
+pub mod eventlight;
 pub mod fontjob;
 pub mod fsb5;
 pub mod fxjob;

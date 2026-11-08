@@ -26,6 +26,7 @@ pub fn registry() -> Vec<Box<dyn Job>> {
     jobs.extend(crate::musicjob::jobs());
     jobs.extend(crate::livejob::jobs());
     jobs.extend(crate::shaderjob::jobs());
+    jobs.extend(crate::eventlight::jobs());
     jobs
 }
 

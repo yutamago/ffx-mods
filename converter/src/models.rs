@@ -1488,6 +1488,65 @@ pub fn debug(chr: &[u8], hd: &[u8]) -> Result<()> {
             m.cloths.iter().map(|c| c.vertices.len()).collect::<Vec<_>>()
         );
     }
+    // The normal skin lists against the normal array, in the bind pose.
+    for (mi, m) in mesh.models.iter().enumerate() {
+        if m.normals.is_empty() {
+            continue;
+        }
+        let base = ps2w[usize::from(m.base)];
+        let mut ang: Vec<f64> = Vec::new();
+        let mut none = 0;
+        for (k, n) in m.normals.iter().enumerate() {
+            let a = normalize(ps2mesh::rotate(&base, n.map(f64::from)));
+            let inf = &m.normal_influences[k];
+            if inf.is_empty() {
+                none += 1;
+                continue;
+            }
+            let mut s = [0f64; 3];
+            for &(bn, w, p) in inf {
+                let r = ps2mesh::rotate(&ps2w[usize::from(bn)], p.map(f64::from));
+                for j in 0..3 {
+                    s[j] += f64::from(w) * r[j];
+                }
+            }
+            let s = normalize(s);
+            ang.push((a[0] * s[0] + a[1] * s[1] + a[2] * s[2]).clamp(-1.0, 1.0).acos().to_degrees());
+        }
+        ang.sort_by(f64::total_cmp);
+        let q = |f: f64| ang.get(((ang.len() as f64 - 1.0) * f) as usize).copied().unwrap_or(0.0);
+        println!(
+            "model {mi}: normal skin lists vs normal array (bind pose), {} skinned, {none} without list: angle p50 {:.1} p90 {:.1} p99 {:.1} max {:.1} deg",
+            ang.len(),
+            q(0.5),
+            q(0.9),
+            q(0.99),
+            q(1.0)
+        );
+    }
+    // Per corner: the normal's bones against its vertex's (sum of |w| differences / 2).
+    for (mi, m) in mesh.models.iter().enumerate() {
+        let sum = |inf: &[(u16, f32, [i16; 3])]| {
+            let mut s: BTreeMap<u16, f32> = BTreeMap::new();
+            for &(b, w, _) in inf {
+                *s.entry(b).or_default() += w;
+            }
+            s
+        };
+        let mut d: Vec<f32> = Vec::new();
+        for t in &m.tris {
+            for c in &t.corners {
+                let (Some(vi), Some(ni)) = (m.influences.get(usize::from(c.vertex)), m.normal_influences.get(usize::from(c.normal))) else { continue };
+                let (a, b) = (sum(vi), sum(ni));
+                let keys: BTreeSet<u16> = a.keys().chain(b.keys()).copied().collect();
+                let x = keys.iter().map(|k| (a.get(k).copied().unwrap_or(0.0) - b.get(k).copied().unwrap_or(0.0)).abs()).sum::<f32>() / 2.0;
+                d.push(x);
+            }
+        }
+        d.sort_by(f32::total_cmp);
+        let q = |f: f32| d.get(((d.len() as f32 - 1.0) * f) as usize).copied().unwrap_or(0.0);
+        println!("model {mi}: corner weight difference normal vs vertex p50 {:.3} p90 {:.3} p99 {:.3} max {:.3}", q(0.5), q(0.9), q(0.99), q(1.0));
+    }
     // Per model and texture entry: UV box (texels), position box and the
     // bones that skin the triangles (most weight first).
     // (triangles, UV box, position box, weight per bone)

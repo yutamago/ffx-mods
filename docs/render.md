@@ -3,7 +3,9 @@
 The code patches behind `render.glow`, `render.lighting`, `render.shadows`
 and `render.texture_filter`: hooks in `mod/RenderPatches.cs`, and for
 `render.lighting` also patched character shaders (converter job
-`render.lighting`, `converter/src/shaderjob.rs`).
+`render.lighting`, `converter/src/shaderjob.rs`) and the PS2's light
+colours in the event scripts (job `render.lighting.events`,
+`converter/src/eventlight.rs`).
 Addresses are ffx-rust's `symbols/ffx.sym` (FFX.exe image base
 `0x00400000`); the post-process chain is ffx-rust's
 `docs/formats/postfx.md`, the shadow solutions `docs/formats/scene-maps.md`
@@ -247,9 +249,9 @@ at x 1/128.
 ### Uncertain
 
 - The sign of the light directions is the HD's (the patch keeps the HD's
-  lit side; the PS2's normal-light matrix builder was not found in the PS2
-  ELF, FFX.exe's port only copies the rows). The opening's close-ups (below,
-  "Compared with the PS2") show the same lit side as the PS2.
+  lit side). Checked in PCSX2 (below, "The HD's event lights"): the PS2's
+  normal light matrix holds the `Light_Set` vectors negated, which the
+  PC's `(-x, -y, z)` matches.
 - Per pixel instead of per vertex: since job version 2 the interpolation
   is Gouraud-like (above); terminator triangles still clamp per pixel.
 - The PS2 clamps the vertex colour at 255 (x 1.99) before the texture
@@ -469,7 +471,8 @@ about 4 frames/s), so a frame within about 0.1 s of the dump's pose exists.
    matrix x base bone) orients the lights against them. The next step
    is to read the PS2's skinned normals of the face (`0x013e5c80` in
    save state 7) and its qw 20-22 at the dump's frame, and to compute
-   N.L per vertex for both.
+   N.L per vertex for both. Done: both are the same as ours; the PS2's
+   light colours are not (next sections, "The HD's event lights").
 
 Not a cause, found on the way: the test install's character shaders
 (2026-11-07 22:23) are still `render.lighting` job version 1 (the `rsq`
@@ -527,6 +530,91 @@ One run with the test install's DLL as found (another agent's build) crashed
 50 s in, inside `Phyre_PRendering_PRendererBase_generateMaterialParameterCaptureBuffer`
 (`0x005b7f30`, from `PhyreScene_render` on the main thread): not this
 patch, and maybe what was blamed on the earlier `Ch_PLightCalc` hook.
+
+### The HD's event lights (2026-11-08)
+
+The cause of the brighter lit areas in the opening's close-ups ("Per
+position against the PS2" above): **the HD Remaster retuned the light
+colours in the opening's event script**, so the PC lit Tidus with other
+lights than the PS2. Not the normals, not the light directions.
+
+- **Normals: the same as the PS2's.** The PS2 skins normals with lists of
+  their own: the mesh header's `+0x24` is a second skin-entry table, one
+  entry per vertex skin entry (same bone, model, base bone and kind), read
+  by the envelope `0x00107ec8` (SCES_504.92) with the vertex entry's
+  matrix; `0x00124058` (kind 0) and `0x00124260` (weighted) rotate them,
+  `0x001243e8` renormalises. Parsed now (`ps2mesh.rs`,
+  `Model::normal_influences`; `demaster models-debug` prints both checks):
+  in the bind pose they give the normal array that the conversion uses
+  (at most 0.2 degrees apart), and every corner's normal has exactly its
+  vertex's bones and weights (c001, c002, c005, c101, c102). Our skinned
+  normals are the PS2's.
+- **Light directions: the same.** Read in PCSX2 at the close-up (chr
+  `0x00bcc350` = c101, after `Sg_LightSetChr`): the raw `Light_Set`
+  vectors at `0x003035c0` are the PC's (`setLightDir` input, logged under
+  Fahrenheit: light 0 (0.4234, 0.2588, 0.8682) on both), and the normal
+  light matrix (qw 20-22, `0x003036b0`) holds them negated (the
+  `sceVu0NormalLightMatrix` convention: vectors towards the light; c101's
+  base bone 150 has no rotation in that shot), which is what the PC's
+  `(-x, -y, z)` and its world flip amount to.
+- **Light colours: not the same.** The PS2 during the whole Tidus shot:
+  light 0 (225, 199, 118) / 255, ambient (20, 22, 49); the PC (a hook on
+  `Sg_LightSetColor` `0x00836310`): light 0 (255, 225, 147), ambient
+  (16, 18, 39); lights 1 and 2 equal. The PC's `znkd0600.ebp` has those
+  numbers in its `Light_Set` calls: 11 of its 36 calls differ from the
+  PS2 disc's (the angles never do), e.g. the Tidus shot, two sets of the
+  party at the fire (light 0 (255, 190, 125) for the PS2's (255, 208,
+  125), lights 2 and the ambient darker), Yuna's light 1 (155 for 141).
+  The previous agent's per-light split assumed the PC's colours for the
+  PS2 frame: with the PS2 at 0.88x light 0 and 1.25x ambient, that split
+  reads as a "1.37x spread N.L".
+
+**Fix** (converter job `render.lighting.events`, under `render.lighting =
+"ps2"`): every event `.ebp` of `FFX_Data.vbf` is paired with the disc's;
+the `Light_Set` calls (`func_facc 0x4013` after six `pushimm`) are taken
+worker by worker in code order, and where both files have the same count
+and the same light numbers the PS2's immediates are written into the PC
+file in place (same instruction lengths, nothing else changes; the test
+checks that only those operands move). 6 scripts change: `znkd0600`,
+`loopdemo` (the title's demo, the same code), `bjyt0200` (14 calls),
+`bvyt0400` (6), `maca0200` (4), `dome0400` (1); 47 of 9679 calls. Not
+paired, left as they are: `genk1000` (164 calls on the PS2, 160 on the
+PC), `maca0500` (4 on the PS2, none on the PC). 311 scripts have the same
+lights; 77 PC events are not on the disc.
+
+**Measured** (Fahrenheit install, the shaders of `render.lighting` job
+version 2 installed for all runs; same-pose registration on the dump
+`d143`, scripts in `scratch/texel/`):
+
+| ours / PS2, G (face) | all | vcol < 150 | 150-190 | 190-215 | > 215 |
+|---|---|---|---|---|---|
+| before (`nl\diag1\f031308`) | 1.078 | 1.008 | 1.070 | 1.093 | 1.104 |
+| after (`nl\ev1\f010216`) | 1.006 | 1.012 | 1.008 | 1.001 | 1.005 |
+
+R 1.050 -> 1.004, B 1.081 -> 1.012. Face ellipses on pose-matched frames
+(as in "Brighter highlights"; `nl\base2`, `nl\ev2`):
+
+| Region | L mean / sd / p5 / p50 / p95 | G p5/50/95 | B p5/50/95 |
+|---|---|---|---|
+| Tidus, PS2 `s153` | 147.5 / 40.6 / 54 / 163 / 186 | 42/138/173 | 24/62/78 |
+| Tidus, before | 160.6 / 39.9 / 69 / 175 / 199 | 54/155/193 | 28/70/88 |
+| Tidus, after | 147.6 / 41.0 / 54 / 163 / 188 | 43/138/176 | 25/62/80 |
+| Yuna, PS2 `s094` | 97.3 / 43.2 / 26 / 94 / 179 | 20/80/162 | 20/57/82 |
+| Yuna, before | 101.9 / 48.8 / 28 / 93 / 192 | 21/75/180 | 22/56/93 |
+| Yuna, after | 101.1 / 45.2 / 27 / 96 / 185 | 21/82/170 | 22/58/85 |
+
+Yuna's shot changes only light 1's red; her remaining few per cent are
+within the head's pose difference (the PS2 frame turns her head further).
+The party at the fire (box over the characters, L mean ours / PS2): "Art
+Directors" `s065` 0.888 -> 0.940, `s068` 0.861 -> 0.902, `s076` 0.855 ->
+0.912, "Lead field designers" `s124` 0.883 -> 0.906; the rest is the map
+around them (ground and sky darker than the PS2's, a map matter). Yuna's
+wider shot `s106` 0.975 -> 1.001. No daylight scene with a changed script
+was reached (the four other scripts are later events).
+
+Pictures: `C:\shots\fix-alpha\nl\tidus-before-after.png` (PS2,
+ours, ours / PS2 ratio map; before on top), `faces-yuna.png`,
+`faces-tidus.png`, `fire-before-after.png`.
 
 ## `render.texture_filter = "nearest"`
 

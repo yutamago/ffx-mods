@@ -89,6 +89,16 @@ Layout as in ffx-rust `docs/formats/chara.md`, plus what this needed:
     ended by `0xffff`; the first run sets, the second adds.
   - kind ≠ 0 (`sg_calcenvelopeW_asm` `0x006ed9e0`): the same first part,
     then two runs of `u16` n, n × (x, y, z, vertex, weight × 10000).
+  - Normal skin lists: the header's `+0x24` is a second table of skin
+    entries, one per vertex entry (same bone, model, base bone, kind),
+    whose lists move the normals with the vertex entry's matrix (rotation
+    only; envelope `0x00107ec8`, `0x00124058` kind 0, `0x00124260`
+    weighted, renormalised by `0x001243e8`). Same layout as the vertex
+    lists except the weighted runs: (x, y, z, weight × 10000, normal),
+    the weight first. In the bind pose they give the normal array, and
+    each corner's normal has its vertex's bones and weights (party models
+    checked, `demaster models-debug`), so the conversion's normals
+    (array, vertex weights) skin as the PS2's.
   - x, y, z are the vertex in that bone's frame. With the bind pose,
     Σ w · bone · p equals base · stored vertex to within 0.01-0.04 units on
     the models checked, so the stored vertices are the bind pose and the
