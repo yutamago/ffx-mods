@@ -249,6 +249,205 @@ pub struct Minimap {
     pub corner: MinimapCorner,
 }
 
+/// `frames.target`: how fast FPS unlock lets the game draw (`docs/fps-unlock.md`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum FrameTarget {
+    /// The game's own limiter (30 fps in the world).
+    Game,
+    /// The refresh rate of the monitor the window is on.
+    #[default]
+    Monitor,
+    /// `frames.fixed_fps`.
+    Fixed,
+    /// No limiter.
+    Unlimited,
+}
+
+/// `frames.vsync`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum FrameVsync {
+    /// As the game's own setting has it.
+    #[default]
+    Game,
+    On,
+    Off,
+}
+
+/// `frames.between_ticks`: what a drawn frame without a world tick does.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum BetweenTicks {
+    /// The game's draw again with the world held still.
+    #[default]
+    Redraw,
+    /// The last frame again.
+    Repeat,
+}
+
+/// `frames.effects`: the effects on frames between ticks.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum FrameEffects {
+    /// The last tick's effect draws drawn again.
+    #[default]
+    Replay,
+    /// The effects run every drawn frame (too fast).
+    Run,
+    /// Held: missing between ticks.
+    Hold,
+}
+
+/// `frames.speed`: the time scale.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct FrameSpeed {
+    pub time_scale: f64,
+    pub fast: f64,
+    pub slow: f64,
+    pub mute_when_fast: bool,
+    pub booster_limits: bool,
+}
+
+impl Default for FrameSpeed {
+    fn default() -> Self {
+        FrameSpeed {
+            time_scale: 1.0,
+            fast: 10.0,
+            slow: 0.25,
+            mute_when_fast: true,
+            booster_limits: true,
+        }
+    }
+}
+
+/// `frames.interpolate`: what is drawn between the last two ticks.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct FrameInterpolate {
+    pub camera: bool,
+    pub characters: bool,
+    pub bones: bool,
+    pub cloth: bool,
+    pub repeats: bool,
+}
+
+impl Default for FrameInterpolate {
+    fn default() -> Self {
+        FrameInterpolate {
+            camera: true,
+            characters: true,
+            bones: true,
+            cloth: true,
+            repeats: true,
+        }
+    }
+}
+
+/// `frames.cuts`: when the camera cut or a character warped (drawn as the tick has it).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct FrameCuts {
+    pub camera_distance: f64,
+    pub camera_degrees: f64,
+    pub game_sets: bool,
+    pub character_distance: f64,
+    pub character_degrees: f64,
+}
+
+impl Default for FrameCuts {
+    fn default() -> Self {
+        FrameCuts {
+            camera_distance: 100.0,
+            camera_degrees: 45.0,
+            game_sets: true,
+            character_distance: 50.0,
+            character_degrees: 120.0,
+        }
+    }
+}
+
+/// `frames.hold`: what redrawn frames hold still.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct FrameHold {
+    pub characters: bool,
+    pub field_animation: bool,
+    pub fades: bool,
+    pub cloth: bool,
+}
+
+impl Default for FrameHold {
+    fn default() -> Self {
+        FrameHold {
+            characters: true,
+            field_animation: true,
+            fades: true,
+            cloth: true,
+        }
+    }
+}
+
+/// `frames.budget`: how many ticks one drawn frame may run.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct FrameBudget {
+    pub max_real_time: f64,
+    pub max_ticks: u32,
+    pub max_update_ms: f64,
+    pub whole_updates: u32,
+}
+
+impl Default for FrameBudget {
+    fn default() -> Self {
+        FrameBudget {
+            max_real_time: 0.3,
+            max_ticks: 100,
+            max_update_ms: 40.0,
+            whole_updates: 4,
+        }
+    }
+}
+
+/// FPS unlock (mod `fps-unlock`, all applied by the mod, live): frame rate,
+/// drawing between ticks, time scale (`docs/fps-unlock.md`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Frames {
+    pub enabled: bool,
+    pub target: FrameTarget,
+    pub fixed_fps: f64,
+    pub vsync: FrameVsync,
+    pub overlay: bool,
+    pub between_ticks: BetweenTicks,
+    pub effects: FrameEffects,
+    pub speed: FrameSpeed,
+    pub interpolate: FrameInterpolate,
+    pub cuts: FrameCuts,
+    pub hold: FrameHold,
+    pub budget: FrameBudget,
+}
+
+impl Default for Frames {
+    fn default() -> Self {
+        Frames {
+            enabled: true,
+            target: FrameTarget::default(),
+            fixed_fps: 120.0,
+            vsync: FrameVsync::default(),
+            overlay: true,
+            between_ticks: BetweenTicks::default(),
+            effects: FrameEffects::default(),
+            speed: FrameSpeed::default(),
+            interpolate: FrameInterpolate::default(),
+            cuts: FrameCuts::default(),
+            hold: FrameHold::default(),
+            budget: FrameBudget::default(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Config {
@@ -265,6 +464,7 @@ pub struct Config {
     pub timing: Timing,
     pub fixes: Fixes,
     pub minimap: Minimap,
+    pub frames: Frames,
 }
 
 /// Who applies a setting.
@@ -320,6 +520,36 @@ pub const SETTINGS: &[(&str, AppliedBy)] = {
         ("minimap.style", Mod),
         ("minimap.size", Mod),
         ("minimap.corner", Mod),
+        ("frames.enabled", Mod),
+        ("frames.target", Mod),
+        ("frames.fixed_fps", Mod),
+        ("frames.vsync", Mod),
+        ("frames.overlay", Mod),
+        ("frames.between_ticks", Mod),
+        ("frames.effects", Mod),
+        ("frames.speed.time_scale", Mod),
+        ("frames.speed.fast", Mod),
+        ("frames.speed.slow", Mod),
+        ("frames.speed.mute_when_fast", Mod),
+        ("frames.speed.booster_limits", Mod),
+        ("frames.interpolate.camera", Mod),
+        ("frames.interpolate.characters", Mod),
+        ("frames.interpolate.bones", Mod),
+        ("frames.interpolate.cloth", Mod),
+        ("frames.interpolate.repeats", Mod),
+        ("frames.cuts.camera_distance", Mod),
+        ("frames.cuts.camera_degrees", Mod),
+        ("frames.cuts.game_sets", Mod),
+        ("frames.cuts.character_distance", Mod),
+        ("frames.cuts.character_degrees", Mod),
+        ("frames.hold.characters", Mod),
+        ("frames.hold.field_animation", Mod),
+        ("frames.hold.fades", Mod),
+        ("frames.hold.cloth", Mod),
+        ("frames.budget.max_real_time", Mod),
+        ("frames.budget.max_ticks", Mod),
+        ("frames.budget.max_update_ms", Mod),
+        ("frames.budget.whole_updates", Mod),
     ]
 };
 
@@ -550,6 +780,10 @@ mod tests {
                 matches!(k.as_str(), "minimap.style" if v == "crt")
                     || matches!(k.as_str(), "minimap.size" if v == "medium")
                     || matches!(k.as_str(), "minimap.corner" if v == "top_right")
+            } else if k.starts_with("frames.") {
+                // not a PS2 part: FPS unlock's defaults are the mod's (mods/fps-unlock/Mod.cs,
+                // settings.toml; checked against each other in mods.rs and the mod's tests)
+                true
             } else if k == "ui.boot_logo" {
                 // an extra screen at every start: off unless asked for
                 v == "hd"

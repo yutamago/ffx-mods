@@ -44,6 +44,24 @@ public sealed class ModSettings {
         return new(all, path, true, r.Values, r.Problems);
     }
 
+    /// <summary>
+    /// Writes values into the settings file at <paramref name="path"/> (the file is created when
+    /// missing): each key's value replaced on its line, the line's comment and every other line kept;
+    /// a key the file lacks is added at the end of its table. <paramref name="values"/> are TOML
+    /// literals ("\"monitor\"", "true", "120.0"). For a mod that changes its settings while the game
+    /// runs; this object keeps the values it read at startup.
+    /// </summary>
+    /// <exception cref="IOException">The file cannot be read or written.</exception>
+    public static void write(string path, IEnumerable<KeyValuePair<string, string>> values) {
+        string text = File.Exists(path) ? File.ReadAllText(path) : "";
+        string next = text;
+        foreach ((string key, string literal) in values) next = MiniToml.set(next, key, literal);
+        if (next == text) return;
+        string temp = path + ".tmp";
+        File.WriteAllText(temp, next);
+        File.Move(temp, path, overwrite: true);
+    }
+
     /// <summary>The setting's value, or its default when the file doesn't set it.</summary>
     public string get(string key) =>
         Values.TryGetValue(key, out string? v) ? v : All.First(s => s.Key == key).Default;

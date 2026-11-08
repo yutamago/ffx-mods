@@ -17,6 +17,7 @@ its `demaster.exe` (the same keys and defaults). Every row of
 | `yuta.ps2-game-feel` | `timing.run_speed`, `ui.battle_menu_delay`, `ui.battle_subtitles` |
 | `yuta.bug-fixes` | `fixes.npc_mouths`, `fixes.farplane_video`, `fixes.lulu_fury` |
 | `yuta.round-minimap` | `minimap.style`, `minimap.size`, `minimap.corner` (not a PS2 part; see [Minimap](#minimap)) |
+| `yuta.fps-unlock` | `frames.*` (not a PS2 part; see [FPS unlock](#fps-unlock)) |
 | FFX Demaster only | `movies`, `maps.*`, `effects.textures`, `render.glow`, `render.shadows`, `audio.soundtrack`, `audio.music_engine = "ps2"` (the rendered bank) |
 
 The converter's list is `converter/src/mods.rs`; each mod's own is its
@@ -162,6 +163,53 @@ replaces the field minimap of both versions with a round one
 | `minimap.style` | `"crt"`: round, centred on the player, turned with the camera, in the game's colours on a small CRT screen; `"plain"`: the same without the CRT screen; `"game"`: the game's own minimap | `"crt"` | done, seen in the game (Thunder Plains; `"plain"` and `"game"` too) |
 | `minimap.size` | `"small"`, `"medium"`, `"large"`: 14, 18 or 24 % of the picture's height across | `"medium"` | done (`"large"` seen in the game) |
 | `minimap.corner` | `"top_right"`, `"top_left"`, `"bottom_right"`, `"bottom_left"` of the 16:9 picture | `"top_right"` | done (`"bottom_left"` seen in the game) |
+
+## FPS unlock
+
+FPS unlock (`yuta.fps-unlock`) is not a part of the PS2 game: it draws the
+game at the monitor's rate (or a fixed rate, or uncapped) while the world
+keeps its 30 ticks a second, draws the camera and the characters between
+ticks, and scales game time ([`fps-unlock.md`](fps-unlock.md)). Every
+setting is applied by the mod and read **live**: F9 opens them in the F8
+window, a change applies at once and is written back into the mod's
+`settings.toml` half a second later (only the lines that changed; a time
+scale above 1.0 only after 5 s at it). The defaults are the mod's, not the
+PS2's. Status: the frame timing is ffx-atel-sharp's `yuta.frames`, seen
+in the game there (2026-11-07, 2026-11-08); as `yuta.fps-unlock`, with
+`settings.toml` and the F8 window, not yet run in the game.
+
+| Setting | Values | Default |
+|---|---|---|
+| `frames.enabled` | `true`; `false`: the game's own timing, limiter and vsync (the hooks stay in and pass everything through) | `true` |
+| `frames.target` | `"game"` (the game's limiter, 30 fps), `"monitor"` (the window's monitor's refresh rate), `"fixed"` (`frames.fixed_fps`), `"unlimited"` | `"monitor"` |
+| `frames.fixed_fps` | 10 to 1000 | `120.0` |
+| `frames.vsync` | `"game"` (as the game has it), `"on"`, `"off"` (Alt+F9 switches on and off) | `"game"` |
+| `frames.overlay` | the fps counter in the top-right corner | `true` |
+| `frames.between_ticks` | `"redraw"`: a frame without a tick runs the game's draw with the world held; `"repeat"`: the last frame again | `"redraw"` |
+| `frames.effects` | between ticks: `"replay"` (the last tick's effect draws again), `"run"` (too fast), `"hold"` (missing) | `"replay"` |
+| `frames.speed.time_scale` | game time per real second, 0.05 to 100 | `1.0` |
+| `frames.speed.fast` | the scale Ctrl+F9 switches to | `10.0` |
+| `frames.speed.slow` | the scale Shift+F9 switches to | `0.25` |
+| `frames.speed.mute_when_fast` | sound off above 1.0 | `true` |
+| `frames.speed.booster_limits` | 1.0 where the PC booster won't speed up | `true` |
+| `frames.interpolate.camera` | the camera between ticks | `true` |
+| `frames.interpolate.characters` | the characters' place and facing between ticks | `true` |
+| `frames.interpolate.bones` | their bones too | `true` |
+| `frames.interpolate.cloth` | their cloth and hair too (needs `frames.hold.cloth`) | `true` |
+| `frames.interpolate.repeats` | the camera on `"repeat"` frames | `true` |
+| `frames.cuts.camera_distance` | a camera that moved further in one tick cut (world units) | `100.0` |
+| `frames.cuts.camera_degrees` | a camera that turned more in one tick cut (degrees) | `45.0` |
+| `frames.cuts.game_sets` | the game's instant camera sets are cuts when the step jumps | `true` |
+| `frames.cuts.character_distance` | a character that moved further in one tick warped (world units) | `50.0` |
+| `frames.cuts.character_degrees` | a character that turned more in one tick warped (degrees) | `120.0` |
+| `frames.hold.characters` | redrawn frames hold `Ch_CalcMiddle` (bones, motion events) | `true` |
+| `frames.hold.field_animation` | … `yiAnimMain` | `true` |
+| `frames.hold.fades` | … the fade counters of `Sg_DrawFilter` | `true` |
+| `frames.hold.cloth` | … the cloth step | `true` |
+| `frames.budget.max_real_time` | the most real time one frame counts (s) | `0.3` |
+| `frames.budget.max_ticks` | the most ticks one frame runs, 1 to 892 | `100` |
+| `frames.budget.max_update_ms` | the most update time one frame may take (ms, 5 to 300) | `40.0` |
+| `frames.budget.whole_updates` | whole game updates per frame before exec frames, 1 to 10 | `4` |
 
 ## Unknown keys
 

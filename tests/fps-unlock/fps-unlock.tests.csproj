@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <!-- Tests of fps-unlock's portable part: the tick accumulator, the plan, the director, the camera's, the characters'
+         and the cloth's interpolation, the effects' replay rules, the settings (against Mod.cs and settings.toml) and the
+         hook checks on machine code. The mod itself builds against Fahrenheit for win-x86, so these sources are compiled
+         in here directly, with the shared library's settings.toml reader and writer. The tests of the hook sites against
+         the game's own FFX.exe need FFX_GAME_DIR (the game's folder) and skip themselves without it. -->
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+        <OutputType>Exe</OutputType>
+        <IsPackable>false</IsPackable>
+        <RootNamespace>Yuta.FfxMods.FpsUnlock.Tests</RootNamespace>
+    </PropertyGroup>
+    <ItemGroup>
+        <PackageReference Include="xunit.v3" Version="3.2.2" />
+        <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5" />
+        <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.0.1" />
+    </ItemGroup>
+    <ItemGroup>
+        <Compile Include="../../mods/fps-unlock/TickAccumulator.cs" Link="mod/TickAccumulator.cs" />
+        <Compile Include="../../mods/fps-unlock/TickPlan.cs" Link="mod/TickPlan.cs" />
+        <Compile Include="../../mods/fps-unlock/TickBudget.cs" Link="mod/TickBudget.cs" />
+        <Compile Include="../../mods/fps-unlock/ScaleGuard.cs" Link="mod/ScaleGuard.cs" />
+        <Compile Include="../../mods/fps-unlock/DrawCounters.cs" Link="mod/DrawCounters.cs" />
+        <Compile Include="../../mods/fps-unlock/FrameSettings.cs" Link="mod/FrameSettings.cs" />
+        <Compile Include="../../mods/fps-unlock/FramePacing.cs" Link="mod/FramePacing.cs" />
+        <Compile Include="../../mods/fps-unlock/FrameDirector.cs" Link="mod/FrameDirector.cs" />
+        <Compile Include="../../mods/fps-unlock/CameraInterpolator.cs" Link="mod/CameraInterpolator.cs" />
+        <Compile Include="../../mods/fps-unlock/FrameStats.cs" Link="mod/FrameStats.cs" />
+        <Compile Include="../../mods/fps-unlock/TimeScaleSteps.cs" Link="mod/TimeScaleSteps.cs" />
+        <Compile Include="../../mods/fps-unlock/CodeScan.cs" Link="mod/CodeScan.cs" />
+        <Compile Include="../../mods/fps-unlock/PeRelocations.cs" Link="mod/PeRelocations.cs" />
+        <Compile Include="../../mods/fps-unlock/HookSites.cs" Link="mod/HookSites.cs" />
+        <Compile Include="../../mods/fps-unlock/EffectReplay.cs" Link="mod/EffectReplay.cs" />
+        <Compile Include="../../mods/fps-unlock/CharacterInterpolator.cs" Link="mod/CharacterInterpolator.cs" />
+        <Compile Include="../../mods/fps-unlock/ClothInterpolator.cs" Link="mod/ClothInterpolator.cs" />
+        <Compile Include="../../mods/fps-unlock/WorldMatrixLog.cs" Link="mod/WorldMatrixLog.cs" />
+        <Compile Include="../../common/MiniToml.cs" Link="common/MiniToml.cs" />
+    </ItemGroup>
+</Project>

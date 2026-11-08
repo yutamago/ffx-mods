@@ -1,9 +1,10 @@
 # FFX mods
 
-Seven [Fahrenheit](https://github.com/fahrenheit-crew/fahrenheit) mods for
-FINAL FANTASY X HD Remaster (Steam, Windows) that bring back parts of the
-original PS2 game, with the PC version's game logic underneath. Install
-any of them, alone or together; each is a separate zip.
+[Fahrenheit](https://github.com/fahrenheit-crew/fahrenheit) mods for
+FINAL FANTASY X HD Remaster (Steam, Windows): seven that bring back parts
+of the original PS2 game, with the PC version's game logic underneath, and
+two that are not PS2 parts (a round minimap, and the frame rate unlocked).
+Install any of them, alone or together; each is a separate zip.
 
 | Mod | What it changes | PS2 disc | Installed size | Needs |
 |---|---|---|---|---|
@@ -15,6 +16,7 @@ any of them, alone or together; each is a separate zip.
 | [PS2 game feel](#ps2-game-feel) (`yuta.ps2-game-feel`) | PS2 run speed, battle menu without input delay, battle subtitles | no | <1 MB | — |
 | [Bug fixes](#bug-fixes) (`yuta.bug-fixes`) | NPC mouths, the Farplane video, Lulu's Fury spins | no | <1 MB | — |
 | [Round minimap](#round-minimap) (`yuta.round-minimap`) | not a PS2 part: a round field minimap, centred on you and turned with the camera | no | <1 MB | — |
+| [FPS unlock](#fps-unlock) (`yuta.fps-unlock`) | not a PS2 part: the game drawn at your monitor's refresh rate (or uncapped) at its own speed, slow motion and fast-forward | no | <1 MB | — |
 
 Every mod needs the shared library `yuta.ffx-mods` (in every zip; its
 manifest dependency). Sizes are the files `install.cmd` builds with the
@@ -183,6 +185,29 @@ clears as you walk. Size and corner are settings (`minimap.size`,
 
 - PS2 disc: not needed. Code only.
 
+### FPS unlock
+
+Not a part of the PS2 game: the 30 fps limit goes, the game's speed stays.
+The game draws at your monitor's refresh rate, at a rate you choose, or
+uncapped, with vsync on or off; the world keeps its 30 ticks a second, and
+the camera and the characters (their bones, cloth and hair) are drawn
+between ticks. A time scale gives slow motion and fast-forward (×0.05 to
+×100) without drawing more frames. Voice-synced scenes, movies and loads
+stay at their own speed.
+
+- **F9** opens its settings in the F8 window (a change applies at once and
+  is saved into its `settings.toml`); **Alt+F9** switches vsync on and off;
+  **Ctrl+F9** switches between fast-forward (×10) and ×1, **Shift+F9**
+  between slow motion (×0.25) and ×1, **Ctrl+Shift+F9** back to ×1,
+  **Ctrl+PgUp/PgDn** step the scale. A counter in the top-right corner shows
+  the frame rate, the world's ticks a second, vsync and the scale.
+- Effects, the 2D layers and blob shadows still move at 30 Hz (the effects
+  at the game's speed, drawn on every frame); fast-forward costs CPU (every
+  tick is simulated) and the counter says when it falls short.
+  [`docs/fps-unlock.md`](docs/fps-unlock.md) explains how it works and its
+  limits.
+- PS2 disc: not needed. Code only.
+
 ## Documents
 
 - [`docs/config.md`](docs/config.md): every setting, and which mod has it.
@@ -193,6 +218,8 @@ clears as you walk. Size and corner are settings (`minimap.size`,
   [`docs/models.md`](docs/models.md), [`docs/music.md`](docs/music.md):
   how each change works and how it was checked.
 - [`docs/minimap.md`](docs/minimap.md): the round minimap.
+- [`docs/fps-unlock.md`](docs/fps-unlock.md): FPS unlock, and how FFX.exe
+  times its frames (what a tick is, the limiter, fast-forward).
 - [`docs/disc.md`](docs/disc.md): how the PS2 disc stores its files.
 - [`docs/ci.md`](docs/ci.md): CI, releases and the `FFX_RUST_TOKEN` secret.
 
@@ -203,9 +230,10 @@ clears as you walk. Size and corner are settings (`minimap.size`,
 | `converter/` | `demaster`, the converter (Rust; library and program). Needs the ffx-rust crates (private, `github.com/yutamago/ffx-rust`, pinned in `Cargo.toml`). |
 | `live/` | `demaster_live.dll`, the live music engine (Rust, 32-bit like FFX.exe) |
 | `common/` | `yuta.ffx-mods`, the shared C# library (a Fahrenheit mod): settings, build status, code patch helpers, the F8 window |
-| `mods/<name>/` | the seven mods (C#, .NET 10, `Fahrenheit.Sdk/1.0.0-alpha12`), each with its `settings.toml` and players' `README.txt` |
+| `mods/<name>/` | the mods (C#, .NET 10, `Fahrenheit.Sdk/1.0.0-alpha12`), each with its `settings.toml` and players' `README.txt` |
+| `tests/` | C# tests (`tests/fps-unlock`: FPS unlock's portable part, built from its sources) |
 | `tools/install/` | `install.ps1` and `install.cmd`, in every mod's zip |
-| `tools/package.cs` | the seven zips |
+| `tools/package.cs` | one zip per mod |
 
 ```bash
 cargo build --release -p demaster                     # Linux: target/release/demaster
@@ -213,6 +241,7 @@ cargo test -p demaster -p demaster-live               # converter tests, incl. t
 tools/build-windows.sh                                # demaster.exe (cargo-xwin, static CRT)
 tools/build-live.sh                                   # demaster_live.dll (32-bit)
 dotnet build -c Release ffx-mods.slnx                 # artifacts/deploy/rel/mods/yuta.*/
+dotnet test -c Release --no-build ffx-mods.slnx       # C# tests (FFX_GAME_DIR=<game folder> for those on FFX.exe)
 dotnet run tools/package.cs -- dist 0.1.0             # dist/yuta.<mod>-0.1.0.zip
 ```
 
@@ -228,9 +257,9 @@ drive's raw volume (`\\.\E:`) in whole 2048-byte sectors at sector offsets
 into aligned memory (`converter/src/disc.rs`, `SectorReader`); images are
 read the same way.
 
-CI (`.github/workflows/build.yml`) builds the mods, runs the converter
-tests on Linux, builds `demaster.exe` and `demaster_live.dll` on Windows,
-packages the seven zips and checks that they hold no game data, on every
+CI (`.github/workflows/build.yml`) builds the mods and runs their tests,
+runs the converter tests on Linux, builds `demaster.exe` and
+`demaster_live.dll` on Windows, packages the zips and checks that they hold no game data, on every
 push and pull request; a tag `v*` publishes a release with the zips
 (`release.yml`). The Rust jobs need the repository secret `FFX_RUST_TOKEN`
 ([`docs/ci.md`](docs/ci.md)).
