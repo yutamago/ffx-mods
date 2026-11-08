@@ -99,17 +99,144 @@ pub fn material_variants(edit: &ClusterEdit) -> Result<Vec<String>> {
         .collect()
 }
 
-/// Points material `m` at effect variant `id` (an import id), adding the
-/// import (a copy of the material's current one) when the cluster has none.
-pub fn set_material_variant(edit: &mut ClusterEdit, m: u32, id: &str) -> Result<()> {
+/// Gives import `i` the id `id` (as long as its old one) in place.
+fn rename_import(edit: &mut ClusterEdit, i: u32, id: &str) -> Result<()> {
+    let l = list(edit, "PAssetReferenceImport")?;
+    let field = offset_of(edit, l, "m_id")?;
+    let old = array_string(edit, l, i, field).context("import without an id")?;
+    ensure!(old.len() == id.len(), "import id {old} and {id} differ in length");
+    let f = edit.lists[l]
+        .array_fixups
+        .iter()
+        .find(|f| f.object() == i && field_offset(&edit.cluster, f.member()) == Some(field))
+        .context("import without an id")?;
+    let at = f.0[3] as usize;
+    edit.lists[l].arrays[at..at + id.len()].copy_from_slice(id.as_bytes());
+    Ok(())
+}
+
+/// What a segment needs of its material's variant: the switches but the
+/// alpha and sidedness ones (the vertex streams follow them: cloth,
+/// skinning, colours, texture animation) and the parameter layout.
+fn variant_key<'a>(variants: &'a Variants, id: &str) -> Option<(BTreeSet<&'a str>, &'a [(String, u8, u32)])> {
+    let v = variants.of(id)?;
+    let mut on = v.on_set();
+    on.retain(|s| !["ALPHA_ENABLED", "UATFOPQ", "DOUBLE_SIDED"].contains(s));
+    Some((on, &v.layout))
+}
+
+/// Frees materials for [`spare_imports`]: each segment not in `drawn` (the
+/// hidden HD segments, still drawn as one degenerate triangle) takes the
+/// material of a drawn segment whose variant has its switches (cloth on
+/// cloth: a hidden cloth segment's import renamed to the non-cloth 3BF9, and
+/// a non-cloth one's to the cloth 9EE8, ended the game in the intro), so its
+/// own material may end up used by no segment. Returns the materials no
+/// segment uses.
+pub fn free_hidden_materials(edit: &mut ClusterEdit, drawn: &BTreeSet<u32>, variants: &Variants) -> Result<BTreeSet<u32>> {
+    let segs = list(edit, "PMeshSegment")?;
+    let n = edit.lists[segs].count();
+    let index_at = offset_of(edit, segs, "m_materialIndex")? as usize;
+    let ids = material_variants(edit)?;
+    let slot = |edit: &ClusterEdit, s: u32| {
+        u32::from_le_bytes(edit.lists[segs].object(s)[index_at..index_at + 4].try_into().expect("4 bytes"))
+    };
+    for s in (0..n).filter(|s| !drawn.contains(s)) {
+        let mine = edit.segment_material(s)?;
+        let key = variant_key(variants, &ids[mine as usize]);
+        if key.is_none() {
+            continue;
+        }
+        let old = slot(edit, s);
+        for &d in drawn {
+            let theirs = edit.segment_material(d)?;
+            if theirs == mine || variant_key(variants, &ids[theirs as usize]) != key {
+                continue;
+            }
+            edit.set_segment_material(s, slot(edit, d))?;
+            if edit.segment_material(s).ok() == Some(theirs) {
+                break;
+            }
+            // another mesh's material set
+            edit.set_segment_material(s, old)?;
+        }
+    }
+    let used: BTreeSet<u32> = (0..n).filter_map(|s| edit.segment_material(s).ok()).collect();
+    let materials = list(edit, "PMaterial")?;
+    Ok((0..edit.lists[materials].count()).filter(|m| !used.contains(m)).collect())
+}
+
+/// The effect variant imports of `edit` that only the materials `spare`
+/// (and their parameter buffers) refer to: imports whose id can change.
+pub fn spare_imports(edit: &ClusterEdit, spare: &BTreeSet<u32>) -> Result<Vec<u32>> {
+    let ids = imports(edit)?;
+    let mut users: BTreeMap<u16, BTreeSet<u32>> = BTreeMap::new();
+    let materials = list(edit, "PMaterial")?;
+    for (li, l) in edit.lists.iter().enumerate() {
+        let name = &edit.cluster.classes[l.class].name;
+        for f in &l.pointer_fixups {
+            let Some(r) = f.user_fixup() else { continue };
+            let [_, len, at] = edit.user_records[r as usize];
+            if len != 2 {
+                continue;
+            }
+            let i = u16::from_be_bytes([edit.user_data[at as usize], edit.user_data[at as usize + 1]]);
+            // a parameter buffer counts as its material's (one buffer per material)
+            let who = if li == materials {
+                f.object()
+            } else if name == "PParameterBuffer" {
+                continue;
+            } else {
+                u32::MAX
+            };
+            users.entry(i).or_default().insert(who);
+        }
+    }
+    Ok((0..ids.len())
+        .filter(|&i| ids[i].contains(".fx#"))
+        .filter(|&i| users.get(&(i as u16)).is_some_and(|u| u.iter().all(|m| spare.contains(m))))
+        .map(|i| i as u32)
+        .collect())
+}
+
+/// Points material `m` at effect variant `id` (an import id). `Ok(Err(why))`
+/// when the cluster has no import it can give the variant.
+///
+/// The game resolves a model's imports by id (`PAssetReferenceImport::
+/// resolve` `0x0045e280`), and an import the converter appends to the
+/// cluster is not found, though the variant is in the character's asset
+/// list: "Failed to find asset %s of type PEffectVariant, using fallback"
+/// (a hook on `Phyre::PhyrePrintf` in the boot intro, five times: the
+/// blended twins new to Lulu, Tidus, Kimahri and Yuna). The fallback draws
+/// nothing, so every segment of such a material was missing (Lulu's fur
+/// collar and necklace, Tidus's pant lattice, Kimahri's belt trims). An
+/// import the model has, renamed in place (all variant ids have one
+/// length), is found. So a variant the model does not import takes over an
+/// import: one of `spare` (only materials no segment uses refer to them,
+/// [`spare_imports`]), else the material's own when no other material uses
+/// it (the kept meshes, whose materials change in place).
+pub fn set_material_variant(
+    edit: &mut ClusterEdit,
+    m: u32,
+    id: &str,
+    spare: &mut Vec<u32>,
+) -> Result<std::result::Result<(), String>> {
     let (l, k) = variant_fixup(edit, m)?;
     let old = edit.lists[l].pointer_fixups[k].user_fixup().context("effect variant is not a user fixup")?;
     let index = match edit.import_index(id)? {
         Some(i) => i,
         None => {
             let [_, _, at] = edit.user_records[old as usize];
-            let current = u16::from_be_bytes([edit.user_data[at as usize], edit.user_data[at as usize + 1]]);
-            edit.add_import(u32::from(current), id)?
+            let current = u32::from(u16::from_be_bytes([edit.user_data[at as usize], edit.user_data[at as usize + 1]]));
+            let own = spare_imports(edit, &BTreeSet::from([m]))?.contains(&current).then_some(current);
+            let pick = (!spare.is_empty()).then(|| spare.remove(0));
+            let Some(i) = pick.or(own) else {
+                return Ok(Err(format!("the model imports no {} and has no import to spare", id.rsplit('#').next().unwrap_or(id))));
+            };
+            if std::env::var_os("DM_DEBUG").is_some() {
+                eprintln!("  material {m}: import {i} {} renamed to {id}", imports(edit)?[i as usize]);
+            }
+            rename_import(edit, i, id)?;
+            i
         }
     };
     let index = u16::try_from(index).context("imports")?;
@@ -119,7 +246,7 @@ pub fn set_material_variant(edit: &mut ClusterEdit, m: u32, id: &str) -> Result<
     edit.user_records.push([kind, 2, at]);
     let record = u32::try_from(edit.user_records.len() - 1)?;
     edit.lists[l].pointer_fixups[k].0[6] = record;
-    Ok(())
+    Ok(Ok(()))
 }
 
 /// The parameter layout of material `m`'s buffer: (name, type, size << 16
@@ -439,6 +566,7 @@ pub fn blend(
     m: u32,
     variants: &Variants,
     draw: Draw,
+    spare: &mut Vec<u32>,
 ) -> Result<std::result::Result<Change, String>> {
     // for before/after comparisons in the game
     if std::env::var_os("DM_NO_BLEND").is_some() {
@@ -465,14 +593,22 @@ pub fn blend(
     if v.layout != layout {
         return Ok(Err(format!("{twin} has another parameter layout than {id}")));
     }
-    set_material_variant(edit, m, &twin)?;
+    if let Err(why) = set_material_variant(edit, m, &twin, spare)? {
+        return Ok(Err(why));
+    }
     set_parameter(edit, m, "AlphaThreshold", &[threshold])?;
     Ok(Ok(Change::Switched(twin)))
 }
 
 /// Gives segments `segs` blended copies of their materials (one copy per
 /// material) and returns a report line.
-pub fn blend_segments(edit: &mut ClusterEdit, segs: &[u32], variants: &Variants, draw: Draw) -> Result<String> {
+pub fn blend_segments(
+    edit: &mut ClusterEdit,
+    segs: &[u32],
+    variants: &Variants,
+    draw: Draw,
+    spare: &mut Vec<u32>,
+) -> Result<String> {
     if segs.is_empty() {
         return Ok(String::new());
     }
@@ -531,7 +667,7 @@ pub fn blend_segments(edit: &mut ClusterEdit, segs: &[u32], variants: &Variants,
                 m
             }
         };
-        match blend(edit, copy, variants, draw)? {
+        match blend(edit, copy, variants, draw, spare)? {
             Ok(c) => {
                 let what = match c {
                     Change::Switched(id) => id.rsplit('#').next().unwrap_or(&id).to_owned(),
@@ -547,10 +683,9 @@ pub fn blend_segments(edit: &mut ClusterEdit, segs: &[u32], variants: &Variants,
 }
 
 /// The asset-list entries of every effect variant the cluster's materials
-/// use. The character's `.ahwin32` loads the variants (`Ch_LoadHdRenderData`
-/// reads its D3D11 file list), and a material whose variant was not loaded
-/// is not drawn: a blended twin the model did not use before must be added
-/// (`ffx_phyre::assets::add_files` skips the ones listed already).
+/// use, for the character's `.ahwin32` (`Ch_LoadHdRenderData` reads its
+/// D3D11 file list; the HD lists name the variants their model imports).
+/// `texanim::insert_files` puts the ones not listed yet before the model.
 pub fn list_entries(edit: &ClusterEdit) -> Result<Vec<String>> {
     let ids: BTreeSet<String> = material_variants(edit)?.into_iter().collect();
     Ok(ids.iter().map(|id| ffx_phyre::assets::texture_entry(id)).collect())
@@ -575,7 +710,7 @@ pub fn blend_in_place(edit: &mut ClusterEdit, segs: &[u32], variants: &Variants)
     }
     let mut out = Blended { switched: 0, lowered: 0, text: String::new() };
     for m in materials {
-        match blend(edit, m, variants, Draw::BlendKept)? {
+        match blend(edit, m, variants, Draw::BlendKept, &mut Vec::new())? {
             Ok(Change::None) => {}
             Ok(Change::Lowered(t)) => {
                 out.lowered += 1;
@@ -596,6 +731,26 @@ pub fn blend_in_place(edit: &mut ClusterEdit, segs: &[u32], variants: &Variants)
 pub fn debug(hd: &[u8], read: impl Fn(&str) -> Result<Option<Vec<u8>>>) -> Result<()> {
     let model = ffx_phyre::Model::parse(hd).context("HD model")?;
     let edit = ClusterEdit::parse(hd)?;
+    if std::env::var_os("IMPORTS").is_some() {
+        // who points at each import (user fixups of 2 bytes holding its index)
+        let ids = imports(&edit)?;
+        let mut users: BTreeMap<u16, Vec<String>> = BTreeMap::new();
+        for l in &edit.lists {
+            let name = &edit.cluster.classes[l.class].name;
+            for f in &l.pointer_fixups {
+                let Some(r) = f.user_fixup() else { continue };
+                let [kind, len, at] = edit.user_records[r as usize];
+                if len != 2 {
+                    continue;
+                }
+                let i = u16::from_be_bytes([edit.user_data[at as usize], edit.user_data[at as usize + 1]]);
+                users.entry(i).or_default().push(format!("{name}#{}(k{kind})", f.object()));
+            }
+        }
+        for (i, id) in ids.iter().enumerate() {
+            println!("import {i} {id}: {:?}", users.get(&(i as u16)));
+        }
+    }
     let variants = material_variants(&edit)?;
     let mut cache: BTreeMap<String, Variant> = BTreeMap::new();
     for (s, seg) in model.segments.iter().enumerate() {
@@ -621,6 +776,11 @@ pub fn debug(hd: &[u8], read: impl Fn(&str) -> Result<Option<Vec<u8>>>) -> Resul
                 .map(|b| -> Result<_> { buffer_layout(&ClusterEdit::parse(&b)?, 0) })
                 .transpose()?;
             println!("  layout {} defs, same as the variant's: {:?}", mine.len(), theirs.map(|t| t == mine));
+        }
+        if std::env::var_os("PARAMS").is_some() {
+            for (name, _, _) in buffer_layout(&edit, m)? {
+                println!("  m{m} {name} = {:?}", parameter(&edit, m, &name).ok());
+            }
         }
         println!(
             "seg {s}: {} tris, texture {}, material {m} {} alpha {:?} passes {:?} switches {}",

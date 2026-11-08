@@ -145,7 +145,7 @@ fn main() -> Result<()> {
             if a[3] == "--states" {
                 // a shader variant's classes, lists, pointers and pass state objects
                 // (PShaderPassD3D11 +0x18: raster +0x1c, depth +0x44, blend +0x78)
-                let b = pc.read(pc.find(&a[4]).context("no such file")?)?;
+                let b = match std::fs::read(&a[4]) { Ok(b) => b, Err(_) => pc.read(pc.find(&a[4]).context("no such file")?)? };
                 let e = ffx_phyre::edit::ClusterEdit::parse(&b)?;
                 for c in &e.cluster.classes {
                     let ms: Vec<String> = c.members.iter().map(|m| format!("{}@{:#x}+{}", m.name, m.offset, m.size)).collect();
@@ -158,7 +158,7 @@ fn main() -> Result<()> {
                         let m = e.cluster.member_by_index(f.member()).map(|x| x.1.name.clone());
                         println!("  ptr obj {} member {:?} field {:#x} -> list {} obj {} off {:#x} n {}", f.object(), m, f.member(), f.target_list(), f.target(), f.target_offset(), f.count());
                     }
-                    if name.contains("PassState") || name == "PSceneRenderPass" || name.starts_with("PShaderPass") {
+                    if name.contains("PassState") || name == "PSceneRenderPass" || name.starts_with("PShaderPass") || std::env::var("DM_DUMP").is_ok_and(|v| v == *name) {
                         for k in 0..l.count() {
                             let o = l.object(k);
                             let words: Vec<String> = o.chunks(4).map(|c| format!("{:08x}", u32::from_le_bytes([c[0], c.get(1).copied().unwrap_or(0), c.get(2).copied().unwrap_or(0), c.get(3).copied().unwrap_or(0)]))).collect();

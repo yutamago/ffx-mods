@@ -10,7 +10,12 @@ remodelled character the jobs write, under
 - `tex/d3d11/p<name[1..]>.dds.phyre` (`c001` → `p001`): the PS2 textures
   as one ARGB8 atlas at PS2 size, one mip level, a new texture (see
   "Conversion" 4);
-- `<name>.ahwin32`: the asset list with that texture added.
+- `<name>.ahwin32`: the asset list with that texture (and the blended
+  twins' shader variants) added, after `textureAnimationChar` and before
+  the model: the game takes the animation textures by their place in the
+  list (see "Texture animation"), and `ffx_phyre::assets::add_files`, which
+  puts new entries first, made two shader variants Lulu's animation
+  textures 0 and 1 (job versions up to 5; `texanim::insert_files`).
 - `<name>.cdf`: the cloth file with the PS2 cloth triangles (see "Cloth"),
   for characters with simulated PS2 cloth.
 
@@ -58,8 +63,16 @@ Layout as in ffx-rust `docs/formats/chara.md`, plus what this needed:
   base bone's frame; PS2 units = HD units × 1000), normals `+0xc` (count
   `+0x16`, `i16` triples, normalise), groups `+0x10`, cloth count `+0x18`,
   cloth table `+0x1c` (`0x24` bytes each: vertex list `+8`, count `+0x1c`).
-- Group (12 bytes): flags byte `+0` (bit 0 strips, bit 2 `PRG`), MAT byte
-  `+1`, texture-list index `+2`, count `+4`, data `+8`.
+- Group (12 bytes): flags byte `+0` (bit 0 strips, bit 1 textured, bit 2
+  drawn from both sides, bit 3 specular), MAT byte `+1`, texture-list
+  index `+2`, count `+4`, data `+8`. Bit 2: the packet builder
+  (`Ch_PacketCreateMain_008423c0`) takes the culling VU1 entry of
+  `g_ChrPacketDrawModes` only for groups without it while the character's
+  cull flag is on (chr `+0x194` bit 19, `Ch_PacketSetCull`; script
+  `ChrSetDrawCull`); read in the running game, the flag is on for the whole
+  party in the boot intro. Kimahri has 100 such triangles, Lulu 368 (her
+  models 1 and 2), Wakka 84, Rikku 52, Auron 48, the close-ups c101 98 and
+  c102 228; Tidus (c001) none.
 - Points are 4 halfwords: vertex, normal, u, v (1/16 texel). A vertex or
   normal with bit 15 set repeats an earlier halfword: vertex
   `p[-(k*4/3)]`, normal `p[-1-(k*4/3)]` with `k = value & 0x7fff` and `p`
@@ -99,6 +112,10 @@ The party has up to 8 bones per vertex, m112 up to 14.
    `m_matrixNames`) hands its weight to its nearest ancestor that it can
    (c101 bones 110, 116; c105 52, 60; c107 158, 165, 173-175).
 2. Normals from the PS2 normal array, rotated by the base bone.
+2b. Two sides: a triangle of a group with flag bit 2 gets a second, reversed
+   triangle on the same vertices (same normals: lit like the front, as the
+   PS2's per-vertex lighting lights both sides), since the PC culls back
+   faces (job version 6).
 3. Winding: the share of triangles whose face normal agrees with their
    vertex normals is compared between the HD segments and the PS2 mesh,
    and the PS2 order is flipped if they disagree (never needed so far).
@@ -388,6 +405,33 @@ use alpha at all.
   problem that kept the blended twin out before (parts over the body not
   drawn) was not reproduced with the converter of 2026-11-04 (below);
   battles were not run again with this build.
+- **The twin's import** (job version 6, chr version 4). A material names
+  its variant through a `PAssetReferenceImport` of the model, and the game
+  resolves those by id (`PAssetReferenceImport::resolve` `0x0045e280`). An
+  import the converter **appends** (a copy of the material's import with
+  the twin's id, versions up to 5) is not found, though the variant is in
+  the character's `.ahwin32` and other models of the scene import it:
+  "Failed to find asset ... of type PEffectVariant, using fallback", five
+  times in the boot intro (a hook on `Phyre::PhyrePrintf`), once for each
+  twin the HD model did not import (Lulu 3BF9… and 9EE8…, Tidus, Kimahri
+  and Yuna 3BF9…). The fallback draws nothing, in any pass: Lulu's fur
+  collar, necklace and hair pins, Tidus's pant lattice, Kimahri's belt
+  trims were missing (with Lulu's body left out of the model,
+  `DM_DROP_BODY`, none of her blended parts showed; Kimahri's 9EE8…, which
+  his HD model imports, did). The same id written over an existing
+  import's `m_id` is found. So the converter now points each hidden HD
+  segment at a drawn material of the same switch set (cloth on cloth;
+  `chralpha::free_hidden_materials`), and a twin the model does not import
+  takes over an import that only materials no segment uses refer to
+  (`spare_imports`); kept meshes, whose materials change in place, rename
+  the material's own import when no other material uses it. Without one
+  the segment stays on its opaque material (reported as "no import to
+  spare": 4 of the 279 blended material copies of the 165 models, in
+  n145, n232, n242, w082). A first try that renamed imports of the hidden
+  segments' own materials gave Yuna's hidden cloth segments the non-cloth
+  3BF9… and Lulu's hidden non-cloth segment the cloth 9EE8…: the game
+  ended at the next camera cut (hidden segments are still drawn, as one
+  degenerate triangle).
 - **Kept-mesh models (`chr.*`): the blended twin at 0.1**
   (`Draw::BlendKept`, chr job version 3): the same twin as the remodelled
   models, `AlphaThreshold` 0.1 (`chralpha::THRESHOLD`; 1/128 brings back
@@ -427,6 +471,10 @@ use alpha at all.
   materials, the shader list, the face animation or the PS2 cloth (each
   ruled out by a build without it); the cause is open
   (`docs/ffx-rust-findings.md`). The `UATFOPQ` twins draw everything.
+  **Explained (2026-11-08):** those are parts whose twin was a variant the
+  HD model did not import, so its appended import fell back to a variant
+  that draws nothing (see "The twin's import" above). Why the 2026-11-04
+  test below drew Lulu's necklace with the blended twin was not found.
   **Not reproduced with the current converter** (2026-11-04): the same
   battle and frame (devsave 51, `kimahri.txt` shot `k-09`, the framing of
   `alpha-blend-battle-lulu.png`) with c006 built three ways, the blended
@@ -542,6 +590,35 @@ install and settings; PS2 | version 4 | version 5, in
 Runs: `cloth/v5a`, `v5b`, `v5c` (the intro's timing varies by up to 8 s
 from run to run).
 
+**Holes in the intro** (2026-11-08, job version 6, same install and
+settings; PS2 | version 5 | version 6, in `/mnt/c/shots/fix-alpha/holes/cmp/`):
+
+| Image | What | Result |
+|---|---|---|
+| `lulu.png` | Lulu at the fire ("Scenario") | version 5: no fur collar, no necklace, the chest bare to the dress; now the collar and the bead necklace as on the PS2. Cause: her blended twins (3BF9…, 9EE8…) were imports the game did not resolve ("The twin's import") |
+| `party.png` | Wakka, Rikku, Lulu ("Art directors") | Lulu as above; Wakka and Rikku unchanged (their HD models import those variants) |
+| `tidus-standing.png` | Tidus from behind ("Field programmers") | version 5: of the long pant leg only the edge strips, skin between; now the black lattice leg as on the PS2 (same cause, 3BF9…) |
+| `tidus-sitting.png` | Tidus sitting ("Field programmers") | the lattice over his left hip is back |
+| `kimahri.png`, `kimahri-mane.png` | Kimahri from behind ("Scenario") | belt trims drawn again (same cause); at the mane's lower edge a gap stays, smaller (the two-sided groups) but not closed: see "Gaps" |
+
+The two other changes are checked by the same runs: the crash a first try
+caused (see "The twin's import") is gone (the whole intro runs to the
+title in `holes/final3`, `final4`), and the face animation textures are in
+their places in the lists again. Runs: `holes/final3`, `holes/final4`;
+the tests that found the cause: `holes/noshader` (the blended variants'
+shader patch undone: no change), `noblend` (`DM_NO_BLEND`: collar and
+necklace drawn), `dropbody`, `drop2` (`DM_DROP_BODY`: none of Lulu's
+blended segments drawn), `msaa` (MSAA on: no change), `cull` and `alog`
+(chr `+0x194` and the MaterialColour inputs read with
+`C:\shots\fix-alpha\holes\chralpha.ps1`).
+
+Debugging switches: `DM_DROP_BODY=1` (models: the opaque body left out,
+one triangle per segment kept; `2`: the cloth too), `IMPORTS=1` and
+`PARAMS=1` with `materials-debug` (who refers to each import; every
+parameter of every material), `DM_DUMP=<class>` with `materials-debug
+--states <file>` (that list's objects as words; the file may be a local
+path), `DM_DEBUG=1` with `models` (which import a twin took over).
+
 ## Checked in the game
 
 Replays through `tools/shotrun` (max graphics settings) with the mod
@@ -586,6 +663,17 @@ Second pass (texture animation, cloth, NPCs, monsters), comparisons in
   keep static faces; the plan takes one `Mat_CTA` segment per character.
 - **Cloth**: pieces are simulated by the PC's port of the PS2 code on the
   PS2 data; a sway was not compared frame by frame with the PS2.
+- **Kimahri's mane** (boot intro, from behind): its lower edge stands off
+  the back of his head, so its darker underside and two openings the PS2
+  mesh has at the back of the head beside the neck show (the fire behind
+  him shows through); on the PS2 the mane lies flat over them
+  (`holes/cmp/kimahri-mane.png`). Not a missing part (a render of the
+  converted model without the mane shows the openings); the cloth pose of
+  piece (0, 6) differs. Not fixed.
+- **Blended twins without an import to take over**: n145, n232, n242,
+  w082 keep one see-through part each on its opaque material (the report
+  says "no import to spare"). The kept meshes (`chr.*`) take over the
+  material's own import; that path was not checked in the game.
 - **4-bone limit**: up to 15 % of a vertex's weight is dropped
   (renormalised). Not visible in the shots (Tidus's chain "arrowhead",
   once suspected, was the cloth binding).

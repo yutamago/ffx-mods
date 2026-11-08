@@ -183,9 +183,13 @@ impl Job for ModelsJob {
     /// quality drop), see-through parts blended with the PS2's alpha test,
     /// PS2 cloth anchors, pieces the HD has another shape for skinned.
     /// 5: the `.cdf` lists the PS2 cloth triangles; the PS2 pins the first
-    /// run of a cloth entry, not the second.
+    /// run of a cloth entry, not the second. 6: a blended twin the HD model
+    /// does not import takes over an import of a material no segment uses
+    /// (appended imports are not resolved: those parts were not drawn); new
+    /// `.ahwin32` entries go before the model, not before the animation
+    /// textures.
     fn version(&self) -> u32 {
-        5
+        6
     }
     fn name(&self) -> &'static str {
         self.name
@@ -1119,6 +1123,7 @@ pub fn convert_bytes(
             .map_or(free_color, |x| x.1)
     };
     let mut degenerate = 0;
+    let mut two_sided = 0;
     for (mi, k) in order {
         let t = &mesh.models[mi].tris[k];
         let vs = t.corners.map(|c| &verts[mi][usize::from(c.vertex)]);
@@ -1221,9 +1226,31 @@ pub fn convert_bytes(
             idx.swap(1, 2);
         }
         prims[p].indices.extend(idx);
+        // Group flag bit 2: the PS2 draws the group's polygons from both
+        // sides. Its packet builder (`Ch_PacketCreateMain_008423c0`) picks
+        // the culling VU1 entry only for groups without the bit while the
+        // character's cull flag (chr `+0x194` bit 19, `Ch_PacketSetCull`) is
+        // on, which it is for the whole party in the boot intro. The PC
+        // culls back faces: the turned-away side of these polygons gets its
+        // own triangle, with the same vertices and normals (lit like the
+        // front, as the PS2's per-vertex lighting does).
+        if t.flags & 4 != 0 {
+            prims[p].indices.extend([idx[0], idx[2], idx[1]]);
+            two_sided += 1;
+        }
+    }
+    // DM_DROP_BODY=1 (debugging): the opaque body left out, one triangle
+    // kept per primitive, to see what the blended and cloth segments draw
+    // (DM_DROP_BODY=2: the cloth too)
+    if let Ok(v) = std::env::var("DM_DROP_BODY") {
+        for p in 0..prims.len() {
+            if (prim_slot[p].1 == 0 && !prim_blend[p]) || (v == "2" && prim_slot[p].1 >= 2) {
+                prims[p].indices.truncate(3);
+            }
+        }
     }
     report += &format!(
-        "  {} triangles ({degenerate} degenerate left out) in {} segments, palettes {:?}\n",
+        "  {} triangles ({degenerate} degenerate left out, {two_sided} drawn from both sides) in {} segments, palettes {:?}\n",
         prims.iter().map(|p| p.indices.len() / 3).sum::<usize>(),
         prims.len(),
         prim_bones.iter().map(BTreeSet::len).collect::<Vec<_>>()
@@ -1362,7 +1389,15 @@ pub fn convert_bytes(
     }
     // Segments with see-through texels draw blended like the PS2 (after the
     // face's rectangle is set: a copied material keeps it).
-    report += &chralpha::blend_segments(&mut edit, &blended, variants, chralpha::Draw::Blend)?;
+    // A variant the HD model did not import is not found when the game
+    // resolves the model's imports (`PAssetReferenceImport::resolve`:
+    // "Failed to find asset", the fallback draws nothing): the blended twin
+    // takes over an import that only materials no segment uses any more
+    // refer to (the hidden segments take drawn materials of their kind).
+    let drawn: BTreeSet<u32> = imported.segments.iter().map(|&s| u32::try_from(s)).collect::<Result<_, _>>()?;
+    let spare_materials = chralpha::free_hidden_materials(&mut edit, &drawn, variants)?;
+    let mut spare = chralpha::spare_imports(&edit, &spare_materials)?;
+    report += &chralpha::blend_segments(&mut edit, &blended, variants, chralpha::Draw::Blend, &mut spare)?;
     let shader_entries = chralpha::list_entries(&edit)?;
     let bytes = edit.write().context("writing")?;
     let check = ffx_phyre::Model::parse(&bytes).context("re-reading")?;
@@ -1403,10 +1438,10 @@ pub fn convert_bytes(
             }
             texanim::rewrite_list(&list, &entries, &[atlas_entry])?
         }
-        None => ffx_phyre::assets::add_files(&list, &[atlas_entry])?,
+        None => texanim::insert_files(&list, &[atlas_entry])?,
     };
     // the blended twins' shader variants
-    let list = ffx_phyre::assets::add_files(&list, &shader_entries)?;
+    let list = texanim::insert_files(&list, &shader_entries)?;
     files.push((list_path, list));
     Ok(Converted {
         files,

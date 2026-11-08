@@ -228,7 +228,7 @@ fn bake_chr_with(
                 let list_path = format!("ffx_data/gamedata/ps3data/chr/{kind}/{name}/{name}.ahwin32");
                 let list = pc.read(pc.find(&list_path).with_context(|| format!("no {list_path}"))?)?;
                 let entries = crate::chralpha::list_entries(&edit)?;
-                files.push((list_path, ffx_phyre::assets::add_files(&list, &entries)?));
+                files.push((list_path, crate::texanim::insert_files(&list, &entries)?));
             }
             report.model = Some((files, note.text));
         }
@@ -398,9 +398,12 @@ impl Job for ChrJob {
     /// 2: textures with mip chains (phyretex::mip_chain). 3: see-through
     /// materials get the blended twin (`chralpha::Draw::BlendKept`) instead
     /// of the alpha-to-coverage one, which is a plain alpha test without
-    /// MSAA.
+    /// MSAA. 4: a blended twin the model does not import takes over the
+    /// material's own import (appended imports are not resolved); added
+    /// shader variants go before the model in the `.ahwin32`, not before
+    /// the animation textures.
     fn version(&self) -> u32 {
-        3
+        4
     }
     fn name(&self) -> &'static str {
         self.name
