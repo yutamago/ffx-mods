@@ -188,8 +188,11 @@ impl Job for ModelsJob {
     /// (appended imports are not resolved: those parts were not drawn); new
     /// `.ahwin32` entries go before the model, not before the animation
     /// textures.
+    /// 7: cloth triangles the PS2 draws after another piece whose segment
+    /// comes later go into a tail segment after it (Kimahri's mane's
+    /// fringe over the fur collar).
     fn version(&self) -> u32 {
-        6
+        7
     }
     fn name(&self) -> &'static str {
         self.name
@@ -1122,6 +1125,43 @@ pub fn convert_bytes(
             .min_by(|a, b| a.0.total_cmp(&b.0))
             .map_or(free_color, |x| x.1)
     };
+    // Draw order between cloth pieces. The PS2 draws a model's groups in
+    // order; the PC draws a cloth piece's segment where its segment stands
+    // in the list: the HD's own segment of the piece, or a new one after
+    // all of them. A triangle the PS2 draws after every triangle of another
+    // piece whose segment comes later goes into a tail segment of its
+    // piece, drawn after them: Kimahri's mane (c004 (0, 6), HD segment 7)
+    // has its bottom row in groups 59-60, after the fur collar ((0, 10),
+    // groups 26-58, a new segment). Drawn before the collar, the row's
+    // half-transparent fringe hid the collar behind it (depth written) and
+    // showed the openings of the head and the fire there.
+    let tri_cloth = |mi: usize, t: &ps2mesh::Tri| -> Option<usize> {
+        let c = t.corners.map(|c| piece_of[mi].get(&c.vertex).copied());
+        c[0].filter(|&x| c.iter().all(|y| *y == Some(x)))
+    };
+    let mut last_group: Vec<Option<u16>> = vec![None; cloth_targets.len()];
+    let mut rank: Vec<Option<usize>> = cloth_targets.iter().map(|c| c.segment).collect();
+    for (n, &(mi, k)) in order.iter().enumerate() {
+        let t = &mesh.models[mi].tris[k];
+        if let Some(c) = tri_cloth(mi, t) {
+            last_group[c] = last_group[c].max(Some(t.group));
+            // a new segment: after the HD's, in the order of first use
+            rank[c].get_or_insert(model.segments.len() + n);
+        }
+    }
+    // (pieces of one model: their groups compare)
+    let tail = |c: usize, group: u16| -> bool {
+        (0..cloth_targets.len()).any(|b| {
+            b != c
+                && cloth_targets[b].tag.0 == cloth_targets[c].tag.0
+                && rank[b] > rank[c]
+                && last_group[b].is_some_and(|g| g < group)
+        })
+    };
+    let mut prim_tail: Vec<bool> = Vec::new();
+    // per primitive: the first PS2 group of its triangles (model, group)
+    let mut prim_group: Vec<(usize, u16)> = Vec::new();
+    let mut tail_triangles = 0;
     let mut degenerate = 0;
     let mut two_sided = 0;
     for (mi, k) in order {
@@ -1148,9 +1188,12 @@ pub fn convert_bytes(
             })
         };
         let blend = k.1 == 0 && cov.0 > 0;
+        let is_tail = cloth.is_some_and(|c| tail(c, t.group));
+        tail_triangles += usize::from(is_tail);
         let fits = |p: usize| {
             prim_slot[p] == k
                 && prim_blend[p] == blend
+                && prim_tail[p] == is_tail
                 && prim_bones[p].union(&bones).count() <= MAX_PALETTE
                 && prims[p].positions.len() + 3 <= 0xffff
         };
@@ -1164,7 +1207,7 @@ pub fn convert_bytes(
                     _ => (Some(slot.template), slot.material),
                 };
                 prims.push(Primitive {
-                    segment: segment.filter(|_| first),
+                    segment: segment.filter(|_| first && !is_tail),
                     material,
                     ..Primitive::default()
                 });
@@ -1172,6 +1215,8 @@ pub fn convert_bytes(
                 prim_keys.push(HashMap::new());
                 prim_slot.push(k);
                 prim_blend.push(blend);
+                prim_tail.push(is_tail);
+                prim_group.push((mi, t.group));
                 prim_cov.push((0, 0));
                 prims.len() - 1
             }
@@ -1225,6 +1270,7 @@ pub fn convert_bytes(
         if flip {
             idx.swap(1, 2);
         }
+        prim_group[p] = prim_group[p].min((mi, t.group));
         prims[p].indices.extend(idx);
         // Group flag bit 2: the PS2 draws the group's polygons from both
         // sides. Its packet builder (`Ch_PacketCreateMain_008423c0`) picks
@@ -1250,7 +1296,7 @@ pub fn convert_bytes(
         }
     }
     report += &format!(
-        "  {} triangles ({degenerate} degenerate left out, {two_sided} drawn from both sides) in {} segments, palettes {:?}\n",
+        "  {} triangles ({degenerate} degenerate left out, {two_sided} drawn from both sides, {tail_triangles} cloth triangles in tail segments) in {} segments, palettes {:?}\n",
         prims.iter().map(|p| p.indices.len() / 3).sum::<usize>(),
         prims.len(),
         prim_bones.iter().map(BTreeSet::len).collect::<Vec<_>>()
@@ -1261,6 +1307,15 @@ pub fn convert_bytes(
     // the glTF order (by instance, then primitive): the order of the
     // segments the import writes
     let mut meshes: BTreeMap<usize, Vec<(Primitive, usize, bool)>> = BTreeMap::new();
+    // the tail segments after the others, in the PS2's group order (new
+    // segments follow the glTF order)
+    let mut by_order: Vec<usize> = (0..prims.len()).collect();
+    by_order.sort_by_key(|&p| (prim_tail[p], if prim_tail[p] { prim_group[p] } else { (0, 0) }));
+    let mut taken: Vec<Option<Primitive>> = prims.into_iter().map(Some).collect();
+    let prims: Vec<Primitive> = by_order.iter().map(|&p| taken[p].take().expect("each once")).collect();
+    let prim_slot: Vec<(usize, usize)> = by_order.iter().map(|&p| prim_slot[p]).collect();
+    let prim_blend: Vec<bool> = by_order.iter().map(|&p| prim_blend[p]).collect();
+    let prim_cov: Vec<(usize, usize)> = by_order.iter().map(|&p| prim_cov[p]).collect();
     for (((p, k), b), c) in prims.into_iter().zip(&prim_slot).zip(&prim_blend).zip(&prim_cov) {
         // blended: a template primitive of see-through triangles, a cloth
         // piece with any see-through texel, a face with 1 % or more

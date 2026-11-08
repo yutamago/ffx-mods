@@ -70,6 +70,8 @@ pub struct Tri {
     pub texture: u8,
     /// The group's flag byte.
     pub flags: u8,
+    /// The group's index in the model: the PS2 draws the groups in order.
+    pub group: u16,
     pub corners: [Corner; 3],
 }
 
@@ -173,7 +175,7 @@ impl Mesh {
                 influences: vec![Vec::new(); nv],
                 ..Model::default()
             };
-            let push = |model: &mut Model, texture: u8, flags: u8, c: [Corner; 3]| {
+            let push = |model: &mut Model, group: u16, texture: u8, flags: u8, c: [Corner; 3]| {
                 if c.iter().any(|c| {
                     usize::from(c.vertex) >= nv || (nn > 0 && usize::from(c.normal) >= nn)
                 }) {
@@ -183,6 +185,7 @@ impl Mesh {
                 model.tris.push(Tri {
                     texture,
                     flags,
+                    group,
                     corners: c,
                 });
             };
@@ -211,7 +214,7 @@ impl Mesh {
                                     } else {
                                         [c[k - 1], c[k - 2], c[k]]
                                     };
-                                    push(&mut model, texture, flags, t);
+                                    push(&mut model, u16::try_from(g)?, texture, flags, t);
                                 }
                             }
                         }
@@ -223,7 +226,7 @@ impl Mesh {
                 } else {
                     for _ in 0..count / 3 {
                         let t = [point(b, q)?, point(b, q + 8)?, point(b, q + 16)?];
-                        push(&mut model, texture, flags, t);
+                        push(&mut model, u16::try_from(g)?, texture, flags, t);
                         q += 24;
                     }
                 }
