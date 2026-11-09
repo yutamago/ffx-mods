@@ -6,10 +6,14 @@ builds the PS2 mods' files from the player's own disc. Most are PS2 mods
 (they restore parts of the PS2 version: presentation from the PS2, logic
 from the PC); others are the user's own changes (`modern-minimap`, `fps-unlock`). Every
 change is a setting. The PS2 mods were split out of ffx-demaster (github.com/yutamago/ffx-demaster,
-history kept up to its 314bbfc); ffx-demaster becomes a bundle of these
-mods plus its own parts (movies, maps, effects, glow, shadows, the music
-bank), which builds with this repo's converter. README.md describes each
-mod for players.
+history kept up to its 314bbfc). ffx-demaster is now the bundle of the PS2
+mods: its `bundle.toml` pins a revision of this repo and lists the mods,
+its CI builds one zip with them (`tools/package.cs --bundle`) whose
+`mods\yuta.ffx-mods\install.cmd` installs and builds them all
+(`demaster build --all`). It also keeps the PS2-vs-PC test tools
+(`tools/shotrun`, `tools/calllist`, `tools/replays`, `tools/compare`,
+`docs/compare.md`, `docs/debugger.md` there). README.md describes each mod
+for players.
 
 ## Rules
 
@@ -55,7 +59,14 @@ The mods and what is in each: README.md and `converter/src/mods.rs`.
 
 - Each mod works alone and with any other: no mod reads another mod's
   setting, a converter job reads only its own mod's settings (a test in
-  `mods.rs` checks), no two mods write the same file. Hooks on the same
+  `mods.rs` checks), no two mods write the same file. One exception, made
+  by the converter: a job whose output depends on what another mod does in
+  the game declares that setting in its mod's `reads` (`mods.rs`,
+  `Foreign`: `movies` and `maps.backgrounds` read `render.aspect`); the
+  build takes it from that mod's `settings.toml` when the mod is installed
+  (in `mods\loadorder`), else the `absent` value, records it in the stamp
+  (`foreign`), and the C# `BuildStatus` shows "rebuild needed" when it
+  changes. Hooks on the same
   function chain (Fahrenheit's `chain_from`); always call the next hook.
 - Shared state lives in `common/` (loaded once for all mods); never copy
   shared code into a mod.
@@ -67,6 +78,7 @@ The mods and what is in each: README.md and `converter/src/mods.rs`.
   (`SETTINGS`), `converter/src/mods.rs` (which mod), `mods/<name>/Mod.cs`
   (with its default, and a `CodePatch` if the mod applies it),
   `mods/<name>/settings.toml`, and `docs/config.md`.
+- Every setting belongs to one mod (a test; `maps.geometry` has none yet).
 - A new job goes in `jobs::registry()` and in its mod's `jobs` in `mods.rs`;
   say `needs_disc() = false` if it builds from the PC game alone.
 - A change that alters a job's output must bump that job's `Job::version`, or
@@ -83,10 +95,12 @@ The mods and what is in each: README.md and `converter/src/mods.rs`.
 RUSTC_WRAPPER= cargo build --release -p demaster
 RUSTC_WRAPPER= cargo test --release -p demaster -p demaster-live   # disc tests use /tmp/dm-ffx.iso
 ./target/release/demaster build --mod ps2-lighting --mod-dir <dir> --iso /tmp/dm-ffx.iso --game ~/steam-games/FFX-X2-HD
+./target/release/demaster build --all --mods-dir <Fahrenheit>/mods --iso ...  # every installed mod, one disc pass
 tools/build-windows.sh && tools/build-live.sh       # demaster.exe, demaster_live.dll
 dotnet build -c Release ffx-mods.slnx               # artifacts/deploy/rel/mods/yuta.*/
 dotnet test -c Release --no-build ffx-mods.slnx     # C# tests; FFX_GAME_DIR=<game folder> for the FFX.exe ones
 dotnet run tools/package.cs -- <out dir> <version>  # one zip per mod
+dotnet run tools/package.cs -- <out> <version> --bundle <name> --mods a,b --readme <file>   # one zip (ffx-demaster)
 ```
 
 CI and tag releases: `docs/ci.md` (no secrets needed).
@@ -108,11 +122,14 @@ give them the real path (`\\wsl.localhost\Ubuntu\home\angelo\ffx-ps2\Final Fanta
 ## Testing in the game
 
 - Fahrenheit install for these mods: `C:\_workspaces\fh-mods-test` (alpha12;
-  `mods/` holds whatever is under test). Never touch
-  `C:\_workspaces\fh-demaster-test` (the user's ffx-demaster install).
+  `mods/` holds whatever is under test); `C:\_workspaces\fh-bundle-test`
+  for the bundle. Never touch `C:\_workspaces\fh-demaster-test` (the
+  user's install).
 - Install a mod as a player does: unpack its zip (`tools/package.cs`) into
   the install and run its `install.cmd` (`-Iso <real Windows path> -Game
-  <game> -NoPause`); it writes `mods\loadorder`.
+  <game> -NoPause`); it writes `mods\loadorder`. In `mods\yuta.ffx-mods\`
+  (a bundle) `install.cmd` installs every mod there; a mod folder without
+  `demaster.exe` uses the shared one.
 - Every game run under `flock /home/angelo/ffx-work/demaster/fh-test.lock`
   (the user's other sessions use it), one game at a time. Launch
   `bin\fhstage0.exe '\\wsl.localhost\Ubuntu\home\angelo\ffx-work\demaster\game\FFX.exe' --extdbg`
