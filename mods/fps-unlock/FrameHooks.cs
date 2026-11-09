@@ -261,7 +261,7 @@ internal sealed unsafe class FrameHooks {
     private bool _placingObjects;
     private readonly float* _objectArgs;
     // A test switch: YUTA_FPS_UNLOCK_TRACE=<file> writes a line per drawn frame (docs/fps-unlock.md, "Testing").
-    private readonly System.IO.StreamWriter? _trace = OpenTrace();
+    private System.IO.StreamWriter? _trace = OpenTrace();
 
     public FrameHooks(Game game, FhLogger log, Func<FrameSettings> settings) {
         _game = game;
@@ -284,9 +284,9 @@ internal sealed unsafe class FrameHooks {
         _otDrawEntry = h_ot_draw;
     }
 
-    private bool Matches(uint va, string name, string bytes) {
+    private bool Matches(uint va, string name, string bytes, int from = 0) {
         string[] want = bytes.Split(' ');
-        for (int i = 0; i < want.Length; i++) {
+        for (int i = from; i < want.Length; i++) {
             if (want[i] == "??" || _game.CodeByte(va + (uint)i) == Convert.ToByte(want[i], 16)) continue;
             _log.Error($"FPS unlock: {name} (0x{va:x8}) is not the code this mod knows (byte {i}); another game version?");
             return false;
@@ -304,7 +304,8 @@ internal sealed unsafe class FrameHooks {
         foreach ((uint va, string name, string bytes, int length) in Prologues) {
             int n = bytes.Split(' ').Length;
             if (!CodeScan.PrologueMatches(_game.Code(va, n), bytes, out bool preHooked)) {
-                Matches(va, name, bytes); // logs the byte that differs
+                // Logs the byte that differs (after another program's jmp, the first one past it).
+                Matches(va, name, bytes, _game.CodeByte(va) == CodeScan.JmpRel32 && !bytes.StartsWith("e9") ? CodeScan.PatchSize : 0);
                 ok = false;
                 continue;
             }
@@ -509,11 +510,11 @@ internal sealed unsafe class FrameHooks {
         finally {
             try {
                 if (!Failed) PlaceObjects(s);
-                if (_trace is not null) TraceFrame();
             }
             catch (Exception ex) {
                 Fail("the map objects between ticks", ex);
             }
+            if (_trace is not null) TraceFrame();
             _inFrame = false;
             if (_frame.Kind != FrameKind.Vanilla) {
                 _game.ExecFrames = _execSaved;
@@ -537,6 +538,8 @@ internal sealed unsafe class FrameHooks {
             _wasEnabled = s.Enabled;
             _camera.Clear();
             _effects.Clear();
+            // Updates without ticks while the mod was off: a pair recorded before it would look consecutive.
+            _objects.ClearSamples();
             _game.ClearCarries();
             _log.Info($"FPS unlock: {(s.Enabled ? "on" : "off")}");
         }
@@ -1626,6 +1629,8 @@ internal sealed unsafe class FrameHooks {
         if (string.IsNullOrEmpty(path)) return null;
         try {
             var w = new System.IO.StreamWriter(path, append: false) { AutoFlush = false };
+            // The last lines when the game closes (flushed every 120 frames otherwise).
+            AppDomain.CurrentDomain.ProcessExit += (_, _) => { try { w.Flush(); } catch { } };
             w.WriteLine("ms\tkind\talpha\tticks\tmap\tid\tx\ty\tz\tm0\tm2\tplaced\tgame_x\tgame_y\tgame_z\tgame_ax\tgame_ay\tgame_az");
             return w;
         }
@@ -1636,6 +1641,18 @@ internal sealed unsafe class FrameHooks {
 
     /// <summary>The test trace: after the game's update and the mod's placing, each map object the game set lately with its first mesh's translation as the renderer will read it.</summary>
     private void TraceFrame() {
+        try {
+            TraceLines();
+        }
+        catch (Exception ex) {
+            // A test switch never stops the mod: the trace ends.
+            _log.Warning($"FPS unlock: the trace stopped: {ex.Message}");
+            try { _trace?.Dispose(); } catch { }
+            _trace = null;
+        }
+    }
+
+    private void TraceLines() {
         double ms = _clock.Elapsed.TotalMilliseconds;
         string head = FormattableString.Invariant($"{ms:0.000}\t{_frame.Kind}\t{_frame.Alpha:0.0000}\t{_frame.Plan.Ticks}\t{_game.Map}");
         bool any = false;

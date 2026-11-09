@@ -184,6 +184,59 @@ public class ObjectHistoryTests {
     }
 
     [Fact]
+    public void ClearSamples_drops_the_pairs_and_keeps_the_poses_to_put_back() {
+        ObjectHistory h = new();
+        Tick(h, 0);
+        Tick(h, 1);
+        h.ClearSamples();
+        Assert.Equal(0, h.Objects);
+        Assert.False(h.TryAt(7, Id1, 0.5, out _));
+        Assert.True(h.Truth(7, out _, out ObjectPose truth));
+        Assert.Equal(1, truth.Position.X);
+    }
+
+    [Fact]
+    public void A_pair_from_before_updates_without_ticks_is_not_used_after_ClearSamples() {
+        // The mod switched off (frames.enabled): Vanilla frames end their updates without a tick, so the serial stands still.
+        ObjectHistory h = new();
+        Tick(h, 0);
+        Tick(h, 10);
+        Redraw(h, 40);
+        Redraw(h, 45);
+        h.ClearSamples(); // what turning the mod back on does
+        Tick(h, 46);
+        Assert.False(h.TryAt(7, Id1, 0.5, out _));
+        Tick(h, 47);
+        Assert.True(h.TryAt(7, Id1, 0.5, out ObjectPose p));
+        Assert.Equal(46.5, p.Position.X, 4);
+    }
+
+    [Fact]
+    public void A_second_push_in_one_tick_replaces_the_first_and_a_new_identity_breaks_the_pair() {
+        ObjectHistory h = new();
+        h.BeginTick();
+        h.Push(7, Id1, At(0), 50, 120);
+        h.BeginTick();
+        h.Push(7, Id1, At(5), 50, 120);
+        h.Push(7, Id1, At(2), 50, 120);
+        Assert.True(h.TryAt(7, Id1, 0.5, out ObjectPose p));
+        Assert.Equal(1, p.Position.X, 5);
+        h.Push(7, 99, At(3), 50, 120);
+        Assert.False(h.TryAt(7, 99, 0.5, out _));
+        Assert.False(h.TryAt(7, Id1, 0.5, out _));
+    }
+
+    [Fact]
+    public void Prune_keeps_an_object_one_tick_and_drops_it_after_two() {
+        ObjectHistory h = new();
+        Tick(h, 0);
+        h.EndUpdate(tick: true, 50, 120);
+        Assert.Equal(1, h.Objects);
+        h.EndUpdate(tick: true, 50, 120);
+        Assert.Equal(0, h.Objects);
+    }
+
+    [Fact]
     public void Clear_forgets_everything() {
         ObjectHistory h = new();
         Tick(h, 0);

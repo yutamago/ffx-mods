@@ -82,7 +82,7 @@ public readonly record struct ObjectPose(bool HasPosition, Vector3 Position, boo
 ///     the crane, boats and the like), keyed by object id, and what to draw between them. The game places them with
 ///     <c>graphicObjectSetTranslation</c>/<c>Rotation</c>, which rewrite the meshes' world matrices; the mod records the
 ///     game's last call in each game update that ran a tick (<see cref="EndUpdate"/>) and, after the game's update of every
-///     drawn frame, places each object that moved in both of its last two ticks between them.
+///     drawn frame, places each object the game set in both of its last two ticks, to two different poses, between them.
 /// </summary>
 /// <remarks>
 ///     <para>An object is drawn between ticks only when it was set in two consecutive tick updates, with the same identity
