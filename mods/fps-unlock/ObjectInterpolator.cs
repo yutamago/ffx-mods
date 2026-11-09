@@ -176,6 +176,7 @@ public sealed class ObjectHistory {
     public void Forget(int id) {
         _truth.Remove(id);
         _samples.Remove(id);
+        _touched.Remove(id);
     }
 
     /// <summary>

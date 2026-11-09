@@ -286,6 +286,10 @@ internal sealed unsafe class FrameHooks {
 
     private bool Matches(uint va, string name, string bytes, int from = 0) {
         string[] want = bytes.Split(' ');
+        if (from >= want.Length) {
+            _log.Error($"FPS unlock: {name} (0x{va:x8}) starts with another program's jmp, and this mod knows too few of its bytes to check the rest; it cannot hook it safely.");
+            return false;
+        }
         for (int i = from; i < want.Length; i++) {
             if (want[i] == "??" || _game.CodeByte(va + (uint)i) == Convert.ToByte(want[i], 16)) continue;
             _log.Error($"FPS unlock: {name} (0x{va:x8}) is not the code this mod knows (byte {i}); another game version?");
@@ -311,7 +315,7 @@ internal sealed unsafe class FrameHooks {
             }
             if (preHooked) {
                 _preHooked.Add(va);
-                _log.Info($"FPS unlock: {name} (0x{va:x8}) is already hooked by another program (it starts with a jmp); this mod's hook goes after it.");
+                _log.Info($"FPS unlock: {name} (0x{va:x8}) is already hooked by another program (it starts with a jmp); this mod's hook runs before it (MinHook keeps its jmp in the trampoline).");
             }
             // The live code: skip the bytes the loader rewrote for this run's base (absolute operands, not branches).
             int at = CodeScan.PrologueBranch(_game.Code(va, length), va, PeRelocations.Covered(_game.Relocations, (uint)Game.Offset(va), length));
@@ -468,7 +472,18 @@ internal sealed unsafe class FrameHooks {
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
     private int h_update_ffx(float dt) {
         FloatFn next = _nextUpdate!;
-        if (Failed) return next(dt);
+        if (Failed) {
+            // Once: the map objects the mod placed between ticks get the game's own poses back.
+            if (_objectsPlaced.Count > 0) {
+                try {
+                    RestoreObjects();
+                }
+                catch {
+                    _objectsPlaced.Clear();
+                }
+            }
+            return next(dt);
+        }
         _gameThread = Environment.CurrentManagedThreadId;
         FrameSettings s = _settings();
         try {
@@ -1628,9 +1643,8 @@ internal sealed unsafe class FrameHooks {
         string? path = Environment.GetEnvironmentVariable("YUTA_FPS_UNLOCK_TRACE");
         if (string.IsNullOrEmpty(path)) return null;
         try {
-            var w = new System.IO.StreamWriter(path, append: false) { AutoFlush = false };
-            // The last lines when the game closes (flushed every 120 frames otherwise).
-            AppDomain.CurrentDomain.ProcessExit += (_, _) => { try { w.Flush(); } catch { } };
+            // A test switch: every line is written at once, so a game ended with taskkill keeps them all.
+            var w = new System.IO.StreamWriter(path, append: false) { AutoFlush = true };
             w.WriteLine("ms\tkind\talpha\tticks\tmap\tid\tx\ty\tz\tm0\tm2\tplaced\tgame_x\tgame_y\tgame_z\tgame_ax\tgame_ay\tgame_az");
             return w;
         }
@@ -1663,7 +1677,6 @@ internal sealed unsafe class FrameHooks {
             any = true;
         }
         if (!any) _trace!.WriteLine($"{head}\t-1\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0");
-        if (Stats.Total(Counter.Frames) % 120 == 0) _trace!.Flush();
     }
 
     /// <summary>Places an object through the game's setters (the rest of their chains): the turn first (it keeps the translation), then the position.</summary>

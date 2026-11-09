@@ -237,6 +237,16 @@ public class ObjectHistoryTests {
     }
 
     [Fact]
+    public void An_object_forgotten_after_the_game_set_it_does_not_break_the_update() {
+        ObjectHistory h = new();
+        h.SawPosition(7, Id1, Vector3.One);
+        h.Forget(7);
+        h.EndUpdate(tick: true, 50, 120);
+        Assert.Equal(0, h.Objects);
+        Assert.False(h.Truth(7, out _, out _));
+    }
+
+    [Fact]
     public void Clear_forgets_everything() {
         ObjectHistory h = new();
         Tick(h, 0);

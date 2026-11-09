@@ -132,7 +132,7 @@ drawing faster ran the game faster. The mod changes that:
   A function another program hooked before Fahrenheit's hooks went in (its first 5 bytes a `jmp`,
   the rest as expected: ffx-rust's harness hook on `Renderer_PresentFlip`) is not refused: MinHook
   takes that `jmp` along in its trampoline, so this mod's hook runs first, then the other program's,
-  then the function (`CodeScan.PrologueMatches`, logged once).
+  then the function (`CodeScan.PrologueMatches`, logged once). If the mod stops (pass-through after an error), the objects it placed between ticks get the game's poses back once.
 
 ## The research: how FFX.exe times its frames
 
@@ -461,7 +461,7 @@ are at the end of this section.
 | `Sg_MainCalcRate` (`0x008206c0`) | Hook (counts) | `Sg_MainLoop` calls it only on the way to the world update. A frame whose updates never called it (menu, pause, save screen, load) makes the next frames without a tick Repeats: their logic runs once per update, and a second update would speed it up |
 | `TkUpdateEventJump` (`0x0088d3d0`) | Hook (counts) | The world ticks that ran, for the window's "ticks/s" |
 | `graphicCameraSetWorldMatrix` (`0x00639860`) | Hook | See "The camera" below |
-| `graphicObjectSetTranslation` (`0x006426c0`), `graphicObjectSetRotation` (`0x006426a0`) | Hooks (switch `frames.interpolate.objects`, on) | Note the game's pose of each map object; after `updateFFX` the mod places the moving ones between ticks through the same two ("Moving map objects between ticks") |
+| `graphicObjectSetTranslation` (`0x006426c0`), `graphicObjectSetRotation` (`0x006426a0`) | Hooks (switch `frames.interpolate.objects`, on) | Note the game's pose of each map object; after `updateFFX` the mod places the moving ones between ticks through the same two, calling the rest of their chains (a mod hooked ahead of this one sees the game's calls, not these) ("Moving map objects between ticks") |
 | `MsCameraResetMove` (`0x007bed60`), `MsSetCheckChange` (`0x007c0790`) | Hooks (notes) | The game's instant camera sets: noted for the update's camera sample ("Cuts" below); `MsSetCheckChange` only while the event scripts run |
 | `FFXApplication_updateGlobalTime_0042fa00` (thiscall app), `TextureAnimation_Animate_00672000` (stdcall), `CharacterLighting_updateFlash_006ab630`, `FogEffectManager_updateChrFogFade_006e3f40`, `BlurEffect_update_006c3d40` (thiscall) | Hooks (switch `frames.speed.scene_time`, on) | Game time instead of the real-time step after `updateFFX` ("The scene's clock" below) |
 | `Renderer_PresentFlip` (`0x00593760`, thiscall, render thread) | Hook | Counts presents (the drawn fps). For vsync on or off it sets the renderer's byte `+0x131c` around the call (the present's sync interval is 1 when it is not 0) and puts it back |
