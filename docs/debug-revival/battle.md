@@ -1,6 +1,6 @@
 # Facts: battle debug, cheats, scene picker, save/load debug (FFX.exe, Steam HD)
 
-Research sheet for the "Debug Revival" Fahrenheit mod (yuta.debugrevival).
+Research sheet for the "Debug Revival" Fahrenheit mod (yuta.debug-revival).
 Sources: `symbols/ffx.sym`, `docs/formats/battle.md`, `docs/formats/save.md`,
 `docs/harness.md`, a Ghidra dump of FFX.exe (ffx-decomp's tools/ghidra/dump.sh), objdump of FFX.exe,
 a byte scan of FFX.exe for absolute pointers and rel32 call/jmp to each

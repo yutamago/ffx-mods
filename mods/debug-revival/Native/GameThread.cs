@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-namespace Yuta.DebugRevival.Native;
+namespace Yuta.FfxMods.DebugRevival.Native;
 
 /// <summary>
 ///     Actions the UI queues for the game thread, which runs the next update while the render thread draws.

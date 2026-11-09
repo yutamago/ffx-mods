@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 
-using Yuta.DebugRevival.Features;
-using Yuta.DebugRevival.Native;
+using Yuta.FfxMods.DebugRevival.Features;
+using Yuta.FfxMods.DebugRevival.Native;
 
-namespace Yuta.DebugRevival.Ui;
+namespace Yuta.FfxMods.DebugRevival.Ui;
 
 /// <summary>The mod's window (F9): one tab per area.</summary>
 public sealed class MainWindow(

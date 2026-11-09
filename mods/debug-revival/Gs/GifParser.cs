@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 
-// Shared with tools/GsCheck, which has no global usings of its own.
+// Shared with tools/debug-revival/GsCheck, which has no global usings of its own.
 using System.Buffers.Binary;
 
-namespace Yuta.DebugRevival.Gs;
+namespace Yuta.FfxMods.DebugRevival.Gs;
 
 /// <summary>A vertex in PS2 screen pixels (0..W x 0..H), with its colour and texel coordinates.</summary>
 public readonly record struct GsVertex(float X, float Y, byte R, byte G, byte B, byte A, float U, float V);
@@ -24,7 +24,7 @@ public sealed record GsPrim(
 /// <summary>
 ///     Parses the GIF stream of a PS2 debug-GUI packet: a DMA "end" tag holding the quadword count, then GIF tags.
 ///     Only the registers FFX's debug drawers use are read. The count ends the stream, not EOP, which FFX's text
-///     tags set mid-packet (docs/research/gs.md).
+///     tags set mid-packet (docs/debug-revival/gs.md).
 /// </summary>
 public static class GifParser {
     private sealed class State {

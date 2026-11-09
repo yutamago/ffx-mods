@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: MIT
 
-using Yuta.DebugRevival.Native;
+using Yuta.FfxMods.DebugRevival.Native;
 
-namespace Yuta.DebugRevival.Features;
+namespace Yuta.FfxMods.DebugRevival.Features;
 
 /// <summary>
 ///     Field debug features: the debug pad's noclip and speed-up, random encounters, map jumps, the developer saves
-///     and the PC port's free camera (docs/research/overlays.md 4.1, field.md).
+///     and the PC port's free camera (docs/debug-revival/overlays.md 4.1, field.md).
 /// </summary>
 public sealed unsafe class FieldTools(FhLogger log, Guards guards, DebugFlag flag, StandInMaps stand_ins,
                                      Dictionary<int, FieldTools.MapInfo> map_info) {
@@ -25,7 +25,7 @@ public sealed unsafe class FieldTools(FhLogger log, Guards guards, DebugFlag fla
     public const int MODEL_VIEWER_MAP = 0;
     public const int VIEWER_SAVE_COUNT = 0x71;
 
-    /// <summary>What a jump to a map would do instead of loading it (docs/research/maps.md).</summary>
+    /// <summary>What a jump to a map would do instead of loading it (docs/debug-revival/maps.md).</summary>
     /// <param name="NoText">The map has no text in the game's language, so its script shows the Japanese text built
     /// into it, whose glyph pages a non-Japanese game never loads: the first message crashes (TOGetFontWidth). Only
     /// reported when <see cref="JapaneseText"/> could not hook the font functions.</param>
@@ -42,7 +42,7 @@ public sealed unsafe class FieldTools(FhLogger log, Guards guards, DebugFlag fla
     /// <summary>A developer save: the place and story progress it starts at.</summary>
     public sealed record DevSave(int Number, string Title, int Story, int Map);
 
-    /// <summary>A row of maps.tsv (tools/gen-map-table.cs): entrance count and place-name index (-1 for none).</summary>
+    /// <summary>A row of maps.tsv (tools/debug-revival/gen-map-table.cs): entrance count and place-name index (-1 for none).</summary>
     public readonly record struct MapInfo(int Entrances, int Place);
 
     public volatile Snapshot? snap;
@@ -212,7 +212,7 @@ public sealed unsafe class FieldTools(FhLogger log, Guards guards, DebugFlag fla
     /// <summary>
     ///     Whether an event effect is playing or its DLL is loaded or waiting to unload. A map change force-ends it
     ///     and frees the DLL in the same frame its particles are queued for drawing, which crashes the draw jobs
-    ///     (docs/research/maps.md, "Effects"). The game's scripts wait for their effects before leaving a map.
+    ///     (docs/debug-revival/maps.md, "Effects"). The game's scripts wait for their effects before leaving a map.
     /// </summary>
     internal static bool effect_active =>
         Mem.i8(G.EventEffectState) != 0 || Mem.i32(G.MagicLoaded) != -1 || Mem.i32(G.MagicPendingUnload) != -1;

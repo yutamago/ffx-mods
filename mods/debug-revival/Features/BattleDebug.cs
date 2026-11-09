@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: MIT
 
 using Fahrenheit.FFX.Battle;
-using Yuta.DebugRevival.Native;
+using Yuta.FfxMods.DebugRevival.Native;
 
-namespace Yuta.DebugRevival.Features;
+namespace Yuta.FfxMods.DebugRevival.Features;
 
 /// <summary>
 ///     Battle debug: the BattleConfig window's switches, which the battle code still reads without checking the debug
-///     flag, the Ms debug cheats, the scene picker and an actor inspector. docs/research/battle.md has the evidence for each.
+///     flag, the Ms debug cheats, the scene picker and an actor inspector. docs/debug-revival/battle.md has the evidence for each.
 /// </summary>
 public sealed unsafe class BattleDebug {
     public enum Risk { None, Stalls, Progress, Untested }

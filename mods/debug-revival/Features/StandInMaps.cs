@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: MIT
 
-using Yuta.DebugRevival.Native;
+using Yuta.FfxMods.DebugRevival.Native;
 
-namespace Yuta.DebugRevival.Features;
+namespace Yuta.FfxMods.DebugRevival.Features;
 
 /// <summary>
 ///     Areas whose geometry ships but whose script does not; a jump there froze the game. The game now reads the
 ///     developers' camera-test map (camtest0) in place of the missing files, and the mod points that script at the area's
-///     geometry, puts the player on its floor and turns off the test's camera tricks (docs/research/stand-in-maps.md).
+///     geometry, puts the player on its floor and turns off the test's camera tricks (docs/debug-revival/stand-in-maps.md).
 /// </summary>
 public sealed unsafe class StandInMaps(FhLogger log) {
     /// <param name="Map">The event id the game has no script for.</param>

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-namespace Yuta.DebugRevival.Native;
+namespace Yuta.FfxMods.DebugRevival.Native;
 
 /// <summary>
 ///     FFX.exe's memory, addressed by ffx-decomp's symbols/ffx.sym VAs (image base 0x00400000). The accessors are thin

@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 
-using Yuta.DebugRevival.Native;
+using Yuta.FfxMods.DebugRevival.Native;
 
-namespace Yuta.DebugRevival.Features;
+namespace Yuta.FfxMods.DebugRevival.Features;
 
 /// <summary>
 ///     Keeps the revived debug code from doing lasting harm: the Basic debug panel's "Achievements Reset" would wipe

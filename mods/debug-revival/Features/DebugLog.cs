@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 
-using Yuta.DebugRevival.Native;
+using Yuta.FfxMods.DebugRevival.Native;
 
-namespace Yuta.DebugRevival.Features;
+namespace Yuta.FfxMods.DebugRevival.Features;
 
 /// <summary>
 ///     The developers' console. Their printf-style functions are a bare <c>ret</c> in FFX.exe, but the callers still

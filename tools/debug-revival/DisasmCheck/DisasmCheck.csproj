@@ -5,12 +5,12 @@
         <TargetFramework>net10.0</TargetFramework>
         <Nullable>enable</Nullable>
         <ImplicitUsings>enable</ImplicitUsings>
-        <RootNamespace>Yuta.DebugRevival.Tools</RootNamespace>
+        <RootNamespace>Yuta.FfxMods.DebugRevival.Tools</RootNamespace>
     </PropertyGroup>
     <ItemGroup>
-        <Compile Include="../../src/Script/Opcodes.cs" />
-        <Compile Include="../../src/Script/Disassembler.cs" />
-        <Compile Include="../../src/Script/NativeNames.cs" />
-        <None Include="../../src/Script/natives.tsv" CopyToOutputDirectory="PreserveNewest" />
+        <Compile Include="../../../mods/debug-revival/Script/Opcodes.cs" />
+        <Compile Include="../../../mods/debug-revival/Script/Disassembler.cs" />
+        <Compile Include="../../../mods/debug-revival/Script/NativeNames.cs" />
+        <None Include="../../../mods/debug-revival/Script/natives.tsv" CopyToOutputDirectory="PreserveNewest" />
     </ItemGroup>
 </Project>

@@ -53,6 +53,7 @@ const string COMMON = "yuta.ffx-mods";
     ("bug-fixes",        false, false),
     ("modern-minimap",    false, false),
     ("fps-unlock",       false, false),
+    ("debug-revival",    false, false),
 ];
 // The bundles: mods (mods/<name>) whose manifest lists the mods they bundle (their csproj's
 // FfxModsDependencies).
@@ -152,14 +153,16 @@ void add_installer(Zip z, string dir) {
     z.text(File.ReadAllText(Path.Combine(root, "tools", "install", "install.ps1")), $"{dir}/install.ps1");
 }
 
-// A mod's folder: DLL and manifest, settings.default.toml, README.txt, install.cmd + .ps1, LICENSES.txt;
+// A mod's folder: DLL and manifest, settings.default.toml (if it has settings), README.txt, install.cmd + .ps1, LICENSES.txt;
 // demaster.exe for the mods with PS2 files (in a bundle the shared library has the one copy).
 void add_mod(Zip z, (string Name, bool Builds, bool Live) m, bool with_exe) {
     string id  = $"yuta.{m.Name}";
     string dir = $"mods/{id}";
     string src = Path.Combine(root, "mods", m.Name);
     z.dll(id);
-    z.text(File.ReadAllText(Path.Combine(src, "settings.default.toml")), $"{dir}/settings.default.toml");
+    // A mod without settings (Debug Revival) has no settings.default.toml.
+    string defaults = Path.Combine(src, "settings.default.toml");
+    if (File.Exists(defaults)) z.text(File.ReadAllText(defaults), $"{dir}/settings.default.toml");
     z.text(File.ReadAllText(Path.Combine(src, "README.txt")), $"{dir}/README.txt");
     add_installer(z, dir);
     if (m.Builds && with_exe) z.add(exe, $"{dir}/demaster.exe");

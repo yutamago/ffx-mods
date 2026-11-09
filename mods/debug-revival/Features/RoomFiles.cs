@@ -3,16 +3,16 @@
 using System.Buffers.Binary;
 using System.Threading.Tasks;
 
-using Yuta.DebugRevival.Native;
+using Yuta.FfxMods.DebugRevival.Native;
 
-namespace Yuta.DebugRevival.Features;
+namespace Yuta.FfxMods.DebugRevival.Features;
 
 /// <summary>
 ///     Builds the PC files of the two unfinished 2D maps whose background only ships in the PS2 format (bvyt14, bvyt15):
 ///     one 2048x2048 DXT5 texture per layer, decoded from the PS2 data, and the model and asset list of hiku17's 2D map
 ///     with the names and layer depths changed. They are written from the player's own game files into the mod's
 ///     replacement folder (efl/x), which Fahrenheit reads at start-up, so they show from the next start
-///     (docs/research/old-backgrounds.md).
+///     (docs/debug-revival/old-backgrounds.md).
 /// </summary>
 public sealed unsafe class RoomFiles(FhLogger log, DirectoryInfo efl) {
     private const int VERSION = 1;

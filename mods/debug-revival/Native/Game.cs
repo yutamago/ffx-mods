@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 
-namespace Yuta.DebugRevival.Native;
+namespace Yuta.FfxMods.DebugRevival.Native;
 
-/// <summary>Delegates for the game functions the mod calls or hooks; docs/research/ has the evidence for each signature.</summary>
+/// <summary>Delegates for the game functions the mod calls or hooks; docs/debug-revival/ has the evidence for each signature.</summary>
 public static class D {
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] public delegate void VoidFn();
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] public delegate void IntFn(int a);
@@ -113,7 +113,7 @@ public static class Calls {
     /// <summary>cdecl (): draws the TODaps buffer through the PC font path (no caller in release).</summary>
     public static FhCallHandle<D.VoidFn> TODapsMakePkt => h<D.VoidFn>(0x0089dcb0);
 
-    // ---- the PS2 debug GUI (Gu toolkit); docs/research/gs.md ----
+    // ---- the PS2 debug GUI (Gu toolkit); docs/debug-revival/gs.md ----
     public static FhCallHandle<D.VoidFn>         Gu_Init             => h<D.VoidFn>(0x008497a0);
     public static FhCallHandle<D.IntPtrFn>       Gu_Main             => h<D.IntPtrFn>(0x00849850);
     public static FhCallHandle<D.IntFn>          Gu_DrawEnd          => h<D.IntFn>(0x008479d0);
@@ -181,7 +181,7 @@ public static class Calls {
     /// <summary>thiscall (FreeCamera*): toggles the photo-mode pause.</summary>
     public static FhCallHandle<D.ThisFn> FreeCamera_setFreePause => h<D.ThisFn>(0x00680320);
 
-    // ---- text and fonts; docs/research/font.md ----
+    // ---- text and fonts; docs/debug-revival/font.md ----
     /// <summary>cdecl (map): loads the map's .ebp, its text in the game's language and its .ftc, and sets up its scripts.</summary>
     public static FhCallHandle<D.IntFn> AtelEventSetUp => h<D.IntFn>(0x00872ef0);
     /// <summary>cdecl (file) -> 0 when loaded: copies an .ftc's widths into font dictionary [file+8].</summary>

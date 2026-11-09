@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 
 using System.Globalization;
-using Yuta.DebugRevival.Gs;
+using Yuta.FfxMods.DebugRevival.Gs;
 
 // usage: GsCheck <packet.bin> [prims.txt]   (packet = from the DMA tag on, 512x416 screen)
 byte[] buf = File.ReadAllBytes(args[0]);

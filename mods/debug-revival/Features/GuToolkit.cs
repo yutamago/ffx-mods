@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: MIT
 
-using Yuta.DebugRevival.Gs;
-using Yuta.DebugRevival.Native;
+using Yuta.FfxMods.DebugRevival.Gs;
+using Yuta.FfxMods.DebugRevival.Native;
 
-namespace Yuta.DebugRevival.Features;
+namespace Yuta.FfxMods.DebugRevival.Features;
 
 /// <summary>
 ///     The PS2 debug GUI ("Gu" toolkit): the developers' debug menu and the windows it opens. FFX.exe still runs it,
 ///     but on PC its packets go nowhere and its mouse is a stub, so the mod copies the packets for
-///     <see cref="Ui.GuRenderer"/>, feeds it the Windows mouse and blocks what would hang or harm (docs/research/gs.md).
+///     <see cref="Ui.GuRenderer"/>, feeds it the Windows mouse and blocks what would hang or harm (docs/debug-revival/gs.md).
 /// </summary>
 public sealed unsafe class GuToolkit(DebugFlag flag) {
     private const uint PACKET_BUFFER  = 0x00c498dc; // ptr: the 1 MB packet buffer

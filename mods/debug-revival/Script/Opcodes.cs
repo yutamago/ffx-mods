@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-namespace Yuta.DebugRevival.Script;
+namespace Yuta.FfxMods.DebugRevival.Script;
 
 /// <summary>How an instruction's 16-bit operand is read.</summary>
 public enum Operand : byte {

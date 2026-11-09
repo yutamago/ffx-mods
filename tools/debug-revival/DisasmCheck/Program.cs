@@ -3,10 +3,10 @@
 using System.Diagnostics;
 using System.Text;
 using System.Text.RegularExpressions;
-using Yuta.DebugRevival.Script;
+using Yuta.FfxMods.DebugRevival.Script;
 
 // Compares the mod's disassembler with ffx-decomp's Rust one (`ffx script disasm`) over the shipped scripts.
-// usage: dotnet run --project tools/DisasmCheck -c Release -- [max scripts]   (needs FFX_GAME_DIR and FFX_CLI)
+// usage: dotnet run --project tools/debug-revival/DisasmCheck -c Release -- [max scripts]   (needs FFX_GAME_DIR and FFX_CLI)
 string game = Environment.GetEnvironmentVariable("FFX_GAME_DIR") ?? throw new Exception("set FFX_GAME_DIR");
 string cli = Environment.GetEnvironmentVariable("FFX_CLI") ?? throw new Exception("set FFX_CLI to the ffx binary of ffx-decomp");
 string archive = Path.Combine(game, "data", "FFX_Data.vbf");

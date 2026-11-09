@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-namespace Yuta.DebugRevival.Script;
+namespace Yuta.FfxMods.DebugRevival.Script;
 
 /// <summary>A signal queued on a worker (node stride 0x18).</summary>
 public sealed record SignalSnap(ushort Entry, ushort From, ushort To, int Level, int State, byte Kind);

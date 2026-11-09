@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT
 
-// Shared with tools/DisasmCheck, which has no global usings of its own.
+// Shared with tools/debug-revival/DisasmCheck, which has no global usings of its own.
 using System.Globalization;
 
-namespace Yuta.DebugRevival.Script;
+namespace Yuta.FfxMods.DebugRevival.Script;
 
-/// <summary>Native function names for <c>func</c> annotations, from natives.tsv (tools/gen-natives.cs).</summary>
+/// <summary>Native function names for <c>func</c> annotations, from natives.tsv (tools/debug-revival/gen-natives.cs).</summary>
 public sealed class NativeNames {
     private readonly Dictionary<ushort, (uint handler, string name)> _by_id = [];
 

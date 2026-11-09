@@ -1,19 +1,25 @@
-# Debug Revival (`yuta.debugrevival`)
+# Debug Revival (`yuta.debug-revival`)
 
 A [Fahrenheit](https://github.com/fahrenheit-crew/fahrenheit) mod for the
 Final Fantasy X HD Remaster (Steam). It turns back on the debug tools the
 developers left in `FFX.exe`. Press **F9** in game to open its window.
+This is its developer page: the players' text is the repository README and
+`mods/debug-revival/README.txt`.
 
 It needs Fahrenheit `1.0.0-alpha12` and the current Steam build of the game.
 
 ## Install
 
-Download the zip from the [releases](https://github.com/yutamago/ffx-debug-revival-mod/releases)
-and unpack it into your Fahrenheit folder, so the mod ends up in
-`mods/yuta.debugrevival/`. Then add a line `yuta.debugrevival` to
-`mods/loadorder`. Back up your saves first (`Documents\Square Enix\FINAL
-FANTASY X&X-2 HD Remaster`): the cheats and two of the panels change what your
-next save writes.
+As every mod of the family: unpack `yuta.debug-revival-<version>.zip` into
+the Fahrenheit folder and run `mods\yuta.debug-revival\install.cmd` (the
+repository README, "Install"). Back up your saves first (`Documents\Square
+Enix\FINAL FANTASY X&X-2 HD Remaster`): the cheats and two of the panels
+change what your next save writes.
+
+Until 2026-11-09 the mod was `yuta.debugrevival`, in its own repository
+(github.com/yutamago/ffx-debug-revival-mod, history merged here). An old
+install: delete `mods\yuta.debugrevival\` and its line in `mods\loadorder`,
+or both copies load and hook the same functions.
 
 ## What's in the window
 
@@ -88,35 +94,38 @@ save.
 - The developer panels stay locked unless both safety hooks are in place on
   the first frame.
 
-`docs/research/` has the facts behind every address, with the evidence.
-
 ## Build
 
-```bash
-dotnet build -c Release ffx-debug-revival.slnx   # artifacts/deploy/rel/mods/yuta.debugrevival/
-```
+The mod builds with the rest (`dotnet build -c Release ffx-mods.slnx`,
+`artifacts/deploy/rel/mods/yuta.debug-revival/`) and ships as
+`yuta.debug-revival-<version>.zip` (`tools/package.cs`). It has no settings,
+so no `settings.default.toml`, and no converter jobs: the two rebuilt
+Bevelle rooms ([old-backgrounds.md](old-backgrounds.md)) are built by the mod
+itself in the game, into its `efl/x`.
 
-The tools are C# scripts that need only the .NET 10 SDK, and run the same on
-Windows, Linux and macOS (CI builds them on all three):
+Its tools are C# scripts and projects in `tools/debug-revival/` that need
+only the .NET 10 SDK (CI builds them):
 
-- `dotnet run tools/package.cs -- <out.zip>` zips the build the way a release
-  ships it. Pushing a tag such as `v0.2.0` makes GitHub build and publish a
-  release; a tag with a `-` (`v0.2.0-alpha`) makes a prerelease.
-- `dotnet run --project tools/DisasmCheck -c Release -- [max]` checks the
-  disassembler against ffx-decomp's `ffx script disasm` on every shipped
-  script (needs `FFX_GAME_DIR` and `FFX_CLI`, the path to ffx-decomp's `ffx`).
-- `dotnet run tools/gen-natives.cs -- <FFX.exe> <ffx.sym>` rewrites
-  `src/Script/natives.tsv`, the native function names in the disassembly,
-  from `FFX.exe` and ffx-decomp's `symbols/ffx.sym`. Those names include
-  Fahrenheit's, used with their permission.
-- `dotnet run tools/gen-map-table.cs` rewrites `src/Features/maps.tsv`, the
-  entrance count of every map (needs `FFX_GAME_DIR` and `FFX_CLI`).
+- `dotnet run --project tools/debug-revival/DisasmCheck -c Release -- [max]`
+  checks the disassembler against ffx-rust's `ffx script disasm` on every
+  shipped script (needs `FFX_GAME_DIR` and `FFX_CLI`, the path to ffx-rust's
+  `ffx`).
+- `dotnet run --project tools/debug-revival/GsCheck -- <packet>` prints a
+  dumped PS2 debug-GUI packet as the mod's parser reads it.
+- `dotnet run tools/debug-revival/gen-natives.cs -- <FFX.exe> <ffx.sym>`
+  rewrites `mods/debug-revival/Script/natives.tsv`, the native function
+  names in the disassembly, from `FFX.exe` and ffx-rust's `symbols/ffx.sym`.
+  Those names include Fahrenheit's, used with their permission.
+- `dotnet run tools/debug-revival/gen-map-table.cs` rewrites
+  `mods/debug-revival/Features/maps.tsv`, the entrance count of every map
+  (needs `FFX_GAME_DIR` and `FFX_CLI`).
 
 The generators write their table themselves rather than to a shell redirect,
 which in PowerShell can change the encoding and line endings. Give a path as
 the last argument to write elsewhere, or `-` for the console.
 
-## License
-
-MIT, see `LICENSE`. See `THIRD-PARTY-NOTICES` for the files
-taken from the Fahrenheit mod template.
+The other files here have the facts behind every address, with the
+evidence: [script.md](script.md), [overlays.md](overlays.md),
+[battle.md](battle.md), [field.md](field.md), [gs.md](gs.md),
+[font.md](font.md), [maps.md](maps.md), [stand-in-maps.md](stand-in-maps.md),
+[old-backgrounds.md](old-backgrounds.md).

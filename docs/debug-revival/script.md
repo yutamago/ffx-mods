@@ -1,6 +1,6 @@
 # Facts: event-script (ATEL) VM and its debugger
 
-For the yuta.debugrevival mod: a mod-side script debugger and the original on-screen debugger pages.
+For the yuta.debug-revival mod: a mod-side script debugger and the original on-screen debugger pages.
 - Addresses are VAs with image base 0x00400000. "off" = FhCallLocation offset = VA - 0x400000.
 - VERIFIED = code seen (dump, objdump of FFX.exe, or our ported Rust with parity tests). INFERRED = not traced end to end.
 

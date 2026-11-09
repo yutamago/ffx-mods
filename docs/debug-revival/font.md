@@ -2,7 +2,7 @@
 
 Static analysis of FFX.exe (Steam, 32-bit) and the shipped file list; the game was not run.
 VERIFIED = read in the decompilation or disassembly, or checked against the data. INFERRED =
-concluded, not read. Feature: `src/Features/JapaneseText.cs`.
+concluded, not read. Feature: `mods/debug-revival/Features/JapaneseText.cs`.
 
 ## The crash
 

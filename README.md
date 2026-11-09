@@ -22,7 +22,8 @@ alone or together; each is a separate zip.
 | [Bug fixes](#bug-fixes) (`yuta.bug-fixes`) | NPC mouths, the Farplane video, Lulu's Fury spins | no | <1 MB | — |
 | [Modern Minimap](#modern-minimap) (`yuta.modern-minimap`) | a round field minimap, centred on you and turned with the camera | no | <1 MB | — |
 | [FPS unlock](#fps-unlock) (`yuta.fps-unlock`) | the game drawn at your monitor's refresh rate (or uncapped) at its own speed; slow motion and fast-forward | no | <1 MB | — |
-| **[PS2 bundle](#ps2-bundle)** (`yuta.ps2-bundle`) | all twelve PS2 mods above (not Modern Minimap, FPS unlock) in one zip with one install step | yes | ~7.3 GB | — |
+| [Debug Revival](#debug-revival) (`yuta.debug-revival`) | the developers' debug tools left in the game, back on: script debugger, debug menus and panels, battle cheats, free camera, map jumps, developer saves (F9) | no | ~35 MB (two rebuilt rooms, made in the game) | — |
+| **[PS2 bundle](#ps2-bundle)** (`yuta.ps2-bundle`) | all twelve PS2 mods above (not Modern Minimap, FPS unlock, Debug Revival) in one zip with one install step | yes | ~7.3 GB | — |
 
 Every mod needs the shared library `yuta.ffx-mods` (in every zip; its
 manifest dependency). Sizes are the files `install.cmd` builds with the
@@ -340,6 +341,36 @@ stay at their own speed.
   limits.
 - PS2 disc: not needed. Code only.
 
+### Debug Revival
+
+The debug tools the developers left in `FFX.exe`, turned back on. **F9**
+opens its window: an event-script debugger (every running script with its
+disassembly, stacks and variables; pause, step, breakpoints), the
+developers' PS2 debug menu drawn by the game's own code, the PC version's
+ten developer panels, the battle debug switches and cheats with any battle
+on demand, and in the field walking through walls, game speed, random
+encounters, a free camera, jumps to any map and the developers' ~110 saves
+for every part of the story. A **Debug flag** switches the game into the
+developers' debug mode while it runs.
+
+- Maps that would crash the game are refused; five unfinished areas get a
+  stand-in script so you can walk around in them, and two of them, rooms in
+  Bevelle that survive only as PS2 backgrounds in an older format, are
+  rebuilt from your game files the first time the game runs with the mod
+  (they show from the next start; ~35 MB in its folder). About 60 test
+  maps with no text in your language show their Japanese text instead of
+  crashing.
+- Back up your saves first: the cheats and two of the panels change what
+  your next save writes, and jumping out of story order can break your
+  progress. Debug items that would hang the game, clear the story flags or
+  reset your Steam achievements are blocked.
+- No settings. Formerly its own mod `yuta.debugrevival`
+  (github.com/yutamago/ffx-debug-revival-mod): delete
+  `mods\yuta.debugrevival\` and its line in `mods\loadorder` when you
+  install this one. [`docs/debug-revival/`](docs/debug-revival/README.md)
+  explains every tab and the research behind it.
+- PS2 disc: not needed.
+
 ## Documents
 
 - [`docs/config.md`](docs/config.md): every setting, and which mod has it.
@@ -352,6 +383,8 @@ stay at their own speed.
 - [`docs/minimap.md`](docs/minimap.md): the Modern Minimap.
 - [`docs/fps-unlock.md`](docs/fps-unlock.md): FPS unlock, and how FFX.exe
   times its frames (what a tick is, the limiter, fast-forward).
+- [`docs/debug-revival/`](docs/debug-revival/README.md): Debug Revival, its
+  tools, and the research behind every address it uses.
 - [`docs/disc.md`](docs/disc.md): how the PS2 disc stores its files.
 - [`docs/ci.md`](docs/ci.md): CI and releases.
 

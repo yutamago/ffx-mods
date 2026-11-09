@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 
-using Yuta.DebugRevival.Script;
+using Yuta.FfxMods.DebugRevival.Script;
 
-namespace Yuta.DebugRevival.Ui;
+namespace Yuta.FfxMods.DebugRevival.Ui;
 
 /// <summary>The script debugger's tab: ctrl works, workers, disassembly, stack, signals, variables.</summary>
 public sealed class ScriptDebuggerUi(ScriptDebugger dbg) {

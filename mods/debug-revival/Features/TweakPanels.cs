@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: MIT
 
-using Yuta.DebugRevival.Native;
+using Yuta.FfxMods.DebugRevival.Native;
 
-namespace Yuta.DebugRevival.Features;
+namespace Yuta.FfxMods.DebugRevival.Features;
 
 /// <summary>
 ///     The PC port's ten tweak panels (DebugMenuManager). FFX.exe still draws whichever one is shown; the cut parts
-///     are the switch and the panels' input handlers, which <see cref="update"/> runs (docs/research/field.md, section 2).
+///     are the switch and the panels' input handlers, which <see cref="update"/> runs (docs/debug-revival/field.md, section 2).
 /// </summary>
 public sealed unsafe class TweakPanels(Guards guards, DebugFlag flag) {
     /// <param name="ViewerOnly">The handler returns at once without the debug flag.</param>

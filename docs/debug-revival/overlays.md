@@ -1,6 +1,6 @@
 # Facts: debug display machinery and the PC tweak overlays (FFX.exe, Steam HD)
 
-Research sheet for the Debug Revival mod (yuta.debugrevival). Scope: the
+Research sheet for the Debug Revival mod (yuta.debug-revival). Scope: the
 DebugMenuManager and the *TweakUtil panels, every g_FFXIsDebug reader, the
 debug text/primitive paths, the debug free camera and op/VFX debug, and the
 Gu_/Gui_ toolkit with the rc map tool. The battle windows (Ms_Gui_*) and

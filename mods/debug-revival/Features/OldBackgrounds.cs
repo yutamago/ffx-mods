@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: MIT
 
-using Yuta.DebugRevival.Native;
+using Yuta.FfxMods.DebugRevival.Native;
 
-namespace Yuta.DebugRevival.Features;
+namespace Yuta.FfxMods.DebugRevival.Features;
 
 /// <summary>
 ///     Two unfinished maps (bvyt14, bvyt15) keep their 2D background in an older format: no padding after counts, a
 ///     shorter layer header with the palettes inline, and the textures in a YNTM chunk of their own. The shipped loader
 ///     (rcbgLoadBin) misreads it and crashes. This rewrites such a background into the format the game reads, without
 ///     the pixels (the PC version draws its own layers), so the game still sets up the layers and the painted camera
-///     (docs/research/old-backgrounds.md).
+///     (docs/debug-revival/old-backgrounds.md).
 /// </summary>
 public sealed unsafe class OldBackgrounds(FhLogger log) {
     private D.PtrFn?      _next_set_data;

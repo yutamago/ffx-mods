@@ -1,15 +1,19 @@
 // SPDX-License-Identifier: MIT
 
-using Yuta.DebugRevival.Features;
-using Yuta.DebugRevival.Native;
-using Yuta.DebugRevival.Script;
-using Yuta.DebugRevival.Ui;
+using Yuta.FfxMods.DebugRevival.Features;
+using Yuta.FfxMods.DebugRevival.Native;
+using Yuta.FfxMods.DebugRevival.Script;
+using Yuta.FfxMods.DebugRevival.Ui;
 
-namespace Yuta.DebugRevival;
+namespace Yuta.FfxMods.DebugRevival;
 
 /// <summary>Debug Revival: the developers' debug tools left in FFX.exe, turned back on. F9 opens the window.</summary>
 [FhLoad(FhGameId.FFX)]
 public sealed class DebugRevivalModule : FhModule {
+    // No settings and no files to build: the F8 window lists it with its version and points to F9.
+    public static readonly ModInfo INFO = new("debug-revival", "Debug Revival", [], [], Builds: false,
+        Section: _ => ImGui.TextWrapped("F9 opens Debug Revival's window."));
+
     private ScriptDebugger? _scripts;
     private TweakPanels?    _panels;
     private BattleDebug?    _battle;
@@ -26,6 +30,7 @@ public sealed class DebugRevivalModule : FhModule {
     private MainWindow?     _window;
 
     public override bool init(FhModContext mod_context, FileStream global_state_file) {
+        ModHost.start(this, _logger, mod_context, INFO);
         NativeNames names = NativeNames.parse(resource("natives.tsv"));
         Dictionary<int, FieldTools.MapInfo> map_info = FieldTools.parse_map_table(resource("maps.tsv"));
 

@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: MIT
 
-using Yuta.DebugRevival.Native;
+using Yuta.FfxMods.DebugRevival.Native;
 
-namespace Yuta.DebugRevival.Features;
+namespace Yuta.FfxMods.DebugRevival.Features;
 
 /// <summary>
 ///     The game's debug flag (g_FFXIsDebug), switched at runtime. A normal boot skips what a debug boot sets up,
-///     so the hooks here keep the flag away from the code that would crash without it (docs/research/field.md, section 5).
+///     so the hooks here keep the flag away from the code that would crash without it (docs/debug-revival/field.md, section 5).
 /// </summary>
 public sealed unsafe class DebugFlag(Guards guards) {
     private bool _buffer_made;

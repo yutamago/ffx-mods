@@ -1,7 +1,7 @@
 # Facts, round 2 (field): free camera, panel size, map list, grid00, debug flag
 
-Research sheet for the Debug Revival mod (yuta.debugrevival). It builds on
-`docs/research/overlays.md` sections 1, 2 and 4.1, and **corrects several
+Research sheet for the Debug Revival mod (yuta.debug-revival). It builds on
+`docs/debug-revival/overlays.md` sections 1, 2 and 4.1, and **corrects several
 of their claims** (summary in section 0).
 
 Conventions:

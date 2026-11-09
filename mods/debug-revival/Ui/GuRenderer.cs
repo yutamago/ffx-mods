@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 
-using Yuta.DebugRevival.Features;
-using Yuta.DebugRevival.Gs;
+using Yuta.FfxMods.DebugRevival.Features;
+using Yuta.FfxMods.DebugRevival.Gs;
 
-namespace Yuta.DebugRevival.Ui;
+namespace Yuta.FfxMods.DebugRevival.Ui;
 
 /// <summary>
 ///     Draws the PS2 debug GUI's primitives under the mod's window, stretched over the screen as the game stretches

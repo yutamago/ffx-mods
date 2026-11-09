@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: MIT
 
-using Yuta.DebugRevival.Native;
+using Yuta.FfxMods.DebugRevival.Native;
 
-namespace Yuta.DebugRevival.Features;
+namespace Yuta.FfxMods.DebugRevival.Features;
 
 /// <summary>
 ///     Maps without text in the game's language show the Japanese text built into their script, which a non-Japanese
 ///     game has no font for: the first message crashed. The first such map loads the Japanese base font, and its text
-///     is drawn with it (docs/research/font.md).
+///     is drawn with it (docs/debug-revival/font.md).
 /// </summary>
 public sealed unsafe class JapaneseText(FhLogger log) {
     private const string FONT_PATH = "/ffx_ps2/ffx/master/new_jppc/menu/base.ftc";

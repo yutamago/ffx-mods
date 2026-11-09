@@ -1,6 +1,7 @@
 <Solution>
   <Project Path="common/yuta.ffx-mods.csproj" />
   <Project Path="mods/bug-fixes/yuta.bug-fixes.csproj" />
+  <Project Path="mods/debug-revival/yuta.debug-revival.csproj" />
   <Project Path="mods/fps-unlock/yuta.fps-unlock.csproj" />
   <Project Path="mods/modern-minimap/yuta.modern-minimap.csproj" />
   <Project Path="mods/no-hd-post-effects/yuta.no-hd-post-effects.csproj" />

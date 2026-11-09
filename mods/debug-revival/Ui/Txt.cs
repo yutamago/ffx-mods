@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-namespace Yuta.DebugRevival.Ui;
+namespace Yuta.FfxMods.DebugRevival.Ui;
 
 /// <summary>ImGui's Text functions take a printf format; these show text that may contain '%' as it is.</summary>
 internal static class Txt {

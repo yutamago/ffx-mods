@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT
 
-// Shared with tools/DisasmCheck, which has no global usings of its own.
+// Shared with tools/debug-revival/DisasmCheck, which has no global usings of its own.
 using System.Globalization;
 using System.Numerics;
 using System.Text;
 
-namespace Yuta.DebugRevival.Script;
+namespace Yuta.FfxMods.DebugRevival.Script;
 
 /// <summary>Reads a script block: offsets are relative to the block's start.</summary>
 public interface IBlockReader {

@@ -4,11 +4,11 @@
 // build in ffx-decomp's symbols/ffx.sym), and its place-name index (the save screen's place; the mod asks the game
 // for the name in the player's language). Needs FFX_GAME_DIR and FFX_CLI (the `ffx` binary of ffx-decomp).
 //
-// usage: dotnet run tools/gen-map-table.cs -- [out.tsv]   (default src/Features/maps.tsv, - for stdout)
-//        dotnet run tools/gen-map-table.cs -- --detail [out.tsv]   (adds the map index per language; not for
+// usage: dotnet run tools/debug-revival/gen-map-table.cs -- [out.tsv]   (default mods/debug-revival/Features/maps.tsv, - for stdout)
+//        dotnet run tools/debug-revival/gen-map-table.cs -- --detail [out.tsv]   (adds the map index per language; not for
 //        shipping, so it defaults to stdout)
 //
-// Reason codes (docs/research/maps.md has the mechanism of each):
+// Reason codes (docs/debug-revival/maps.md has the mechanism of each):
 //   no_name    module 0xc slot map*0x12 empty in cdrom.fnd: Cd_QueueRead copies a NULL name (crash)
 //   no_file    named, but the .ebp is not in the archive: size 0, "EV" check fails, AtelEventSetUp jmp $ (hang)
 //   bad_path   name lacks "/event/obj/" or a later '/': AtelEventSetUp's strstr/strrchr give a NULL (crash)
@@ -33,7 +33,7 @@ const int EVENT_MODULE = 0xc, MAP_MODULE = 0x13, FILES_PER_EVENT = 0x12;
 int[] LANGS = [ 0, 1, 2, 3, 4, 5, 9, 10, 11 ];
 bool detail = args.Contains("--detail");
 string? out_arg = args.FirstOrDefault(a => a != "--detail");
-string out_path = out_arg ?? (detail ? "-" : Path.Combine(Path.GetDirectoryName(this_file())!, "..", "src", "Features", "maps.tsv"));
+string out_path = out_arg ?? (detail ? "-" : Path.Combine(Path.GetDirectoryName(this_file())!, "..", "..", "mods", "debug-revival", "Features", "maps.tsv"));
 
 byte[] run(params string[] argv) {
     ProcessStartInfo psi = new(cli) { RedirectStandardOutput = true, RedirectStandardError = true };

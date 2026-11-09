@@ -1,6 +1,6 @@
 # Facts, round 2: bringing back the PS2 debug GUI's original look (GS/GIF packets to ImGui)
 
-Research sheet for the Debug Revival mod (yuta.debugrevival). Scope:
+Research sheet for the Debug Revival mod (yuta.debug-revival). Scope:
 - the packet format the Gu toolkit (main menu WMainProc, the Ms_Gui_* battle
   windows, the rcui windows) and the other PS2 debug drawers build;
 - the debug-font texture;

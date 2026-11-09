@@ -2,11 +2,11 @@
 
 using Fahrenheit.Atel;
 
-using Yuta.DebugRevival.Native;
+using Yuta.FfxMods.DebugRevival.Native;
 
 using AtelGlobals = Fahrenheit.FFX.Globals.Atel;
 
-namespace Yuta.DebugRevival.Script;
+namespace Yuta.FfxMods.DebugRevival.Script;
 
 /// <summary>A script block in game memory; breakpoint bytes read as the instruction they replaced.</summary>
 internal sealed unsafe class MemBlockReader(nint block, long size, IReadOnlyDictionary<long, byte> overlay) : IBlockReader {
@@ -14,7 +14,7 @@ internal sealed unsafe class MemBlockReader(nint block, long size, IReadOnlyDict
     public byte u8(long offset) => overlay.TryGetValue(offset, out byte b) ? b : *(byte*)(block + (nint)offset);
 }
 
-/// <summary>One of a ctrl work's 4 breakpoint entries (ctrl +0x64, docs/research/script.md 1.2); Fahrenheit has no type for it.</summary>
+/// <summary>One of a ctrl work's 4 breakpoint entries (ctrl +0x64, docs/debug-revival/script.md 1.2); Fahrenheit has no type for it.</summary>
 [StructLayout(LayoutKind.Explicit, Size = 0x10)]
 internal struct AtelBreakpoint {
     [FieldOffset(0x0)] public int   id;     // >= 0 set, -1 free
@@ -25,7 +25,7 @@ internal struct AtelBreakpoint {
 }
 
 /// <summary>
-///     The event-script debugger, built on the VM's own support (docs/research/script.md): ctrl work +8 is the
+///     The event-script debugger, built on the VM's own support (docs/debug-revival/script.md): ctrl work +8 is the
 ///     debugger state (0 run, 1 step, 2 one frame, 3 stopped) and +0x64 holds 4 breakpoints for opcode 0x40.
 ///     Game memory is touched only inside the <c>Atel_ExecCtrlWorks</c> hook, where no script is mid-instruction.
 ///     Fahrenheit's Atel structs cover most of it; the ctrl work fields they don't name are read by offset below.
@@ -197,7 +197,7 @@ public sealed unsafe class ScriptDebugger {
 
     private static AtelWorkerController* ctrl_ptr(int c) => AtelGlobals.controllers + c;
 
-    // Ctrl work fields AtelWorkerController doesn't name (docs/research/script.md 1.2).
+    // Ctrl work fields AtelWorkerController doesn't name (docs/debug-revival/script.md 1.2).
     private static bool  in_use     (AtelWorkerController* ctrl) => (*(byte*)ctrl & 1) != 0;  // +0 bit 0
     private static byte* state      (AtelWorkerController* ctrl) => (byte*)ctrl + 8;          // the debugger state
     private static int   total      (AtelWorkerController* ctrl) => *(ushort*)((nint)ctrl + 0x10); // with the 0x30-byte ones
