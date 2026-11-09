@@ -58,6 +58,8 @@ internal sealed unsafe class FrameHooks {
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] internal delegate int SegmentBufferFn(nint renderData, int segment, int vertices, int indices);
     [UnmanagedFunctionPointer(CallingConvention.StdCall)] internal delegate int StdFloatFn(float dt);
     [UnmanagedFunctionPointer(CallingConvention.ThisCall)] internal delegate int ThisFloatFn(nint self, float dt);
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)] internal delegate int IdPtrFn(int id, nint p);
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)] internal delegate int IdPtrIntFn(int id, nint p, int a);
 
     private static FhCallHandle<T> At<T>(uint va) where T : Delegate => new(new FhCallLocation("FFX.exe", Game.Offset(va)));
 
@@ -106,6 +108,9 @@ internal sealed unsafe class FrameHooks {
     private static FhCallHandle<ThisFloatFn> LightFlash => At<ThisFloatFn>(0x006ab630);
     private static FhCallHandle<ThisFloatFn> RadialBlur => At<ThisFloatFn>(0x006c3d40);
     private static FhCallHandle<ThisFloatFn> ChrFogFade => At<ThisFloatFn>(0x006e3f40);
+    // The map's moving objects (ObjectHistory).
+    private static FhCallHandle<IdPtrFn> ObjectTranslation => At<IdPtrFn>(0x006426c0);
+    private static FhCallHandle<IdPtrIntFn> ObjectRotation => At<IdPtrIntFn>(0x006426a0);
 
     private readonly Game _game;
     private readonly FhLogger _log;
@@ -117,6 +122,9 @@ internal sealed unsafe class FrameHooks {
     private readonly CharacterHistory _chars = new();
     private readonly DrawCounters _drawCounters = new(Game.DrawCountersSize);
     private readonly ClothHistory _cloth = new();
+    private readonly ObjectHistory _objects = new();
+    // The functions another program had hooked before ours (CodeScan.PrologueMatches).
+    private readonly HashSet<uint> _preHooked = [];
     public readonly FrameStats Stats = new();
 
     // The current frame (game thread). Vanilla outside updateFFX, so calls from elsewhere pass through.
@@ -168,6 +176,8 @@ internal sealed unsafe class FrameHooks {
     public int Characters => _chars.Characters;
     public int CharacterCuts => _chars.Cuts;
     public int ClothMeshesHeld => _cloth.Meshes;
+    public int ObjectsHeld => _objects.Objects;
+    public int ObjectCuts => _objects.Cuts;
     public bool LimiterPatched => _limiterPatched;
     /// <summary>The start-up ramp and the scale that may be saved (<see cref="ScaleGuard"/>).</summary>
     public ScaleGuard Guard => _guard;
@@ -241,6 +251,18 @@ internal sealed unsafe class FrameHooks {
     private double _sceneStep;
     private readonly GlobalTimeClock _globalTime = new();
 
+    // The map's moving objects (ObjectHistory): the game's setters, the objects the mod placed between ticks this frame
+    // (put back before the next update), the map they belong to, and a buffer for the mod's own calls.
+    private IdPtrFn? _nextObjectTranslation;
+    private IdPtrIntFn? _nextObjectRotation;
+    private readonly HashSet<int> _objectsPlaced = [];
+    private readonly List<int> _objectsMoving = [];
+    private int _objectMap = -1;
+    private bool _placingObjects;
+    private readonly float* _objectArgs;
+    // A test switch: YUTA_FPS_UNLOCK_TRACE=<file> writes a line per drawn frame (docs/fps-unlock.md, "Testing").
+    private System.IO.StreamWriter? _trace = OpenTrace();
+
     public FrameHooks(Game game, FhLogger log, Func<FrameSettings> settings) {
         _game = game;
         _log = log;
@@ -253,6 +275,7 @@ internal sealed unsafe class FrameHooks {
         _fades = (byte*)NativeMemory.AllocZeroed(Game.FadeStateSize);
         _event = (int*)NativeMemory.AlignedAlloc(16, 16);
         _world = (Matrix4x4*)NativeMemory.AlignedAlloc((nuint)sizeof(Matrix4x4), 16);
+        _objectArgs = (float*)NativeMemory.AlignedAlloc(32, 16);
         _updateEntry = h_update_ffx;
         _updateScanEntry = h_update_scan;
         _gs1Entry = h_gs1_transfer;
@@ -261,9 +284,13 @@ internal sealed unsafe class FrameHooks {
         _otDrawEntry = h_ot_draw;
     }
 
-    private bool Matches(uint va, string name, string bytes) {
+    private bool Matches(uint va, string name, string bytes, int from = 0) {
         string[] want = bytes.Split(' ');
-        for (int i = 0; i < want.Length; i++) {
+        if (from >= want.Length) {
+            _log.Error($"FPS unlock: {name} (0x{va:x8}) starts with another program's jmp, and this mod knows too few of its bytes to check the rest; it cannot hook it safely.");
+            return false;
+        }
+        for (int i = from; i < want.Length; i++) {
             if (want[i] == "??" || _game.CodeByte(va + (uint)i) == Convert.ToByte(want[i], 16)) continue;
             _log.Error($"FPS unlock: {name} (0x{va:x8}) is not the code this mod knows (byte {i}); another game version?");
             return false;
@@ -279,9 +306,16 @@ internal sealed unsafe class FrameHooks {
     public bool CheckGame() {
         bool ok = true;
         foreach ((uint va, string name, string bytes, int length) in Prologues) {
-            if (!Matches(va, name, bytes)) {
+            int n = bytes.Split(' ').Length;
+            if (!CodeScan.PrologueMatches(_game.Code(va, n), bytes, out bool preHooked)) {
+                // Logs the byte that differs (after another program's jmp, the first one past it).
+                Matches(va, name, bytes, _game.CodeByte(va) == CodeScan.JmpRel32 && !bytes.StartsWith("e9") ? CodeScan.PatchSize : 0);
                 ok = false;
                 continue;
+            }
+            if (preHooked) {
+                _preHooked.Add(va);
+                _log.Info($"FPS unlock: {name} (0x{va:x8}) is already hooked by another program (it starts with a jmp); this mod's hook runs before it (MinHook keeps its jmp in the trampoline).");
             }
             // The live code: skip the bytes the loader rewrote for this run's base (absolute operands, not branches).
             int at = CodeScan.PrologueBranch(_game.Code(va, length), va, PeRelocations.Covered(_game.Relocations, (uint)Game.Offset(va), length));
@@ -357,6 +391,8 @@ internal sealed unsafe class FrameHooks {
         Hook(LightFlash.hook(owner, h_light_flash), "CharacterLighting_updateFlash");
         Hook(RadialBlur.hook(owner, h_radial_blur), "BlurEffect_update");
         Hook(ChrFogFade.hook(owner, h_chr_fog_fade), "FogEffectManager_updateChrFogFade");
+        Hook(ObjectTranslation.hook(owner, h_object_translation), "graphicObjectSetTranslation");
+        Hook(ObjectRotation.hook(owner, h_object_rotation), "graphicObjectSetRotation");
         return ok;
     }
 
@@ -384,7 +420,7 @@ internal sealed unsafe class FrameHooks {
         nint original = _game.Address(va);
         (string name, byte first) = ("0x" + va.ToString("x8"), _game.CodeByte(va));
         foreach ((uint fn, string n, string bytes, _) in Prologues) {
-            if (fn == va) (name, first) = (n, Convert.ToByte(bytes[..2], 16));
+            if (fn == va) (name, first) = (n, _preHooked.Contains(va) ? CodeScan.JmpRel32 : Convert.ToByte(bytes[..2], 16));
         }
         string? problem = CodeScan.ChainProblem(at, original, _game.CodeByte(va), at == 0 ? (byte)0 : *(byte*)at, first);
         if (problem is null) return next;
@@ -436,7 +472,18 @@ internal sealed unsafe class FrameHooks {
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
     private int h_update_ffx(float dt) {
         FloatFn next = _nextUpdate!;
-        if (Failed) return next(dt);
+        if (Failed) {
+            // Once: the map objects the mod placed between ticks get the game's own poses back.
+            if (_objectsPlaced.Count > 0) {
+                try {
+                    RestoreObjects();
+                }
+                catch {
+                    _objectsPlaced.Clear();
+                }
+            }
+            return next(dt);
+        }
         _gameThread = Environment.CurrentManagedThreadId;
         FrameSettings s = _settings();
         try {
@@ -464,12 +511,25 @@ internal sealed unsafe class FrameHooks {
         _loop = 0;
         _syncFrame = false;
         _worldSeen = false;
+        try {
+            RestoreObjects();
+        }
+        catch (Exception ex) {
+            Fail("the map objects (put back)", ex);
+        }
         _inFrame = true;
         long start = Stopwatch.GetTimestamp();
         try {
             return next(dt);
         }
         finally {
+            try {
+                if (!Failed) PlaceObjects(s);
+            }
+            catch (Exception ex) {
+                Fail("the map objects between ticks", ex);
+            }
+            if (_trace is not null) TraceFrame();
             _inFrame = false;
             if (_frame.Kind != FrameKind.Vanilla) {
                 _game.ExecFrames = _execSaved;
@@ -493,6 +553,8 @@ internal sealed unsafe class FrameHooks {
             _wasEnabled = s.Enabled;
             _camera.Clear();
             _effects.Clear();
+            // Updates without ticks while the mod was off: a pair recorded before it would look consecutive.
+            _objects.ClearSamples();
             _game.ClearCarries();
             _log.Info($"FPS unlock: {(s.Enabled ? "on" : "off")}");
         }
@@ -614,6 +676,17 @@ internal sealed unsafe class FrameHooks {
             _game.CalmFrames = calm;
             _drawCounters.EndRedraw(counters);
             _game.WriteDrawCounters(counters);
+        }
+        if (!Failed) {
+            try {
+                // The game's last calls in this update are its objects' poses at this tick.
+                FrameSettings os = _settings();
+                _objects.EndUpdate(_inFrame && _frame.Kind == FrameKind.Tick && _loopTicked && os.InterpolateObjects,
+                    os.CharacterCutDistance, os.CharacterCutDegrees);
+            }
+            catch (Exception ex) {
+                Fail("the map objects' history", ex);
+            }
         }
         if (_clothRecord && !Failed) {
             // Sg_MainLoop waited for the cloth jobs Ch_DrawMain queued: the tick's cloth is final.
@@ -1240,6 +1313,8 @@ internal sealed unsafe class FrameHooks {
     /// </summary>
     private void CutCharacters(FrameSettings s) {
         _chars.CutAll();
+        // The map's objects are placed after the update (PlaceObjects): none between ticks from this tick on.
+        _objects.CutAll();
         _cloth.CutAll(_chars.Serial);
         _rootDelta.Clear();
         _drawnRoot.Clear();
@@ -1460,6 +1535,162 @@ internal sealed unsafe class FrameHooks {
         VoidFn? next = _nextYi ??= Chain(YiAnimMain, h_yi_anim, 0x00908320);
         if (next is null) return 0;
         return Redraw && !Failed && _settings().HoldFieldAnimation ? 0 : next();
+    }
+
+    // ------------------------------------------------------------------ the map's moving objects (between ticks)
+
+    /// <summary>
+    ///     <c>graphicObjectSetTranslation(id, pos)</c> (<c>0x006426c0</c>): the field's animation (<c>yiRender_draw</c>, each
+    ///     update) and the event scripts (<c>yiSetRotTransDObj</c>/<c>Group</c>) place a map object; its meshes' world
+    ///     matrices get the translation. The game's own calls are noted as the object's pose (<see cref="ObjectHistory"/>);
+    ///     the mod's own (<see cref="PlaceObjects"/>, <see cref="RestoreObjects"/>) pass straight through.
+    /// </summary>
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    private int h_object_translation(int id, nint pos) {
+        IdPtrFn? next = _nextObjectTranslation ??= Chain(ObjectTranslation, h_object_translation, 0x006426c0);
+        if (next is null) return 0;
+        if (!_placingObjects && !Failed && pos != 0 && Environment.CurrentManagedThreadId == _gameThread) {
+            try {
+                ulong identity = _game.ObjectIdentity(id);
+                if (identity != 0) _objects.SawPosition(id, identity, *(Vector3*)pos);
+            }
+            catch (Exception ex) {
+                Fail("graphicObjectSetTranslation", ex);
+            }
+        }
+        return next(id, pos);
+    }
+
+    /// <summary><c>graphicObjectSetRotation(id, angles, order)</c> (<c>0x006426a0</c>): as <see cref="h_object_translation"/>, for the turn.</summary>
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    private int h_object_rotation(int id, nint angles, int order) {
+        IdPtrIntFn? next = _nextObjectRotation ??= Chain(ObjectRotation, h_object_rotation, 0x006426a0);
+        if (next is null) return 0;
+        if (!_placingObjects && !Failed && angles != 0 && Environment.CurrentManagedThreadId == _gameThread) {
+            try {
+                ulong identity = _game.ObjectIdentity(id);
+                // The order is an i16 (PhyreScene_setObjectRotation reads its low half).
+                if (identity != 0) _objects.SawAngles(id, identity, *(Vector3*)angles, (short)order);
+            }
+            catch (Exception ex) {
+                Fail("graphicObjectSetRotation", ex);
+            }
+        }
+        return next(id, angles, order);
+    }
+
+    /// <summary>
+    ///     Before the game's update of a frame: every object the mod placed between ticks gets the game's own last pose
+    ///     back (only while the object tree still holds the same object), so an object the game stops moving does not stay
+    ///     where the mod drew it. A new map forgets everything instead.
+    /// </summary>
+    private void RestoreObjects() {
+        int map = _game.Map;
+        if (map != _objectMap) {
+            _objectMap = map;
+            _objects.Clear();
+            _objectsPlaced.Clear();
+            return;
+        }
+        if (_objectsPlaced.Count == 0) return;
+        _placingObjects = true;
+        try {
+            foreach (int id in _objectsPlaced) {
+                if (!_objects.Truth(id, out ulong identity, out ObjectPose truth)) continue;
+                if (_game.ObjectIdentity(id) != identity) {
+                    _objects.Forget(id);
+                    continue;
+                }
+                WriteObject(id, truth);
+            }
+        }
+        finally {
+            _placingObjects = false;
+            _objectsPlaced.Clear();
+        }
+    }
+
+    /// <summary>
+    ///     After the game's update of a frame drawn between ticks (and before <c>FFXApplication_render</c> reads the
+    ///     meshes' matrices): every object that moved in its last two ticks is placed between them at the frame's alpha.
+    /// </summary>
+    private void PlaceObjects(FrameSettings s) {
+        if (!s.InterpolateObjects) {
+            // Switched off: the history starts again when it comes back on (the game's poses stay, for the restore).
+            if (_objects.Objects > 0) _objects.ClearSamples();
+            return;
+        }
+        if (!_inFrame || _frame.Kind is not (FrameKind.Tick or FrameKind.Redraw) || _frame.Alpha >= 1 || _game.Map != _objectMap
+            || _game.MovieOn || _game.WaitFramesByTime) return;
+        _objects.Moving(_objectsMoving);
+        if (_objectsMoving.Count == 0) return;
+        _placingObjects = true;
+        try {
+            foreach (int id in _objectsMoving) {
+                ulong identity = _game.ObjectIdentity(id);
+                if (identity == 0 || !_objects.TryAt(id, identity, _frame.Alpha, out ObjectPose pose)) continue;
+                WriteObject(id, pose);
+                _objectsPlaced.Add(id);
+                Stats.Add(Counter.ObjectsInterpolated);
+            }
+        }
+        finally {
+            _placingObjects = false;
+        }
+    }
+
+    private static System.IO.StreamWriter? OpenTrace() {
+        string? path = Environment.GetEnvironmentVariable("YUTA_FPS_UNLOCK_TRACE");
+        if (string.IsNullOrEmpty(path)) return null;
+        try {
+            // A test switch: every line is written at once, so a game ended with taskkill keeps them all.
+            var w = new System.IO.StreamWriter(path, append: false) { AutoFlush = true };
+            w.WriteLine("ms\tkind\talpha\tticks\tmap\tid\tx\ty\tz\tm0\tm2\tplaced\tgame_x\tgame_y\tgame_z\tgame_ax\tgame_ay\tgame_az");
+            return w;
+        }
+        catch {
+            return null;
+        }
+    }
+
+    /// <summary>The test trace: after the game's update and the mod's placing, each map object the game set lately with its first mesh's translation as the renderer will read it.</summary>
+    private void TraceFrame() {
+        try {
+            TraceLines();
+        }
+        catch (Exception ex) {
+            // A test switch never stops the mod: the trace ends.
+            _log.Warning($"FPS unlock: the trace stopped: {ex.Message}");
+            try { _trace?.Dispose(); } catch { }
+            _trace = null;
+        }
+    }
+
+    private void TraceLines() {
+        double ms = _clock.Elapsed.TotalMilliseconds;
+        string head = FormattableString.Invariant($"{ms:0.000}\t{_frame.Kind}\t{_frame.Alpha:0.0000}\t{_frame.Plan.Ticks}\t{_game.Map}");
+        bool any = false;
+        foreach (int id in _objects.Ids()) {
+            if (!_game.ObjectMeshTranslation(id, out Vector3 t, out Vector2 r)) continue;
+            _objects.Truth(id, out _, out ObjectPose g);
+            _trace!.WriteLine(FormattableString.Invariant($"{head}\t{id}\t{t.X:0.0000}\t{t.Y:0.0000}\t{t.Z:0.0000}\t{r.X:0.00000}\t{r.Y:0.00000}\t{(_objectsPlaced.Contains(id) ? 1 : 0)}\t{g.Position.X:0.0000}\t{g.Position.Y:0.0000}\t{g.Position.Z:0.0000}\t{g.Angles.X:0.00000}\t{g.Angles.Y:0.00000}\t{g.Angles.Z:0.00000}"));
+            any = true;
+        }
+        if (!any) _trace!.WriteLine($"{head}\t-1\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0");
+    }
+
+    /// <summary>Places an object through the game's setters (the rest of their chains): the turn first (it keeps the translation), then the position.</summary>
+    private void WriteObject(int id, in ObjectPose p) {
+        if (p.HasAngles && _nextObjectRotation is { } rotate) {
+            *(Vector3*)_objectArgs = p.Angles;
+            _objectArgs[3] = 0;
+            rotate(id, (nint)_objectArgs, p.Order);
+        }
+        if (p.HasPosition && _nextObjectTranslation is { } move) {
+            *(Vector3*)(_objectArgs + 4) = p.Position;
+            _objectArgs[7] = 1;
+            move(id, (nint)(_objectArgs + 4));
+        }
     }
 
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]

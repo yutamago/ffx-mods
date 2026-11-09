@@ -214,12 +214,13 @@ in the game there (2026-11-07, 2026-11-08); as `yuta.fps-unlock`, with
 | `frames.interpolate.characters` | the characters' place and facing between ticks | `true` |
 | `frames.interpolate.bones` | their bones too | `true` |
 | `frames.interpolate.cloth` | their cloth and hair too (needs `frames.hold.cloth`) | `true` |
+| `frames.interpolate.objects` | the map's moving objects between ticks (field animated parts, objects the scripts move: lifts, gates, boats) | `true` |
 | `frames.interpolate.repeats` | the camera on `"repeat"` frames | `true` |
 | `frames.cuts.camera_distance` | a camera that moved further in one tick cut (world units) | `100.0` |
 | `frames.cuts.camera_degrees` | a camera that turned more in one tick cut (degrees) | `45.0` |
 | `frames.cuts.game_sets` | the game's instant camera sets are cuts when the step jumps | `true` |
-| `frames.cuts.character_distance` | a character that moved further in one tick warped (world units) | `50.0` |
-| `frames.cuts.character_degrees` | a character that turned more in one tick warped (degrees) | `120.0` |
+| `frames.cuts.character_distance` | a character or map object that moved further in one tick warped (world units) | `50.0` |
+| `frames.cuts.character_degrees` | a character or map object that turned more in one tick warped (degrees) | `120.0` |
 | `frames.hold.characters` | redrawn frames hold `Ch_CalcMiddle` (bones, motion events) | `true` |
 | `frames.hold.field_animation` | … `yiAnimMain` | `true` |
 | `frames.hold.fades` | … the fade counters of `Sg_DrawFilter` | `true` |

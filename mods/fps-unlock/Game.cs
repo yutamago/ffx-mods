@@ -170,6 +170,50 @@ internal sealed unsafe class Game(nint moduleBase) {
     /// <summary><c>g_GraphicSkipFrame</c> (<c>0x012fb7d0</c>): the VFX calls do nothing while it is set.</summary>
     public bool GraphicSkipFrame => *At<int>(0x012fb7d0) != 0;
 
+    // ---- Map objects (ObjectHistory). ----
+
+    /// <summary>
+    ///     The node of map object <paramref name="id"/> in the scene's object tree (head at scene <c>+0x1198</c>, root at
+    ///     head <c>+0xc</c>, children at node <c>+0</c>/<c>+4</c>, key <c>+0xc</c>, <c>+0x10</c> its mesh list: <c>+0</c> count,
+    ///     <c>+8</c> the mesh array; ffx-rust <c>scene_set_object_translation</c>), as <c>PhyreScene_setObjectTranslation</c>/<c>Rotation</c> find it (<c>ObjectTree_Find</c>);
+    ///     its identity (the node and its mesh list) or 0 when the tree is not up (<c>+0x10d4</c>) or has no such id.
+    /// </summary>
+    public ulong ObjectIdentity(int id) {
+        nint scene = PhyreScene;
+        if (scene == 0 || *(int*)(scene + 0x10d4) == 0) return 0;
+        nint head = scene + 0x1198;
+        nint node = *(nint*)(head + 0xc);
+        uint key = (uint)id;
+        for (int depth = 0; node != head && node != 0 && depth < 64; depth++) {
+            uint k = *(uint*)(node + 0xc);
+            if (k == key) return (ulong)(uint)node << 32 | *(uint*)(node + 0x10);
+            node = *(nint*)(node + (key < k ? 0 : 4));
+        }
+        return 0;
+    }
+
+    /// <summary>
+    ///     Words 8 to 10 (the translation <c>(-x, -y, z)</c> the game writes) and words 0 and 2 (a turn about y shows there)
+    ///     of the first mesh's 3x4 world matrix (<c>*(mesh +4)</c>) of map object <paramref name="id"/>, as the renderer
+    ///     reads it (the test trace).
+    /// </summary>
+    public bool ObjectMeshTranslation(int id, out Vector3 t, out Vector2 r) {
+        t = default;
+        r = default;
+        ulong identity = ObjectIdentity(id);
+        nint list = (nint)(uint)identity;
+        if (identity == 0 || list == 0) return false;
+        uint count = *(uint*)list;
+        nint meshes = *(nint*)(list + 8);
+        if (count == 0 || count > 4096 || meshes == 0) return false;
+        nint mesh = *(nint*)meshes;
+        float* m = mesh == 0 ? null : *(float**)(mesh + 4);
+        if (m == null) return false;
+        t = new Vector3(m[8], m[9], m[10]);
+        r = new Vector2(m[0], m[2]);
+        return true;
+    }
+
     // ---- Characters (CharacterInterpolator). ----
 
     /// <summary><c>g_ChrCount</c> (<c>0x023c44e0</c>) and the character array (<c>0x023c44e4</c>, <see cref="ChrSize"/> bytes each).</summary>

@@ -48,6 +48,9 @@ public static class HookSites {
         (0x006ab630, "CharacterLighting_updateFlash", "55 8b ec 83 ec 0c 56 8b f1", 0xf0),
         (0x006c3d40, "BlurEffect_update", "55 8b ec 51 56 8b f1 80 7e 0c 00", 0x290),
         (0x006e3f40, "FogEffectManager_updateChrFogFade", "55 8b ec 56 8b f1 8b 86 b4 00 00 00", 0xe0),
+        // The map's moving objects (ObjectHistory): the setters the field's animation and the event scripts place them with.
+        (0x006426c0, "graphicObjectSetTranslation", "55 8b ec ff 75 0c 8b 0d ?? ?? ?? ?? ff 75 08 e8", 0x20),
+        (0x006426a0, "graphicObjectSetRotation", "55 8b ec ff 75 10 8b 0d ?? ?? ?? ?? ff 75 0c ff 75 08 e8", 0x20),
     ];
 
     /// <summary>

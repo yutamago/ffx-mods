@@ -133,9 +133,15 @@ public sealed record FrameSettings {
     ///     shape and place while the body moves on.
     /// </summary>
     public bool InterpolateCloth { get; init; } = true;
-    /// <summary>A character that moved further than this in one tick warped: it is drawn as it is (world units).</summary>
+    /// <summary>
+    ///     Draw the map's moving objects (field animated parts, objects the event scripts move: lifts, gates, boats, the
+    ///     crane; everything placed through <c>graphicObjectSetTranslation</c>/<c>Rotation</c>) between their last two ticks.
+    ///     Warps use the character thresholds.
+    /// </summary>
+    public bool InterpolateObjects { get; init; } = true;
+    /// <summary>A character or map object that moved further than this in one tick warped: it is drawn as it is (world units).</summary>
     public double CharacterCutDistance { get; init; } = 50;
-    /// <summary>A character that turned more than this in one tick warped (degrees).</summary>
+    /// <summary>A character or map object that turned more than this in one tick warped (degrees).</summary>
     public double CharacterCutDegrees { get; init; } = 120;
 
     /// <summary>The settings with every number in its range.</summary>
@@ -220,6 +226,7 @@ public sealed record FrameSettings {
         Flag("frames.interpolate.characters", s => s.InterpolateCharacters, (s, v) => s with { InterpolateCharacters = v }),
         Flag("frames.interpolate.bones", s => s.InterpolateBones, (s, v) => s with { InterpolateBones = v }),
         Flag("frames.interpolate.cloth", s => s.InterpolateCloth, (s, v) => s with { InterpolateCloth = v }),
+        Flag("frames.interpolate.objects", s => s.InterpolateObjects, (s, v) => s with { InterpolateObjects = v }),
         Flag("frames.interpolate.repeats", s => s.InterpolateRepeats, (s, v) => s with { InterpolateRepeats = v }),
         Number("frames.cuts.camera_distance", s => s.CutDistance, (s, v) => s with { CutDistance = v }),
         Number("frames.cuts.camera_degrees", s => s.CutDegrees, (s, v) => s with { CutDegrees = v }),

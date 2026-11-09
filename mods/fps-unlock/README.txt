@@ -11,8 +11,9 @@ Not a part of the PS2 game: the fixed 30 fps limit goes, without speeding
 the game up.
 - the game draws at your monitor's refresh rate, at a rate you choose, or
   uncapped, with vsync on or off;
-- the world keeps its 30 ticks a second; the camera and the characters
-  (their bones, cloth and hair) are drawn between ticks;
+- the world keeps its 30 ticks a second; the camera, the characters
+  (their bones, cloth and hair) and the map's moving objects (animated
+  parts, lifts, gates, boats) are drawn between ticks;
 - a time scale gives slow motion and fast-forward (x0.05 to x100) without
   drawing more frames (the water, the scrolling skies and other animated
   surfaces follow it too); voice-synced scenes, movies and loads stay at
