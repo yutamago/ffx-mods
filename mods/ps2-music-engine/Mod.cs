@@ -4,7 +4,7 @@ namespace Yuta.FfxMods.MusicEngine;
 
 /// <summary>
 /// PS2 music engine (mod yuta.ps2-music-engine): The PS2 sound driver plays the original soundtrack inside the game from your PS2 disc. Needs the PS2 disc (install.cmd).
-/// The settings and their defaults are those of settings.toml in this folder; the converter's
+/// The settings and their defaults are those of settings.default.toml in this folder; the converter's
 /// list of this mod (converter/src/mods.rs) must agree (a converter test checks).
 /// </summary>
 [FhLoad(FhGameId.FFX)]

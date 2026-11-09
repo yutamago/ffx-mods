@@ -4,7 +4,7 @@ namespace Yuta.FfxMods.GameFeel;
 
 /// <summary>
 /// PS2 game feel (mod yuta.ps2-game-feel): The PS2 run speed, a battle menu without input delays and battle dialogue subtitles.
-/// The settings and their defaults are those of settings.toml in this folder; the converter's
+/// The settings and their defaults are those of settings.default.toml in this folder; the converter's
 /// list of this mod (converter/src/mods.rs) must agree (a converter test checks).
 /// </summary>
 [FhLoad(FhGameId.FFX)]

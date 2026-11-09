@@ -4,7 +4,7 @@ namespace Yuta.FfxMods.Lighting;
 
 /// <summary>
 /// PS2 lighting (mod yuta.ps2-lighting): Characters lit the PS2 way: its light levels, falloff and point lights. The event lights need your PS2 disc (install.cmd).
-/// The settings and their defaults are those of settings.toml in this folder; the converter's
+/// The settings and their defaults are those of settings.default.toml in this folder; the converter's
 /// list of this mod (converter/src/mods.rs) must agree (a converter test checks).
 /// </summary>
 [FhLoad(FhGameId.FFX)]

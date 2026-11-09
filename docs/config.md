@@ -3,7 +3,14 @@
 Every difference between the HD Remaster and the PS2 original that the
 PS2 mods restore is a setting, and so is every change of the other mods. **Each mod has its own settings file,
 `settings.toml` in its folder (`mods/yuta.<name>/`), with only its
-settings**, also in FFX Demaster (the bundle of the PS2 mods). Every row of
+settings**, also in the PS2 bundle. The zips ship the defaults as
+`settings.default.toml`, never `settings.toml`: `install.cmd` makes
+`settings.toml` from it when there is none, and adds the settings a newer
+version brought (with their comments and defaults) to an existing one
+without changing its values, so unpacking a newer zip keeps the player's
+settings. A key the file leaves out has the mod's default (the C#
+`ModSettings.get`, the converter's `Config::parse_with_defaults`); a mod
+without `settings.toml` (install.cmd not run yet) uses its defaults. Every row of
 [`differences.md`](differences.md) has a setting here. (`converter/demaster.toml`
 holds every setting in one file, for `demaster build` without a mod: every
 job into one folder, for development.)
@@ -36,8 +43,8 @@ the value; when PS2 aspect ratio is installed, removed or switched later,
 the F8 window shows PS2 movies and PS2 maps as "rebuild needed".
 
 The converter's list is `converter/src/mods.rs`; each mod's own is its
-`mods/<name>/Mod.cs` (a test keeps them, the shipped `settings.toml` and
-this page in step). A key in a mod's file that isn't one of its settings
+`mods/<name>/Mod.cs` (a test keeps them, the shipped `settings.default.toml`
+and this page in step). A key in a mod's file that isn't one of its settings
 is ignored with a warning (the converter's output and the F8 window).
 
 **The rule for defaults of the PS2 mods: presentation from the PS2, logic from the PC.**

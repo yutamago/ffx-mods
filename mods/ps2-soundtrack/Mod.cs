@@ -4,7 +4,7 @@ namespace Yuta.FfxMods.Soundtrack;
 
 /// <summary>
 /// PS2 soundtrack (mod yuta.ps2-soundtrack): The original soundtrack rendered from your PS2 disc by the PS2 sound driver, and new games start with it (install.cmd).
-/// The settings and their defaults are those of settings.toml in this folder; the converter's
+/// The settings and their defaults are those of settings.default.toml in this folder; the converter's
 /// list of this mod (converter/src/mods.rs) must agree (a converter test checks).
 /// </summary>
 [FhLoad(FhGameId.FFX)]

@@ -576,7 +576,8 @@ impl Config {
     }
 
     /// Parses a mod's settings file over that mod's defaults (its shipped
-    /// `settings.toml`): keys the file leaves out get the mod's defaults, not
+    /// `settings.default.toml`): keys the file leaves out (settings newer
+    /// than the player's file) get the mod's defaults, not
     /// [`Config::default`]'s. Unknown keys are those of `text`.
     pub fn parse_with_defaults(text: &str, defaults: &str) -> Result<(Config, Vec<String>)> {
         // first alone, for its errors (with line numbers) and unknown keys
@@ -807,7 +808,7 @@ mod tests {
                     || matches!(k.as_str(), "minimap.corner" if v == "top_right")
             } else if k.starts_with("frames.") {
                 // not a PS2 part: FPS unlock's defaults are the mod's (mods/fps-unlock/Mod.cs,
-                // settings.toml; checked against each other in mods.rs and the mod's tests)
+                // settings.default.toml; checked against each other in mods.rs and the mod's tests)
                 true
             } else if k == "audio.music_engine" {
                 // the PS2 driver playing in the game; "hd" is the soundtrack bank alone

@@ -64,10 +64,28 @@ opens by itself when something is wrong.
 Settings
 --------
 
-settings.toml in the mod folder, with a comment above each setting. After
-changing one: run install.cmd again (it redoes only what changed and
-removes the files of whatever you switched back to HD), then restart the
-game. After updating the mod, run install.cmd again too.
+settings.toml in the mod folder, with a comment above each setting.
+install.cmd makes it from settings.default.toml (the defaults) when there
+is none; until then the mod uses the defaults. After changing one: run
+install.cmd again (it redoes only what changed and removes the files of
+whatever you switched back to HD), then restart the game.
+
+Updating
+--------
+
+Unpack the newer zip over your install and run install.cmd again (it
+rebuilds only what changed). The zip holds only settings.default.toml,
+never settings.toml, so your settings stay; settings new in that version
+are added to your settings.toml with their comments and defaults.
+
+Switching it off
+----------------
+
+mods\yuta.ps2-music-engine\install.cmd -Disable ps2-music-engine takes the
+mod out of mods\loadorder and keeps it out whenever install.cmd runs again
+(it is listed in mods\ffx-mods-off.txt); install.cmd -Enable
+ps2-music-engine switches it on again. Its folder and its PS2 files stay.
+Deleting its line in mods\loadorder by hand does the same.
 
 Uninstall
 ---------
@@ -80,7 +98,8 @@ Files
 -----
 
   yuta.ps2-music-engine.dll, .manifest.json, ...   the mod
-  settings.toml   its settings
+  settings.default.toml   the default settings (an update replaces it)
+  settings.toml   your settings (made by install.cmd from settings.default.toml)
   install.cmd, install.ps1   the installer (load order, PS2 files)
   demaster.exe    the converter (builds the PS2 files from your disc)
   demaster_live.dll   the PS2 sound driver that plays in the game

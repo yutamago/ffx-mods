@@ -4,7 +4,7 @@ namespace Yuta.FfxMods.BugFixes;
 
 /// <summary>
 /// Bug fixes (mod yuta.bug-fixes): Fixes of the PC version: NPC mouths that stay open, the Farplane video that never plays, Lulu's Fury spins that are not counted.
-/// The settings and their defaults are those of settings.toml in this folder; the converter's
+/// The settings and their defaults are those of settings.default.toml in this folder; the converter's
 /// list of this mod (converter/src/mods.rs) must agree (a converter test checks).
 /// </summary>
 [FhLoad(FhGameId.FFX)]

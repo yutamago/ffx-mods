@@ -49,8 +49,27 @@ opens by itself when something is wrong.
 Settings
 --------
 
-settings.toml in the mod folder, with a comment above each setting. After
-changing one, restart the game.
+settings.toml in the mod folder, with a comment above each setting.
+install.cmd makes it from settings.default.toml (the defaults) when there
+is none; until then the mod uses the defaults. After changing one, restart
+the game.
+
+Updating
+--------
+
+Unpack the newer zip over your install and run install.cmd again. The zip
+holds only settings.default.toml, never settings.toml, so your settings
+stay; settings new in that version are added to your settings.toml with
+their comments and defaults.
+
+Switching it off
+----------------
+
+mods\yuta.no-hd-post-effects\install.cmd -Disable no-hd-post-effects takes
+the mod out of mods\loadorder and keeps it out whenever install.cmd runs
+again (it is listed in mods\ffx-mods-off.txt); install.cmd -Enable
+no-hd-post-effects switches it on again. Its folder stays. Deleting its
+line in mods\loadorder by hand does the same.
 
 Uninstall
 ---------
@@ -62,7 +81,8 @@ Files
 -----
 
   yuta.no-hd-post-effects.dll, .manifest.json, ...   the mod
-  settings.toml   its settings
+  settings.default.toml   the default settings (an update replaces it)
+  settings.toml   your settings (made by install.cmd from settings.default.toml)
   install.cmd, install.ps1   the installer (load order)
   LICENSES.txt    licences of this mod and of the code it includes
   README.txt      this file

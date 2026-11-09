@@ -48,10 +48,10 @@ README.md describes each mod and the bundle for players.
 | `converter/` | crate `demaster` (lib + binary): the jobs, the build, the disc reader. `mods.rs` lists each mod's settings and jobs. |
 | `live/` | crate `demaster-live`: `demaster_live.dll` (32-bit, the live PS2 music engine, `tools/build-live.sh`) |
 | `common/` | `yuta.ffx-mods`, the shared C# library (itself a Fahrenheit mod): `Native`/`Fn`, `ModHost` (settings.toml, build status, patches), the one F8 window (`FamilyWindow`), `ModFiles` (the PS2 files of every installed mod) |
-| `mods/<name>/` | the mods, `yuta.<name>`: `Mod.cs` (settings with defaults, code patches), the patch code, `settings.toml` (defaults), `README.txt` (for the zip) |
+| `mods/<name>/` | the mods, `yuta.<name>`: `Mod.cs` (settings with defaults, code patches), the patch code, `settings.default.toml` (defaults: the zips ship only this; `install.cmd` makes the player's `settings.toml` from it and adds newer keys, never changing values), `README.txt` (for the zip) |
 | `mods/ps2-bundle/` | the PS2 bundle, `yuta.ps2-bundle`: no settings, no patches, not in `mods.rs`; its csproj lists the bundle's mods (manifest `Dependencies`), its `Mod.cs` shows them in F8, its `README.txt` is the bundle zip's |
 | `tests/<name>/` | C# tests of a mod's portable part (its sources linked in; the mods build for win-x86 against Fahrenheit): `tests/fps-unlock`. Tests that need the game read `FFX_GAME_DIR` and skip without it |
-| `tools/install/` | `install.ps1` + `install.cmd`, shipped in every mod folder |
+| `tools/install/` | `install.ps1` + `install.cmd`, shipped in every mod folder; `install.tests.ps1` tests it (Windows PowerShell 5.1 and pwsh; CI) |
 | `tools/package.cs` | one zip per mod, one per bundle (`BUNDLES`) |
 | `docs/` | moved from ffx-demaster: the research and design docs of every feature (also of the parts that stay in ffx-demaster) |
 
@@ -79,7 +79,9 @@ The mods and what is in each: README.md and `converter/src/mods.rs`.
 - A setting lives in 4 places a test keeps in sync: `converter/src/config.rs`
   (`SETTINGS`), `converter/src/mods.rs` (which mod), `mods/<name>/Mod.cs`
   (with its default, and a `CodePatch` if the mod applies it),
-  `mods/<name>/settings.toml`, and `docs/config.md`.
+  `mods/<name>/settings.default.toml`, and `docs/config.md`. A test of the
+  converter checks that an older `settings.toml` (lacking a newer key) gets
+  that key's default; `install.tests.ps1` that the installer adds it.
 - Every setting belongs to one mod (a test; `maps.geometry` has none yet).
 - A new job goes in `jobs::registry()` and in its mod's `jobs` in `mods.rs`;
   say `needs_disc() = false` if it builds from the PC game alone.
@@ -93,8 +95,16 @@ The mods and what is in each: README.md and `converter/src/mods.rs`.
   family mods besides `yuta.ffx-mods` as a bundle (installs everything, puts
   it after the mods in `mods\loadorder`). ffx-remix's `yuta.ffxremix.*` mods
   are not bundles: they use the shared library and the F8 window but depend on their
-  own `yuta.ffxremix.core`, and ffx-remix's launcher installs them. A mod
-  with no settings needs no `settings.toml` (`ModSettings.Missing`).
+  own `yuta.ffxremix.core`, and ffx-remix's launcher installs them (the
+  installer's off list and record leave them alone too). A mod with no
+  settings needs no `settings.default.toml` (`ModSettings.Missing` is false
+  for it).
+- Switched-off mods: `mods\ffx-mods-off.txt` (`install.cmd -Disable/-Enable`;
+  a line deleted from `mods\loadorder` by hand lands there too, through the
+  installer's record `mods\yuta.ffx-mods\installed.txt`). The installer
+  never adds or builds those; F8's bundle section reads the list
+  (`ModFiles.switched_off`). Fahrenheit reads `mods\loadorder` raw (every
+  line is a mod id, no comments), so nothing else may go into it.
 - The converter is a library too (`src/lib.rs`, every module `pub`) for
   ffx-demaster and FFX Music Studio: keep the public API of `sqseq`,
   `spu2`, `musicjob`, `disc`, `config`, `build`.

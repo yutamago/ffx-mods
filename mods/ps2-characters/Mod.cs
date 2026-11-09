@@ -4,7 +4,7 @@ namespace Yuta.FfxMods.Characters;
 
 /// <summary>
 /// PS2 characters (mod yuta.ps2-characters): PS2 models and textures for the party, NPCs, monsters, aeons, weapons and objects, built from your PS2 disc (install.cmd).
-/// The settings and their defaults are those of settings.toml in this folder; the converter's
+/// The settings and their defaults are those of settings.default.toml in this folder; the converter's
 /// list of this mod (converter/src/mods.rs) must agree (a converter test checks).
 /// </summary>
 [FhLoad(FhGameId.FFX)]

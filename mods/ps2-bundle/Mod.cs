@@ -15,10 +15,12 @@ public sealed class Ps2BundleModule : FhModule {
     private const string COMMON = "yuta.ffx-mods";
     private static string[] _members = [];
     private static string _mods_dir = "";
+    private static HashSet<string> _off = [];
 
     public override bool init(FhModContext mod_context, FileStream global_state_file) {
         _members  = [.. mod_context.Manifest.Dependencies.Where(id => id != COMMON)];
         _mods_dir = mod_context.Paths.ModDir.Parent?.FullName ?? "";
+        _off      = ModFiles.switched_off(_mods_dir);
         ModHost.start(this, _logger, mod_context, INFO);
         HashSet<string> loaded = [.. FhApi.Mods.get_mods().Select(m => m.Manifest.Id)];
         string[] off = [.. _members.Where(id => !loaded.Contains(id))];
@@ -27,8 +29,15 @@ public sealed class Ps2BundleModule : FhModule {
         return true;
     }
 
+    /// <summary>
+    /// Why a mod of the bundle is off: switched off (install.cmd -Disable, kept in
+    /// mods\ffx-mods-off.txt), not in mods\loadorder (install.cmd not run since it was unpacked),
+    /// or no folder.
+    /// </summary>
     private static string why_off(string id) =>
-        File.Exists(Path.Combine(_mods_dir, id, $"{id}.manifest.json")) ? "not in mods\\loadorder" : "not installed";
+        !File.Exists(Path.Combine(_mods_dir, id, $"{id}.manifest.json")) ? "not installed"
+        : _off.Contains(id) ? $"switched off (install.cmd -Enable {id["yuta.".Length..]} switches it on)"
+        : "not in mods\\loadorder (run install.cmd)";
 
     /// <summary>The bundle's part of the F8 window: each of its mods and its state.</summary>
     private static void draw(ModHost bundle) {
@@ -47,7 +56,7 @@ public sealed class Ps2BundleModule : FhModule {
         }
         ImGui.PushTextWrapPos(0);
         ImGui.TextDisabled($"{on} of {_members.Length} on. Each mod has its own section in this window and its settings.toml in its folder. "
-                         + "To switch a whole mod off, delete its folder mods\\yuta.<mod> and its line in mods\\loadorder.");
+                         + "To switch a whole mod off: mods\\yuta.ps2-bundle\\install.cmd -Disable <mod> (it stays off; -Enable <mod> switches it on again).");
         ImGui.PopTextWrapPos();
     }
 }

@@ -72,10 +72,12 @@ scale the game cannot take never crashes the next start.
 Settings
 --------
 
-settings.toml in the mod folder, with a comment above each setting. Every
-setting can also be changed in the game (F8): it applies at once and is
-written back into settings.toml (only the lines that changed). A change
-made in the file while the game runs is read at the next start.
+settings.toml in the mod folder, with a comment above each setting.
+install.cmd makes it from settings.default.toml (the defaults) when there
+is none; until then the mod uses the defaults. Every setting can also be
+changed in the game (F8): it applies at once and is written back into
+settings.toml (only the lines that changed). A change made in the file
+while the game runs is read at the next start.
 
   frames.enabled        true; false gives the game its own timing back
   frames.target         "monitor" (the default), "game" (30 fps),
@@ -89,6 +91,23 @@ made in the file while the game runs is read at the next start.
   frames.effects, frames.between_ticks, frames.cuts.*, frames.hold.*,
   frames.budget.*       finer settings; the window's "Advanced" part
 
+Updating
+--------
+
+Unpack the newer zip over your install and run install.cmd again. The zip
+holds only settings.default.toml, never settings.toml, so your settings
+stay; settings new in that version are added to your settings.toml with
+their comments and defaults.
+
+Switching it off
+----------------
+
+mods\yuta.fps-unlock\install.cmd -Disable fps-unlock takes the mod out of
+mods\loadorder and keeps it out whenever install.cmd runs again (it is
+listed in mods\ffx-mods-off.txt); install.cmd -Enable fps-unlock switches
+it on again. Its folder stays. Deleting its line in mods\loadorder by hand
+does the same.
+
 Uninstall
 ---------
 
@@ -99,7 +118,8 @@ Files
 -----
 
   yuta.fps-unlock.dll, .manifest.json, ...   the mod
-  settings.toml   its settings
+  settings.default.toml   the default settings (an update replaces it)
+  settings.toml   your settings (made by install.cmd from settings.default.toml)
   install.cmd, install.ps1   the installer (load order)
   LICENSES.txt    licences of this mod and of the code it includes
   README.txt      this file

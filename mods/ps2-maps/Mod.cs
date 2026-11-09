@@ -4,7 +4,7 @@ namespace Yuta.FfxMods.Maps;
 
 /// <summary>
 /// PS2 maps (mod yuta.ps2-maps): The PS2 textures of the field and battle maps and the PS2 painted backgrounds, built from your PS2 disc (install.cmd).
-/// The settings and their defaults are those of settings.toml in this folder; the converter's
+/// The settings and their defaults are those of settings.default.toml in this folder; the converter's
 /// list of this mod (converter/src/mods.rs) must agree (a converter test checks).
 /// </summary>
 [FhLoad(FhGameId.FFX)]

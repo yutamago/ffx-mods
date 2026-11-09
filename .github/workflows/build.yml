@@ -121,8 +121,9 @@ jobs:
       run: |
         dotnet run tools/package.cs -- dist "${TAG:-ci}"
 
-    # Every zip: the shared library, the mod with its settings, README, licences and install
-    # script; demaster.exe for the mods with PS2 files; nothing else (no efl/, build/, game data).
+    # Every zip: the shared library, the mod with its default settings (settings.default.toml,
+    # never settings.toml: that is the player's), README, licences and install script;
+    # demaster.exe for the mods with PS2 files; nothing else (no efl/, build/, game data).
     - name: Check the zips
       shell: pwsh
       run: |
@@ -143,12 +144,12 @@ jobs:
           $z.Dispose()
           "$($zip.Name):"; $names | ForEach-Object { "  $_" }
           $need = @("mods/yuta.ffx-mods/yuta.ffx-mods.dll", "mods/yuta.ffx-mods/yuta.ffx-mods.manifest.json")
-          foreach ($f in "$id.dll", "$id.manifest.json", 'settings.toml', 'README.txt', 'LICENSES.txt', 'install.cmd', 'install.ps1') { $need += "mods/$id/$f" }
+          foreach ($f in "$id.dll", "$id.manifest.json", 'settings.default.toml', 'README.txt', 'LICENSES.txt', 'install.cmd', 'install.ps1') { $need += "mods/$id/$f" }
           if ($builds[$name]) { $need += "mods/$id/demaster.exe" }
           if ($name -eq 'ps2-music-engine') { $need += "mods/$id/demaster_live.dll" }
           foreach ($f in $need) { if ($names -notcontains $f) { throw "$($zip.Name) has no $f" } }
           if (-not $builds[$name] -and ($names -like '*/demaster.exe')) { throw "$($zip.Name) has demaster.exe, but $name builds nothing" }
-          $bad = $names | Where-Object { ($_ -notlike "mods/$id/*" -and $_ -notlike 'mods/yuta.ffx-mods/*') -or $_ -match '/(efl|build|tools|preview|music)/|\.(phyre|iso|bin|img|png|dds|webm|fsb|wav|vbf|bgm|wd|irx)$' }
+          $bad = $names | Where-Object { ($_ -notlike "mods/$id/*" -and $_ -notlike 'mods/yuta.ffx-mods/*') -or $_ -match '/(efl|build|tools|preview|music)/|/settings\.toml$|\.(phyre|iso|bin|img|png|dds|webm|fsb|wav|vbf|bgm|wd|irx)$' }
           if ($bad) { throw "$($zip.Name) contains files it must not: $bad" }
         }
         # Every bundle: exactly the mods its manifest lists, each as in its own zip but without
@@ -175,16 +176,28 @@ jobs:
           $need += @("$id.dll", "$id.manifest.json", 'README.txt', 'LICENSES.txt', 'install.cmd', 'install.ps1') | ForEach-Object { "mods/$id/$_" }
           foreach ($m in $members) {
             if (-not $builds.ContainsKey(($m -replace '^yuta\.', ''))) { throw "$id lists $m, which is no mod" }
-            foreach ($f in "$m.dll", "$m.manifest.json", 'settings.toml', 'README.txt', 'LICENSES.txt', 'install.cmd', 'install.ps1') { $need += "mods/$m/$f" }
+            foreach ($f in "$m.dll", "$m.manifest.json", 'settings.default.toml', 'README.txt', 'LICENSES.txt', 'install.cmd', 'install.ps1') { $need += "mods/$m/$f" }
             if ($m -eq 'yuta.ps2-music-engine') { $need += "mods/$m/demaster_live.dll" }
           }
           foreach ($f in $need) { if ($names -notcontains $f) { throw "$($zip.Name) has no $f" } }
           $exes = @($names | Where-Object { $_ -like '*/demaster.exe' })
           if ($exes.Count -ne 1) { throw "$($zip.Name): expected one demaster.exe, found: $exes" }
           $allowed = @('yuta.ffx-mods', $id) + $members | ForEach-Object { "mods/$_/*" }
-          $bad = $names | Where-Object { $n = $_; -not ($allowed | Where-Object { $n -like $_ }) -or $n -match '/(efl|build|tools|preview|music)/|\.(phyre|iso|bin|img|png|dds|webm|fsb|wav|vbf|bgm|wd|irx)$' }
+          $bad = $names | Where-Object { $n = $_; -not ($allowed | Where-Object { $n -like $_ }) -or $n -match '/(efl|build|tools|preview|music)/|/settings\.toml$|\.(phyre|iso|bin|img|png|dds|webm|fsb|wav|vbf|bgm|wd|irx)$' }
           if ($bad) { throw "$($zip.Name) contains files it must not: $bad" }
         }
+
+    # The installer: its settings merge, switched-off mods and load order, then the bundle's
+    # install.cmd from its zip (the mods with PS2 files switched off: no disc needed). Windows
+    # PowerShell 5.1 runs it for players; PowerShell 7 too.
+    - name: Test the installer
+      shell: pwsh
+      run: |
+        $zip = (Get-ChildItem dist -Filter 'yuta.ps2-bundle-*.zip').FullName
+        powershell -NoProfile -ExecutionPolicy Bypass -File tools/install/install.tests.ps1 -BundleZip $zip
+        if ($LASTEXITCODE -ne 0) { exit 1 }
+        pwsh -NoProfile -File tools/install/install.tests.ps1
+        if ($LASTEXITCODE -ne 0) { exit 1 }
 
     - uses: actions/upload-artifact@v7
       with:

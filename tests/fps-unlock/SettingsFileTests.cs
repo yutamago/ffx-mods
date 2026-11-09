@@ -50,8 +50,8 @@ public class SettingsFileTests {
     }
 
     [Fact]
-    public void Settings_toml_holds_the_defaults() {
-        MiniToml.Result r = MiniToml.parse(ModFile("settings.toml"));
+    public void Settings_default_toml_holds_the_defaults() {
+        MiniToml.Result r = MiniToml.parse(ModFile("settings.default.toml"));
         Assert.Empty(r.Problems);
         Assert.Equal(FrameSettings.Keys.Order(), r.Values.Keys.Order());
         Assert.Equal(new FrameSettings().ToValues().ToDictionary(kv => kv.Key, kv => kv.Value), r.Values);
@@ -59,7 +59,7 @@ public class SettingsFileTests {
 
     [Fact]
     public void Saving_into_the_shipped_file_keeps_its_comments_and_reads_back() {
-        string shipped = ModFile("settings.toml");
+        string shipped = ModFile("settings.default.toml");
         FrameSettings changed = new() { Target = FpsTarget.Unlimited, TimeScale = 18.42, Vsync = VsyncMode.Off, MaxTicksPerFrame = 50, FrameBudgetSeconds = 0.06 };
         string text = shipped;
         Dictionary<string, string> defaults = new FrameSettings().ToValues().ToDictionary(kv => kv.Key, kv => kv.Value);
@@ -74,6 +74,53 @@ public class SettingsFileTests {
         Assert.Contains("target = \"unlimited\"\n", text);
         Assert.Contains("time_scale = 18.42\n", text);
         Assert.Contains("max_update_ms = 60.0\n", text);
+    }
+}
+
+/// <summary>
+/// The zips ship settings.default.toml only; install.cmd makes settings.toml from it. A mod that saves its settings
+/// in the game (FPS unlock) before install.cmd made the file starts from the defaults, with their comments.
+/// </summary>
+public class SettingsWriteTests {
+    [Fact]
+    public void A_missing_settings_toml_starts_as_the_defaults() {
+        string dir = Path.Combine(Path.GetTempPath(), $"ffxmods-settings-{Environment.ProcessId}-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(dir);
+        try {
+            string shipped = File.ReadAllText(Path.Combine(Toml.Repo(), "mods", "fps-unlock", ModSettings.DEFAULTS));
+            File.WriteAllText(Path.Combine(dir, ModSettings.DEFAULTS), shipped);
+            string path = Path.Combine(dir, ModSettings.FILE);
+            SettingInfo[] all = [.. new FrameSettings().ToValues().Select(kv => new SettingInfo(kv.Key, AppliedBy.Mod, kv.Value))];
+
+            ModSettings missing = ModSettings.load(path, all);
+            Assert.True(missing.Missing);
+            Assert.Equal("monitor", missing.get("frames.target"));
+
+            ModSettings.write(path, [new("frames.target", "\"unlimited\"")]);
+            string text = File.ReadAllText(path);
+            Assert.Equal(MiniToml.set(shipped, "frames.target", "\"unlimited\""), text);
+            ModSettings loaded = ModSettings.load(path, all);
+            Assert.False(loaded.Missing);
+            Assert.Empty(loaded.Problems);
+            Assert.Equal("unlimited", loaded.get("frames.target"));
+            Assert.Equal(File.ReadAllText(Path.Combine(dir, ModSettings.DEFAULTS)), shipped);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void A_key_the_file_lacks_has_its_default() {
+        string dir = Path.Combine(Path.GetTempPath(), $"ffxmods-settings-{Environment.ProcessId}-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(dir);
+        try {
+            string path = Path.Combine(dir, ModSettings.FILE);
+            File.WriteAllText(path, "[frames]\ntarget = \"game\"\n");
+            SettingInfo[] all = [new("frames.target", AppliedBy.Mod, "monitor"), new("frames.overlay", AppliedBy.Mod, "true")];
+            ModSettings s = ModSettings.load(path, all);
+            Assert.Equal("game", s.get("frames.target"));
+            Assert.Equal("true", s.get("frames.overlay"));
+        }
+        finally { Directory.Delete(dir, true); }
     }
 }
 

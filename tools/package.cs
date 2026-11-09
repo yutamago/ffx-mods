@@ -3,7 +3,9 @@
 // Zips the release: one zip per mod, yuta.<name>-<version>.zip, and one per bundle, all ready
 // to unpack into the Fahrenheit folder. Each mod's zip holds
 //   mods/yuta.ffx-mods/   the shared library every mod needs (its DLL and manifest)
-//   mods/yuta.<name>/     the mod: DLL and manifest, settings.toml, README.txt, LICENSES.txt,
+//   mods/yuta.<name>/     the mod: DLL and manifest, settings.default.toml (never settings.toml:
+//                         install.cmd makes that from it, so a newer zip keeps the player's),
+//                         README.txt, LICENSES.txt,
 //                         install.cmd + install.ps1; for mods with PS2 files demaster.exe
 //                         (the converter), for ps2-music-engine also demaster_live.dll
 // No game data: install.cmd builds that with demaster.exe from the player's own disc.
@@ -150,14 +152,14 @@ void add_installer(Zip z, string dir) {
     z.text(File.ReadAllText(Path.Combine(root, "tools", "install", "install.ps1")), $"{dir}/install.ps1");
 }
 
-// A mod's folder: DLL and manifest, settings.toml, README.txt, install.cmd + .ps1, LICENSES.txt;
+// A mod's folder: DLL and manifest, settings.default.toml, README.txt, install.cmd + .ps1, LICENSES.txt;
 // demaster.exe for the mods with PS2 files (in a bundle the shared library has the one copy).
 void add_mod(Zip z, (string Name, bool Builds, bool Live) m, bool with_exe) {
     string id  = $"yuta.{m.Name}";
     string dir = $"mods/{id}";
     string src = Path.Combine(root, "mods", m.Name);
     z.dll(id);
-    z.text(File.ReadAllText(Path.Combine(src, "settings.toml")), $"{dir}/settings.toml");
+    z.text(File.ReadAllText(Path.Combine(src, "settings.default.toml")), $"{dir}/settings.default.toml");
     z.text(File.ReadAllText(Path.Combine(src, "README.txt")), $"{dir}/README.txt");
     add_installer(z, dir);
     if (m.Builds && with_exe) z.add(exe, $"{dir}/demaster.exe");

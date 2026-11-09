@@ -12,9 +12,9 @@
         <WriteLinesToFile File="$(__FfxModsManifest)" Lines="$(__FfxModsText)" Overwrite="true" />
     </Target>
 
-    <!-- The mod's default settings.toml and players' README.txt go into the mod folder. -->
+    <!-- The mod's default settings (settings.default.toml) and players' README.txt go into the mod folder. -->
     <ItemGroup>
-        <None Include="settings.toml" CopyToPublishDirectory="PreserveNewest" Condition="Exists('settings.toml')" />
+        <None Include="settings.default.toml" CopyToPublishDirectory="PreserveNewest" Condition="Exists('settings.default.toml')" />
         <None Include="README.txt" CopyToPublishDirectory="PreserveNewest" Condition="Exists('README.txt')" />
     </ItemGroup>
 </Project>

@@ -16,6 +16,27 @@ public static class ModFiles {
     /// <summary>Whether demaster.exe built files into this mod folder.</summary>
     public static bool built_by_converter(string mod_dir) => File.Exists(Path.Combine(mod_dir, "build", "files.json"));
 
+    /// <summary>
+    /// The list of switched-off mods in the mods folder, kept by install.cmd (-Disable, -Enable, or
+    /// a line deleted from mods\loadorder): one mod id a line, '#' starts a comment.
+    /// </summary>
+    public const string OFF_LIST = "ffx-mods-off.txt";
+
+    /// <summary>The mod ids in <see cref="OFF_LIST"/> of <paramref name="mods_dir"/> (none without the file).</summary>
+    public static HashSet<string> switched_off(string mods_dir) {
+        HashSet<string> ids = new(StringComparer.OrdinalIgnoreCase);
+        try {
+            foreach (string line in File.ReadAllLines(Path.Combine(mods_dir, OFF_LIST))) {
+                string id = line.Split('#')[0].Trim();
+                if (id.Length == 0) continue;
+                ids.Add(id.StartsWith("yuta.", StringComparison.OrdinalIgnoreCase) ? id : $"yuta.{id}");
+            }
+        }
+        catch (IOException) { }
+        catch (UnauthorizedAccessException) { }
+        return ids;
+    }
+
     private static string norm(string path) => path.Replace('\\', '/').ToLowerInvariant();
 
     /// <summary>

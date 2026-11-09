@@ -9,8 +9,11 @@
 //! the PS2 bundle, `mods/ps2-bundle`).
 //!
 //! The C# side keeps the same lists (`mods/<name>/Mod.cs`); the tests below
-//! check that they agree, and that `mods/<name>/settings.toml` holds the
-//! defaults.
+//! check that they agree, and that `mods/<name>/settings.default.toml` holds
+//! the defaults. The zips ship that file; the installer makes the player's
+//! `settings.toml` from it when there is none (an update never replaces the
+//! player's), and a key the player's file leaves out gets the mod's default
+//! ([`Config::parse_with_defaults`] over [`Profile::default_toml`]).
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -54,7 +57,7 @@ pub struct Profile {
     /// Its converter jobs (names in `jobs::registry()`).
     pub jobs: &'static [&'static str],
     pub disc: DiscUse,
-    /// Its default `settings.toml`, shipped in the mod folder.
+    /// Its defaults, `settings.default.toml` in the mod folder (and the zip).
     pub default_toml: &'static str,
     /// What stays HD without the disc ([`DiscUse::Optional`]).
     pub without_disc: &'static str,
@@ -72,7 +75,7 @@ impl Profile {
     /// Its default settings (`key` -> value) as in [`Profile::default_toml`].
     pub fn defaults(&self) -> BTreeMap<String, String> {
         let config = Config::parse_with_defaults(self.default_toml, self.default_toml)
-            .expect("the shipped settings.toml parses")
+            .expect("the shipped settings.default.toml parses")
             .0;
         let all = config.settings();
         self.settings.iter().map(|k| (k.to_string(), all[*k].clone())).collect()
@@ -89,7 +92,7 @@ pub const PROFILES: &[Profile] = &[
         settings: &["audio.music_engine"],
         jobs: &["audio.live"],
         disc: DiscUse::Needed,
-        default_toml: include_str!("../../mods/ps2-music-engine/settings.toml"),
+        default_toml: include_str!("../../mods/ps2-music-engine/settings.default.toml"),
         without_disc: "",
         reads: &[],
     },
@@ -99,7 +102,7 @@ pub const PROFILES: &[Profile] = &[
         settings: &["audio.music", "audio.soundtrack"],
         jobs: &["audio.music"],
         disc: DiscUse::Needed,
-        default_toml: include_str!("../../mods/ps2-soundtrack/settings.toml"),
+        default_toml: include_str!("../../mods/ps2-soundtrack/settings.default.toml"),
         without_disc: "",
         reads: &[],
     },
@@ -109,7 +112,7 @@ pub const PROFILES: &[Profile] = &[
         settings: &["movies"],
         jobs: &["movies"],
         disc: DiscUse::Needed,
-        default_toml: include_str!("../../mods/ps2-movies/settings.toml"),
+        default_toml: include_str!("../../mods/ps2-movies/settings.default.toml"),
         without_disc: "",
         reads: &[ASPECT],
     },
@@ -141,7 +144,7 @@ pub const PROFILES: &[Profile] = &[
             "models.object",
         ],
         disc: DiscUse::Needed,
-        default_toml: include_str!("../../mods/ps2-characters/settings.toml"),
+        default_toml: include_str!("../../mods/ps2-characters/settings.default.toml"),
         without_disc: "",
         reads: &[],
     },
@@ -151,7 +154,7 @@ pub const PROFILES: &[Profile] = &[
         settings: &["maps.field", "maps.battle", "maps.backgrounds"],
         jobs: &["maps.field", "maps.battle", "maps.backgrounds"],
         disc: DiscUse::Needed,
-        default_toml: include_str!("../../mods/ps2-maps/settings.toml"),
+        default_toml: include_str!("../../mods/ps2-maps/settings.default.toml"),
         without_disc: "",
         reads: &[ASPECT],
     },
@@ -161,7 +164,7 @@ pub const PROFILES: &[Profile] = &[
         settings: &["effects.textures"],
         jobs: &["fx.textures"],
         disc: DiscUse::Needed,
-        default_toml: include_str!("../../mods/ps2-effects/settings.toml"),
+        default_toml: include_str!("../../mods/ps2-effects/settings.default.toml"),
         without_disc: "",
         reads: &[],
     },
@@ -171,7 +174,7 @@ pub const PROFILES: &[Profile] = &[
         settings: &["render.lighting"],
         jobs: &["render.lighting", "render.lighting.events"],
         disc: DiscUse::Optional,
-        default_toml: include_str!("../../mods/ps2-lighting/settings.toml"),
+        default_toml: include_str!("../../mods/ps2-lighting/settings.default.toml"),
         without_disc: "the event lights (the PS2's light colours in the 6 cutscene scripts the HD retuned) stay HD",
         reads: &[],
     },
@@ -181,7 +184,7 @@ pub const PROFILES: &[Profile] = &[
         settings: &["render.glow", "render.shadows"],
         jobs: &[],
         disc: DiscUse::None,
-        default_toml: include_str!("../../mods/no-hd-post-effects/settings.toml"),
+        default_toml: include_str!("../../mods/no-hd-post-effects/settings.default.toml"),
         without_disc: "",
         reads: &[],
     },
@@ -199,7 +202,7 @@ pub const PROFILES: &[Profile] = &[
         ],
         jobs: &["ui.menus", "ui.title", "ui.loading", "ui.glyphs", "ui.font", "ui.boot_logo"],
         disc: DiscUse::Needed,
-        default_toml: include_str!("../../mods/ps2-interface/settings.toml"),
+        default_toml: include_str!("../../mods/ps2-interface/settings.default.toml"),
         without_disc: "",
         reads: &[],
     },
@@ -209,7 +212,7 @@ pub const PROFILES: &[Profile] = &[
         settings: &["render.aspect"],
         jobs: &[],
         disc: DiscUse::None,
-        default_toml: include_str!("../../mods/ps2-aspect-ratio/settings.toml"),
+        default_toml: include_str!("../../mods/ps2-aspect-ratio/settings.default.toml"),
         without_disc: "",
         reads: &[],
     },
@@ -219,7 +222,7 @@ pub const PROFILES: &[Profile] = &[
         settings: &["timing.run_speed", "ui.battle_menu_delay", "ui.battle_subtitles"],
         jobs: &[],
         disc: DiscUse::None,
-        default_toml: include_str!("../../mods/ps2-game-feel/settings.toml"),
+        default_toml: include_str!("../../mods/ps2-game-feel/settings.default.toml"),
         without_disc: "",
         reads: &[],
     },
@@ -229,7 +232,7 @@ pub const PROFILES: &[Profile] = &[
         settings: &["fixes.npc_mouths", "fixes.farplane_video", "fixes.lulu_fury"],
         jobs: &[],
         disc: DiscUse::None,
-        default_toml: include_str!("../../mods/bug-fixes/settings.toml"),
+        default_toml: include_str!("../../mods/bug-fixes/settings.default.toml"),
         without_disc: "",
         reads: &[],
     },
@@ -239,7 +242,7 @@ pub const PROFILES: &[Profile] = &[
         settings: &["minimap.style", "minimap.size", "minimap.corner"],
         jobs: &[],
         disc: DiscUse::None,
-        default_toml: include_str!("../../mods/modern-minimap/settings.toml"),
+        default_toml: include_str!("../../mods/modern-minimap/settings.default.toml"),
         without_disc: "",
         reads: &[],
     },
@@ -282,7 +285,7 @@ pub const PROFILES: &[Profile] = &[
         ],
         jobs: &[],
         disc: DiscUse::None,
-        default_toml: include_str!("../../mods/fps-unlock/settings.toml"),
+        default_toml: include_str!("../../mods/fps-unlock/settings.default.toml"),
         without_disc: "",
         reads: &[],
     },
@@ -360,7 +363,7 @@ mod tests {
         }
     }
 
-    /// Each mod's settings.toml holds exactly its settings with the
+    /// Each mod's settings.default.toml holds exactly its settings with the
     /// defaults of [`Config::default`]; `[source]` only for mods that build.
     #[test]
     fn default_files_hold_the_defaults() {
@@ -376,12 +379,38 @@ mod tests {
                 .collect();
             let mut want: Vec<&str> = p.settings.to_vec();
             want.sort_unstable();
-            assert_eq!(settings, want, "{}: settings.toml", p.name);
+            assert_eq!(settings, want, "{}: settings.default.toml", p.name);
             assert_eq!(keys.iter().any(|k| k == "source.iso"), p.disc != DiscUse::None, "{}: [source]", p.name);
             for (k, v) in p.defaults() {
                 assert_eq!(v, base[&k], "{}: {k}", p.name);
             }
         }
+    }
+
+    /// A player's settings.toml from an older version lacks the newer
+    /// settings: those get the mod's defaults, the player's values stay.
+    #[test]
+    fn an_older_settings_file_gets_the_new_defaults() {
+        for p in PROFILES {
+            let defaults = p.defaults();
+            // the file without the last setting, and nothing at all
+            let lines: Vec<&str> = p.default_toml.lines().collect();
+            let last = lines.iter().rposition(|l| !l.starts_with('#') && l.contains('=')).unwrap();
+            let older: String = lines.iter().enumerate().filter(|(i, _)| *i != last).map(|(_, l)| format!("{l}\n")).collect();
+            for text in [older.as_str(), ""] {
+                let (config, unknown) = Config::parse_with_defaults(text, p.default_toml).unwrap();
+                assert!(unknown.is_empty(), "{}: {unknown:?}", p.name);
+                let all = config.settings();
+                for (k, v) in &defaults {
+                    assert_eq!(&all[k], v, "{}: {k}", p.name);
+                }
+            }
+        }
+        // a value the player changed stays; the setting the file lacks is the default
+        let p = find("ps2-interface").unwrap();
+        let (config, _) = Config::parse_with_defaults("[ui]\nmenus = \"hd\"\n", p.default_toml).unwrap();
+        assert_eq!(config.settings()["ui.menus"], "hd");
+        assert_eq!(config.settings()["ui.boot_logo"], p.defaults()["ui.boot_logo"]);
     }
 
     /// The C# mod keeps its own copy of the list (`mods/<name>/Mod.cs`: the

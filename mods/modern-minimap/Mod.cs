@@ -5,7 +5,7 @@ namespace Yuta.FfxMods.ModernMinimap;
 /// <summary>
 /// Modern Minimap (mod yuta.modern-minimap): the field minimap round, always centred on the
 /// player and turned with the camera, in the game's colours on a small CRT screen
-/// (docs/minimap.md). The settings and their defaults are those of settings.toml in this
+/// (docs/minimap.md). The settings and their defaults are those of settings.default.toml in this
 /// folder; the converter's list of this mod (converter/src/mods.rs) must agree (a converter
 /// test checks).
 /// </summary>

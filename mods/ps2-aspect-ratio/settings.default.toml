@@ -1,4 +1,7 @@
 # PS2 aspect ratio settings. After changing anything here, restart the game.
+#
+# install.cmd makes settings.toml from settings.default.toml (the defaults) when
+# there is none; unpacking a newer zip replaces only settings.default.toml.
 
 [render]
 # "ps2": 4:3 with black bars and the PS2 projection; the menus, windows and

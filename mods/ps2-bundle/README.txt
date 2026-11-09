@@ -48,7 +48,10 @@ Install
 2. Double-click mods\yuta.ps2-bundle\install.cmd. It
    - adds yuta.ffx-mods, every mod of the bundle and yuta.ps2-bundle to
      mods\loadorder (and takes out yuta.demaster, the old all-in-one FFX
-     Demaster: delete its folder mods\yuta.demaster\ afterwards);
+     Demaster: delete its folder mods\yuta.demaster\ afterwards), except
+     the mods you switched off (below);
+   - makes each mod's settings.toml from its settings.default.toml (the
+     defaults) when it has none;
    - asks where your PS2 disc is (the disc drives with the disc in them are
      listed; or pick an image file) and finds the game in your Steam folders
      (or asks for its folder);
@@ -56,7 +59,8 @@ Install
      into its own folder. The first build takes about an hour (half of it the
      movies); later runs redo only what changed.
    From a terminal: install.cmd -Iso 'D:\PS2\FFX.iso', or -Drive E, and
-   -Game <game folder>, -Force (build everything again).
+   -Game <game folder>, -Force (build everything again), -Disable <mod>
+   and -Enable <mod> (below).
    (mods\yuta.ffx-mods\install.cmd does the same.)
 3. Start the game through Fahrenheit (bin\fhstage0.exe with the path of
    FFX.exe).
@@ -67,11 +71,12 @@ code patches are on. The "PS2 bundle" section lists the bundle's mods and
 which of them are on. The window opens by itself when something is wrong.
 
 Upgrading (a newer PS2 bundle, or FFX Demaster's ffx-demaster-<version>.zip):
-the zip has every mod's settings.toml with the defaults, so unpacking it
-over your install replaces yours. Copy the settings.toml files you changed
-somewhere first, unpack, put them back, then run
-mods\yuta.ps2-bundle\install.cmd. It adds
-yuta.ps2-bundle to mods\loadorder and builds only what is not up to date.
+unpack the zip over your install and run mods\yuta.ps2-bundle\install.cmd.
+The zip holds each mod's settings.default.toml (the defaults), never its
+settings.toml, so your settings stay; settings new in that version are
+added to your settings.toml files with their comments and defaults. It
+adds yuta.ps2-bundle to mods\loadorder and builds only what is not up to
+date.
 
 
 The mods
@@ -104,9 +109,10 @@ Settings
 --------
 
 Each mod has its own settings file, mods\yuta.<mod>\settings.toml, with a
-comment above each setting; the defaults are the PS2's. The bundle itself
-has no settings. install.cmd writes the disc and the game folder into each
-mod's settings.toml under [source].
+comment above each setting; the defaults are the PS2's. install.cmd makes
+it from settings.default.toml next to it (the defaults; an update replaces
+only that one) and writes the disc and the game folder into it under
+[source]. The bundle itself has no settings.
 
 After changing a setting: run mods\yuta.ps2-bundle\install.cmd again (it
 rebuilds what changed, in every mod; or the mod's own install.cmd for that
@@ -120,10 +126,16 @@ Switching single mods off
 - A part of a mod: set its setting to "hd" (or false for a fix) in that
   mod's settings.toml and run install.cmd again; the files of that part are
   removed.
-- A whole mod: delete its folder mods\yuta.<mod>\ (that also gives its disk
-  space back) and its line in mods\loadorder. Deleting only the line works
-  until the next install.cmd, which adds every mod whose folder is there
-  back to mods\loadorder. F8's "PS2 bundle" section shows the mod as off.
+- A whole mod: mods\yuta.ps2-bundle\install.cmd -Disable <mod>, for example
+  -Disable ps2-movies (several: -Disable ps2-movies,ps2-maps). It takes the
+  mod out of mods\loadorder and lists it in mods\ffx-mods-off.txt, and
+  install.cmd never adds it back or builds it, until
+  install.cmd -Enable <mod> (or until you delete its line there and run
+  install.cmd). Deleting its line in mods\loadorder by hand does the same:
+  the next install.cmd puts it on that list. Its folder and PS2 files stay
+  (switching it on again rebuilds only what changed); delete the folder
+  mods\yuta.<mod>\ too to get its disk space back. F8's "PS2 bundle"
+  section shows the mod as switched off.
 
 The mods work in any combination. PS2 movies and PS2 maps are built for the
 picture the game shows: 4:3 with PS2 aspect ratio, 16:9 without it. After
@@ -149,9 +161,11 @@ Files
   mods\yuta.ffx-mods\      the shared library (settings, build status, the F8
                            window), demaster.exe (the converter), install.cmd
                            (the same installer), LICENSES.txt
-  mods\yuta.<mod>\         each mod: its DLL, settings.toml, README.txt,
-                           install.cmd (that mod alone), LICENSES.txt
+  mods\yuta.<mod>\         each mod: its DLL, settings.default.toml (the
+                           defaults), README.txt, install.cmd (that mod
+                           alone), LICENSES.txt
+  mods\ffx-mods-off.txt    the switched-off mods (made by install.cmd -Disable)
 
-Made by install.cmd in each mod's folder: efl\ (the PS2 files), build\ (what
-was built, for F8 and the next build); music\ (PS2 music engine), tools\
-(ffmpeg, PS2 movies).
+Made by install.cmd in each mod's folder: settings.toml (your settings),
+efl\ (the PS2 files), build\ (what was built, for F8 and the next build);
+music\ (PS2 music engine), tools\ (ffmpeg, PS2 movies).

@@ -6,7 +6,7 @@ namespace Yuta.FfxMods.FpsUnlock;
 /// FPS unlock (mod yuta.fps-unlock): draws the game at the monitor's refresh rate, a fixed rate or
 /// uncapped while the world keeps its 30 ticks a second, draws the camera and the characters
 /// between ticks, and scales game time (slow motion, fast-forward) without drawing more frames
-/// (docs/fps-unlock.md). The settings and their defaults are those of settings.toml in this
+/// (docs/fps-unlock.md). The settings and their defaults are those of settings.default.toml in this
 /// folder and of FrameSettings (a test checks both); the converter's list of this mod
 /// (converter/src/mods.rs) must agree (a converter test checks). Every setting is read live: the
 /// mod's part of the F8 window changes them while the game runs and writes

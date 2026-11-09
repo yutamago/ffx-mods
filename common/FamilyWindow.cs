@@ -10,7 +10,8 @@ namespace Yuta.FfxMods;
 /// its files match its settings.toml, and how to rebuild them) and its code patches. Drawn by
 /// <see cref="FfxModsModule"/>, the module of this shared library, so however many mods are
 /// installed there is one window and one key. It opens by itself when a mod's files don't match
-/// its settings.
+/// its settings, a patch failed or a settings.toml has errors (not for a settings.toml that
+/// install.cmd has not made yet: the defaults apply).
 /// </summary>
 public static class FamilyWindow {
     public const ImGuiKey TOGGLE_KEY = ImGuiKey.F8;
@@ -51,7 +52,7 @@ public static class FamilyWindow {
     private static bool problem(ModHost h) =>
         (h.Status is { } s && s.State != BuildState.Ok)
         || h.Patches.Any(p => p.State == PatchState.Failed)
-        || h.Settings.Missing || h.Settings.Problems.Count > 0;
+        || h.Settings.Problems.Count > 0;
 
     /// <summary>A mod's state as its header in the window shows it: "built", "rebuild needed", "on", ...</summary>
     public static (Vector4 Colour, string State) state(ModHost h) => h.Status?.State switch {
@@ -117,7 +118,7 @@ public static class FamilyWindow {
                 ImGui.TreePop();
             }
         }
-        if (h.Settings.Missing) coloured(YELLOW, $"{ModSettings.FILE} is missing: the defaults are used.");
+        if (h.Settings.Missing) ImGui.TextDisabled($"No {ModSettings.FILE} yet: the defaults are used (install.cmd makes it from {ModSettings.DEFAULTS}).");
         foreach (string p in h.Settings.Problems) coloured(YELLOW, $"{ModSettings.FILE}: {p}");
         foreach (string k in h.Settings.Unknown)  coloured(YELLOW, $"{ModSettings.FILE}: unknown setting {k}");
         if (h.Info.Section is { } section && !_failed_sections.Contains(h.Info.Name)) {

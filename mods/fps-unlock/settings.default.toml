@@ -2,6 +2,9 @@
 # F8 window, where a change applies at once and is saved back into this
 # file (only the values that changed; these comments stay). A change made here while
 # the game runs is read at the next start.
+#
+# install.cmd makes settings.toml from settings.default.toml (the defaults) when
+# there is none; unpacking a newer zip replaces only settings.default.toml.
 
 [frames]
 # The whole mod. false gives the game back its own timing, frame limiter and vsync

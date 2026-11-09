@@ -1,5 +1,8 @@
 # PS2 characters settings.
 #
+# install.cmd makes settings.toml from settings.default.toml (the defaults) when
+# there is none; unpacking a newer zip replaces only settings.default.toml.
+#
 # After changing a [models] setting: run install.cmd again, then restart the
 # game. The [render] settings need only a restart.
 #

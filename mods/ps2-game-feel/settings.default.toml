@@ -1,5 +1,8 @@
 # PS2 game feel settings. After changing anything here, restart the game.
 #
+# install.cmd makes settings.toml from settings.default.toml (the defaults) when
+# there is none; unpacking a newer zip replaces only settings.default.toml.
+#
 # "ps2": as on the PS2 (the default). "hd": as on the PC.
 
 [timing]

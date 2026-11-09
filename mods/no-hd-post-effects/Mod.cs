@@ -4,7 +4,7 @@ namespace Yuta.FfxMods.PostEffects;
 
 /// <summary>
 /// No HD post-effects (mod yuta.no-hd-post-effects): No HD glow and no shadow maps: the picture without the HD bloom and with the PS2 ground shadows.
-/// The settings and their defaults are those of settings.toml in this folder; the converter's
+/// The settings and their defaults are those of settings.default.toml in this folder; the converter's
 /// list of this mod (converter/src/mods.rs) must agree (a converter test checks).
 /// </summary>
 [FhLoad(FhGameId.FFX)]

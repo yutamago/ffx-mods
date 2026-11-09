@@ -1,5 +1,8 @@
 # PS2 interface settings.
 #
+# install.cmd makes settings.toml from settings.default.toml (the defaults) when
+# there is none; unpacking a newer zip replaces only settings.default.toml.
+#
 # After changing anything here: run install.cmd again, then restart the game.
 #
 # "ps2": the PS2 original (the default). "hd": the HD Remaster.

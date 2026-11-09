@@ -55,13 +55,15 @@ For each mod you want:
    adds `mods\yuta.<mod>\` and `mods\yuta.ffx-mods\` (the shared library;
    unpacking it again with another mod is fine).
 2. Double-click `mods\yuta.<mod>\install.cmd`. It adds `yuta.ffx-mods` and
-   the mod to `mods\loadorder`. For a mod with PS2 files it then asks where
+   the mod to `mods\loadorder` and makes the mod's `settings.toml` from
+   `settings.default.toml`. For a mod with PS2 files it then asks where
    your disc is (the disc drives with the disc in them are listed; or pick
    an image file), finds the game in the Steam folders (or asks for its
    folder), and builds the mod's PS2 files into its folder. From a
    terminal: `install.cmd -Iso 'D:\PS2\FFX.iso'`, `install.cmd -Drive E`,
    `-Game <game folder>`, `-NoDisc` (PS2 lighting only), `-Force`
-   (rebuild everything). Running it again is safe: it redoes only what
+   (rebuild everything), `-Disable <mod>` / `-Enable <mod>` (below).
+   Running it again is safe: it redoes only what
    changed. (The PS2 bundle has one `install.cmd` for all its mods, in
    `mods\yuta.ps2-bundle\`: it takes the same options and builds every
    installed mod from one pass over the disc.)
@@ -74,8 +76,28 @@ It opens by itself when something is wrong.
 
 **Settings:** each mod has `settings.toml` in its folder, with a comment
 above each setting; the defaults are the PS2's ([`docs/config.md`](docs/config.md)
-describes every setting). After changing one, run that mod's `install.cmd`
-again if it has PS2 files, then restart the game.
+describes every setting). `install.cmd` makes it from
+`settings.default.toml` (the defaults, in the zip) when there is none; the
+mod uses the defaults until then. After changing one, run that mod's
+`install.cmd` again if it has PS2 files, then restart the game.
+
+**Updating:** unpack the newer zip over your install and run
+`install.cmd` again. The zips hold only `settings.default.toml`, never
+`settings.toml`, so your settings stay; settings that are new in that
+version are added to your `settings.toml` with their comments and
+defaults (a setting the file lacks has its default anyway). The build
+redoes only what changed.
+
+**Switching a mod off:** `install.cmd -Disable <mod>` (in any mod's
+folder; `-Disable ps2-movies,ps2-maps` for several) takes the mod out of
+`mods\loadorder` and lists it in `mods\ffx-mods-off.txt`; `install.cmd`
+then never adds it back or builds it, until `install.cmd -Enable <mod>`
+(or deleting its line there and running `install.cmd`). Deleting a mod's
+line in `mods\loadorder` by hand works too: the next `install.cmd` puts the
+mod on that list instead of adding it back. The mod's folder and its
+PS2 files stay, so switching it on again rebuilds only what changed
+meanwhile. (Fahrenheit reads `mods\loadorder` line by line: a commented
+line there would be taken for a mod name, hence the separate list.)
 
 **Uninstall:** delete `mods\yuta.<mod>\` and its line in `mods\loadorder`
 (the PS2 files it built are in its folder and go with it). When no mod of
@@ -111,16 +133,17 @@ the game, and builds every mod's PS2 files from one pass over the disc,
 each into its own folder (options as for a mod's `install.cmd`, above).
 Start the game through Fahrenheit. Each mod keeps its own
 `settings.toml`; after changing one, run the bundle's `install.cmd` again
-(it rebuilds only what changed). Unpacking a newer zip over an install
-replaces every `settings.toml` with the defaults: keep a copy of the ones
-you changed.
+(it rebuilds only what changed). To update, unpack the newer zip over the
+install and run the bundle's `install.cmd`: your `settings.toml` files
+stay (see Updating, above).
 
-**Switching one mod off:** delete its folder `mods\yuta.<mod>\` and its
-line in `mods\loadorder` (only the line: the next `install.cmd` puts it
-back). F8's "PS2 bundle" section then shows it as off. A part of a mod is
-a setting in its `settings.toml` (`"hd"`, or `false` for a fix). The other
-mods (Modern Minimap, FPS unlock) install next to the bundle from their own
-zips.
+**Switching one mod off:** `mods\yuta.ps2-bundle\install.cmd -Disable <mod>`
+(`-Enable <mod>` switches it on again); it stays off at every later
+`install.cmd` (Switching a mod off, above). F8's "PS2 bundle" section
+shows it as "off: switched off". Deleting its folder `mods\yuta.<mod>\`
+as well gives its disk space back. A part of a mod is a setting in its
+`settings.toml` (`"hd"`, or `false` for a fix). The other mods (Modern
+Minimap, FPS unlock) install next to the bundle from their own zips.
 
 ## The mods
 
@@ -339,7 +362,7 @@ stay at their own speed.
 | `converter/` | `demaster`, the converter (Rust; library and program). Uses the ffx-rust crates (`github.com/yutamago/ffx-rust`, public, pinned in `Cargo.toml`). |
 | `live/` | `demaster_live.dll`, the live music engine (Rust, 32-bit like FFX.exe) |
 | `common/` | `yuta.ffx-mods`, the shared C# library (a Fahrenheit mod): settings, build status, code patch helpers, the F8 window |
-| `mods/<name>/` | the mods (C#, .NET 10, `Fahrenheit.Sdk/1.0.0-alpha12`), each with its `settings.toml` and players' `README.txt` |
+| `mods/<name>/` | the mods (C#, .NET 10, `Fahrenheit.Sdk/1.0.0-alpha12`), each with its `settings.default.toml` (the defaults; the player's `settings.toml` is made from it) and players' `README.txt` |
 | `tests/` | C# tests (`tests/fps-unlock`: FPS unlock's portable part, built from its sources) |
 | `tools/install/` | `install.ps1` and `install.cmd`, in every mod's zip |
 | `tools/package.cs` | one zip per mod, and the PS2 bundle's |
@@ -381,8 +404,8 @@ A new mod is a folder `mods/<name>/` (its Fahrenheit id is `yuta.<name>`):
    `mods/Directory.Build.props` adds the rest: the version, a reference to
    the shared library `common/` (not copied: Fahrenheit loads it once from
    `mods/yuta.ffx-mods` and shares it), its global usings, and
-   `yuta.ffx-mods` as the manifest's dependency; `settings.toml` and
-   `README.txt` are copied into the build. Add the project to
+   `yuta.ffx-mods` as the manifest's dependency; `settings.default.toml`
+   and `README.txt` are copied into the build. Add the project to
    `ffx-mods.slnx`.
 2. **Module.** `Mod.cs`: an `FhModule` with `[FhLoad(FhGameId.FFX)]`, its
    `SETTINGS` (`SettingInfo`: key, who applies it, default), its `PATCHES`
@@ -402,7 +425,9 @@ A new mod is a folder `mods/<name>/` (its Fahrenheit id is `yuta.<name>`):
    and writes them back with `ModSettings.write` (as FPS unlock does).
 4. **Settings.** Each setting is in `converter/src/config.rs` (`Config`,
    `SETTINGS`), the mod's entry in `converter/src/mods.rs`, its `Mod.cs`,
-   its `settings.toml` (with comments; `[source]` only if it has PS2 files)
+   its `settings.default.toml` (with comments; `[source]` only if it has
+   PS2 files; the zip ships it, `install.cmd` makes the player's
+   `settings.toml` from it)
    and `docs/config.md`. `cargo test -p demaster` checks they agree, and
    that no setting or job belongs to two mods.
 5. **PS2 files.** A mod that builds files lists its jobs in its `mods.rs`
