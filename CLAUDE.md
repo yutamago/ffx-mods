@@ -91,10 +91,10 @@ The mods and what is in each: README.md and `converter/src/mods.rs`.
   `mods/ps2-bundle/yuta.ps2-bundle.csproj` (converter order) and its
   `README.txt`. The installer treats any mod whose manifest depends on
   family mods besides `yuta.ffx-mods` as a bundle (installs everything, puts
-  it after the mods in `mods\loadorder`), except ffx-remix's `yuta.ffxremix.*`
-  mods (they use the shared library and F8 but depend on their own
-  `yuta.ffxremix.core`; ffx-remix's launcher installs them); a mod with no settings needs no
-  `settings.toml` (`ModSettings.Missing`).
+  it after the mods in `mods\loadorder`). ffx-remix's `yuta.ffxremix.*` mods
+  are not bundles: they use the shared library and F8 but depend on their
+  own `yuta.ffxremix.core`, and ffx-remix's launcher installs them. A mod
+  with no settings needs no `settings.toml` (`ModSettings.Missing`).
 - The converter is a library too (`src/lib.rs`, every module `pub`) for
   ffx-demaster and FFX Music Studio: keep the public API of `sqseq`,
   `spu2`, `musicjob`, `disc`, `config`, `build`.
