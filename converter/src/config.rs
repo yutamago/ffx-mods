@@ -42,26 +42,18 @@ pub enum Filter {
 }
 
 /// `audio.music_engine`: what plays when the game's soundtrack is
-/// "Original" (`docs/music.md`).
+/// "Original" (`docs/music.md`), mod `ps2-music-engine`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum MusicEngine {
-    /// The original soundtrack bank rendered by our PS2 sound driver.
-    #[default]
-    Ps2,
-    /// The PC's recordings.
-    Hd,
     /// The PS2 driver playing inside the game (`demaster_live.dll`),
-    /// driven by the game's music commands; the rendered bank stays as
-    /// the fallback (and for the three tracks with streamed parts).
+    /// driven by the game's music commands; what it can't play (the three
+    /// tracks with streamed parts) comes from the "Original" bank (the PC's,
+    /// or the rendered one of `audio.music`).
+    #[default]
     Live,
-}
-
-impl MusicEngine {
-    /// Whether the rendered bank is built.
-    pub fn bank(self) -> bool {
-        self != MusicEngine::Hd
-    }
+    /// The "Original" bank alone.
+    Hd,
 }
 
 fn yes() -> bool {
@@ -160,10 +152,13 @@ impl Default for Ui {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Audio {
+    /// New games start with the "Original" soundtrack (mod `ps2-soundtrack`).
     pub soundtrack: Look,
-    /// `"ps2"`: the original soundtrack rendered from the PS2 disc's
-    /// sequences by our PS2 sound driver, instead of the PC's recordings;
-    /// `"live"`: that driver playing in the game.
+    /// `"ps2"`: the "Original" soundtrack bank rendered from the PS2 disc's
+    /// sequences by our PS2 sound driver, instead of the PC's recordings
+    /// (mod `ps2-soundtrack`).
+    pub music: Look,
+    /// `"live"`: the PS2 driver playing in the game (mod `ps2-music-engine`).
     pub music_engine: MusicEngine,
 }
 
@@ -513,6 +508,7 @@ pub const SETTINGS: &[(&str, AppliedBy)] = {
         ("ui.button_glyphs", Converter),
         ("ui.boot_logo", Converter),
         ("audio.soundtrack", Mod),
+        ("audio.music", Converter),
         ("audio.music_engine", Both),
         ("movies", Converter),
         ("timing.run_speed", Mod),
@@ -615,6 +611,28 @@ impl Config {
             unknown,
             text,
         })
+    }
+
+    /// Sets one setting from its plain-text value (as [`Config::settings`]
+    /// writes it: `ps2`, `true`, `120`), keeping the value's TOML type.
+    pub fn set(&mut self, key: &str, value: &str) -> Result<()> {
+        let mut root = toml::Value::try_from(&*self).context("Config serialises")?;
+        let mut at = &mut root;
+        for part in key.split('.') {
+            at = at
+                .as_table_mut()
+                .and_then(|t| t.get_mut(part))
+                .with_context(|| format!("no setting {key}"))?;
+        }
+        *at = match at {
+            toml::Value::String(_) => toml::Value::String(value.to_string()),
+            toml::Value::Boolean(_) => toml::Value::Boolean(value.parse().with_context(|| format!("{key} = {value}"))?),
+            toml::Value::Integer(_) => toml::Value::Integer(value.parse().with_context(|| format!("{key} = {value}"))?),
+            toml::Value::Float(_) => toml::Value::Float(value.parse().with_context(|| format!("{key} = {value}"))?),
+            _ => anyhow::bail!("{key} is not a single value"),
+        };
+        *self = root.try_into().with_context(|| format!("{key} = {value}"))?;
+        Ok(())
     }
 
     /// Every setting (not `source`/`build`) as `key → value`, values written
@@ -787,6 +805,9 @@ mod tests {
                 // not a PS2 part: FPS unlock's defaults are the mod's (mods/fps-unlock/Mod.cs,
                 // settings.toml; checked against each other in mods.rs and the mod's tests)
                 true
+            } else if k == "audio.music_engine" {
+                // the PS2 driver playing in the game; "hd" is the soundtrack bank alone
+                v == "live"
             } else if k == "ui.boot_logo" {
                 // an extra screen at every start: off unless asked for
                 v == "hd"
@@ -795,6 +816,19 @@ mod tests {
             };
             assert!(ok, "{k} = {v}");
         }
+    }
+
+    #[test]
+    fn set_one_setting() {
+        let mut c = Config::default();
+        c.set("render.aspect", "hd").unwrap();
+        assert_eq!(c.render.aspect, Look::Hd);
+        c.set("fixes.lulu_fury", "false").unwrap();
+        assert!(!c.fixes.lulu_fury);
+        c.set("frames.fixed_fps", "90").unwrap();
+        assert_eq!(c.frames.fixed_fps, 90.0);
+        assert!(c.set("render.aspect", "psx").is_err());
+        assert!(c.set("render.nothing", "hd").is_err());
     }
 
     #[test]

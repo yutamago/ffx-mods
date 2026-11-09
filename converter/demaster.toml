@@ -1,4 +1,6 @@
-# FFX Demaster settings.
+# Every setting of the FFX mods in one file, for `demaster build` without a
+# mod (development: every job into one folder). The mods have their own
+# settings.toml each, with only their settings.
 #
 # After changing anything here: run `demaster.exe build` again, then restart
 # the game. (Fahrenheit picks up the mod's files only when the game starts.)
@@ -100,14 +102,15 @@ button_glyphs = "ps2"
 boot_logo = "hd"
 
 [audio]
-# "ps2": the original soundtrack. "hd": the arranged one.
+# "ps2": new games start with the original soundtrack. "hd": the arranged one.
 soundtrack = "ps2"
-# "ps2": the original soundtrack played by a PS2 sound driver from the disc's
-# sequences and instruments. "hd": the PC's recordings of it. "live": that
-# PS2 driver playing inside the game, driven by the game's music commands
-# (fades, pauses, tempo as the scripts ask); the rendered bank stays as the
-# fallback.
-music_engine = "ps2"
+# "ps2": the original soundtrack's bank rendered by a PS2 sound driver from the
+# disc's sequences and instruments. "hd": the PC's recordings of it.
+music = "ps2"
+# "live": that PS2 driver playing inside the game, driven by the game's music
+# commands (fades, pauses, tempo as the scripts ask); what it can't play comes
+# from the bank above. "hd": the bank alone.
+music_engine = "live"
 
 [timing]
 # The game's logic runs at the NTSC PS2's (and the PC's) 29.97 frames a
