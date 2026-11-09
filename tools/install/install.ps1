@@ -6,8 +6,9 @@
 #     in a drive) and your PC game into this folder, with demaster.exe (next to this
 #     script, or in mods\yuta.ffx-mods as in the PS2 bundle).
 # In a bundle's folder (mods\yuta.ps2-bundle: a mod whose manifest depends on other mods of
-# the family; ffx-remix's yuta.ffxremix.* mods are not bundles) and in mods\yuta.ffx-mods it installs every mod of the family in the mods
-# folder: all of them into mods\loadorder (the bundles after the mods), then one build of
+# the family, but not ffx-remix's yuta.ffxremix.*) and in mods\yuta.ffx-mods it installs
+# every mod of the family in the mods folder: all of them into mods\loadorder (the bundles
+# after the mods), then one build of
 # all their PS2 files from one pass over the disc (demaster.exe build --all), each with its
 # own settings.toml.
 # After that the mods need neither the disc nor the image. Running it again is safe: the
