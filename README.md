@@ -190,8 +190,9 @@ clears as you walk. Size and corner are settings (`minimap.size`,
 The 30 fps limit goes, the game's speed stays.
 The game draws at your monitor's refresh rate, at a rate you choose, or
 uncapped, with vsync on or off; the world keeps its 30 ticks a second, and
-the camera and the characters (their bones, cloth and hair) are drawn
-between ticks. A time scale gives slow motion and fast-forward (×0.05 to
+the camera, the characters (their bones, cloth and hair) and the map's
+moving objects (animated parts, lifts, gates, boats) are drawn between
+ticks. A time scale gives slow motion and fast-forward (×0.05 to
 ×100) without drawing more frames. Voice-synced scenes, movies and loads
 stay at their own speed.
 

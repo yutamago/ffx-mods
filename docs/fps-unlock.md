@@ -2,8 +2,8 @@
 
 FPS unlock (`yuta.fps-unlock`, `mods/fps-unlock`) removes the fixed 30 fps limit of the Steam HD
 Remaster without speeding the game up. The game draws at the monitor's refresh rate, at a rate you
-choose, or uncapped, with vsync on or off; the world keeps its 30 ticks a second, and the camera and
-the characters (their bones, cloth and hair) are drawn between ticks. A time scale gives slow
+choose, or uncapped, with vsync on or off; the world keeps its 30 ticks a second, and the camera,
+the characters (their bones, cloth and hair) and the map's moving objects are drawn between ticks. A time scale gives slow
 motion and fast-forward (×0.05 to ×100) without drawing more frames.
 
 It was written in ffx-atel-sharp as `yuta.frames` (`src/Ffx.Frames`, PRs #64 to #67, history there
@@ -65,6 +65,9 @@ drawing faster ran the game faster. The mod changes that:
    bigger than the cut or warp thresholds is drawn as it is. When the camera cuts to a new shot
    (by the thresholds, or the game sets its camera at once), the characters and their cloth are
    drawn as the tick has them too, so they do not slide in from the last shot.
+   The map's moving objects (field animated parts, objects the event scripts move) are placed
+   between their last two ticks after the game's update of each frame ("Moving map objects between
+   ticks" below).
 5. **Time scale.** Above 4 ticks per frame, ticks go through the game's exec frames (up to 99 ticks
    per update) instead of whole updates, so ×100 costs 3,000 ticks a second but no extra draws.
    Only the frame's last update draws (the game skips the others' graphics), and it always runs
@@ -96,6 +99,10 @@ drawing faster ran the game faster. The mod changes that:
   quick move over one tick; at ×0.1 that is a slow slide. Lower the cut thresholds if you see one.
 - **Characters drawn by other paths** (a magic file's situation pass, the effects' character
   draws) stay at 30 Hz.
+- **Map surfaces animated other ways** stay at 30 Hz: the swaying morph meshes (trees, grass; their
+  weights come from the field code per tick), UV offsets the field's key frame tracks set
+  (`graphicSetMaterialUV`), and objects moved by anything but `graphicObjectSetTranslation`/`Rotation`.
+  Map objects themselves are drawn between ticks ("Moving map objects between ticks").
 - **Fast-forward costs CPU.** Every tick is simulated. ×100 is 3,000 ticks a second, which may
   be more than one core can do (in a heavy scene a tick can take 2 to 3 ms, so about ×12 to ×15).
   The game then runs slower than asked, at about 25 fps, and the overlay shows the speed reached. A
@@ -450,6 +457,7 @@ are at the end of this section.
 | `Sg_MainCalcRate` (`0x008206c0`) | Hook (counts) | `Sg_MainLoop` calls it only on the way to the world update. A frame whose updates never called it (menu, pause, save screen, load) makes the next frames without a tick Repeats: their logic runs once per update, and a second update would speed it up |
 | `TkUpdateEventJump` (`0x0088d3d0`) | Hook (counts) | The world ticks that ran, for the window's "ticks/s" |
 | `graphicCameraSetWorldMatrix` (`0x00639860`) | Hook | See "The camera" below |
+| `graphicObjectSetTranslation` (`0x006426c0`), `graphicObjectSetRotation` (`0x006426a0`) | Hooks (switch `frames.interpolate.objects`, on) | Note the game's pose of each map object; after `updateFFX` the mod places the moving ones between ticks through the same two ("Moving map objects between ticks") |
 | `MsCameraResetMove` (`0x007bed60`), `MsSetCheckChange` (`0x007c0790`) | Hooks (notes) | The game's instant camera sets: noted for the update's camera sample ("Cuts" below); `MsSetCheckChange` only while the event scripts run |
 | `FFXApplication_updateGlobalTime_0042fa00` (thiscall app), `TextureAnimation_Animate_00672000` (stdcall), `CharacterLighting_updateFlash_006ab630`, `FogEffectManager_updateChrFogFade_006e3f40`, `BlurEffect_update_006c3d40` (thiscall) | Hooks (switch `frames.speed.scene_time`, on) | Game time instead of the real-time step after `updateFFX` ("The scene's clock" below) |
 | `Renderer_PresentFlip` (`0x00593760`, thiscall, render thread) | Hook | Counts presents (the drawn fps). For vsync on or off it sets the renderer's byte `+0x131c` around the call (the present's sync interval is 1 when it is not 0) and puts it back |
@@ -834,6 +842,70 @@ wrote when the next tick is recorded was not written by the game, and gets its l
 back. `Ch_UpdateClothMatrix` writes the true matrix again on every draw, and the cloth job
 overwrites every bound vertex on every tick, so nothing the mod writes reaches the simulation.
 
+### Moving map objects between ticks
+
+**The oversight.** With the camera and the characters drawn between ticks, the map's own moving
+objects still moved 30 times a second: the field's animated parts, lifts, gates, a crane, boats,
+anything the event scripts move. They stepped against a smooth camera.
+
+**How the game places them** (ffx-rust `docs/formats/scene.md`, "Round 2: open questions";
+`docs/formats/render.md`, "Object translation/rotation"). Every game update, the field's draw
+(`yiDisp`, then `yiRender_draw`) and the event scripts (`yiSetRotTransDObj`, `yiSetRotTransGroup`)
+call `graphicObjectSetTranslation(id, pos)` and `graphicObjectSetRotation(id, angles, order)`. These
+reach `PhyreScene_setObjectTranslation`/`Rotation`, which find the object id in the scene's object
+tree (head at scene `+0x1198`, root `+0xc`, children `+0`/`+4`, key `+0xc`, node `+0x10` a pointer to
+its mesh list: `+0` count, `+8` the meshes) and rewrite each mesh's 3x4 world matrix (`*(mesh +4)`):
+the translation words 8 to 10 as `(-x, -y, z)`; the rotation as 10 × the turns about x (`-x`), y
+(`-y`) and z (`+z`) in the order `order` names. The game reads nothing back from these matrices; it
+keeps its objects' state in its own records. `FFXApplication_render` reads them after `updateFFX`.
+
+**What the mod does** (`ObjectHistory`, setting "moving objects", `frames.interpolate.objects`, on):
+
+- Both functions are hooked. The game's own calls are noted per object id (the position and the
+  angles with their order, each kept from the last call), with the object's identity: its tree node
+  and its mesh list, so a new map, a battle's scene or a reload, which build new nodes, never get
+  another object's pose.
+- At the end of each game update that ran a tick, every object the game set in it goes into a
+  two-tick history (as for the characters).
+- After `updateFFX` of a frame drawn between ticks (Tick or Redraw, alpha under 1), every object
+  with two consecutive samples of the same identity and shape and no warp is placed at the frame's
+  alpha through the same two functions (the rest of their hook chains): the position lerped, each
+  angle turned the short way. The characters' warp thresholds apply (`frames.cuts.character_*`);
+  a camera cut draws every object as its tick has it. An object the game set to something else
+  since its tick is drawn as the game set it.
+- Before the next `updateFFX`, every object the mod placed gets the game's own last pose back (only
+  while the tree still holds the same node), so an object the game stops moving does not stay
+  where the mod drew it. A new map (`g_CurrentMapNo`) forgets everything.
+
+**Checked in the game** (2026-11-09, harness slots, 144 fps, vsync off; the test trace below; see
+"Testing"). A scan of every third developer save (6 s each) found map objects that move at the map's
+start on two maps: map 119 (developer save 41, objects 23 and 24) and map 71 (developer save 5,
+object 3). The drawn matrix (as the renderer reads it, after the update), frames a second it
+changed, over the run's time on the map:
+
+| Map, object | Frame rate | Objects off | Objects on |
+|---|---|---|---|
+| 119 (a camp's tent, developer save 41), objects 23 and 24 (swaying banners) | 122 to 142 fps | 28.4 a second (the ticks) | 121.7 of 121.7 (every frame) |
+| 71 (the Al Bhed ship's deck, developer save 5), object 3 | 125 to 130 fps | 27.5 a second | 130.1 of 130.3 |
+| 119 at ×0.1 (slow motion) | 106 fps | - | 98.4 of 105.6 (the rest: frames the scene was loading or cut) |
+
+Off, the value holds for four or five frames and steps at each tick; on, it moves on every frame
+between the same tick values. The world stayed at 29.4 to 30.0 ticks a second either way. Objects
+that stood still over a tick (two equal samples) are left as the game set them. Nothing in the
+logs; no crash in 5 runs (and a scan of 37 developer saves).
+
+### Testing
+
+`YUTA_FPS_UNLOCK_TRACE=<file>` (an environment variable of the game) writes a line per drawn frame
+after the update and the mod's placing: time (ms), frame kind, alpha, ticks, map, and per map
+object the game set lately: its first mesh's translation words and words 0 and 2 of its matrix as the
+renderer reads them, whether the mod placed it, and the game's own pose. ffx-remix's
+`tools/fpsunlock-compat.sh` runs it in harness slots and `tools/fpsunlock-compat.py` counts, per
+object, how many frames a second its drawn matrix changed (the frame rate when it is drawn between
+ticks, about 30 when not). The ffx-rust harness hook patches `Renderer_PresentFlip` before
+Fahrenheit's hooks go in; the mod hooks after it ("Hooking" below: a function that starts with
+another program's `jmp` and is otherwise as expected).
+
 ### Other things that advance per drawn frame
 
 What each `Sg_MainLoop` runs once besides the ticks, and what the mod does with it on a Redraw:
@@ -843,7 +915,7 @@ What each `Sg_MainLoop` runs once besides the ticks, and what the mod does with 
 | The effects | the effect loop, above | held, replayed |
 | The cloth | `Ch_DrawMain` → `Ch_Cloth_PerCharacter` | held; drawn blended between ticks |
 | Bones, motion events, mouths, texture animations of the characters | `Ch_CalcMiddle` | held; bones interpolated |
-| Field animation (the map's texture animation frames, moving parts) | `yiAnimMain` | held. `yiRender_draw` only applies the frame |
+| Field animation (the map's texture animation frames, moving parts) | `yiAnimMain` | held. `yiRender_draw` only applies the frame; the moving parts are then placed between ticks |
 | Fades | `Sg_DrawFilter` | drawn, counters put back |
 | The Eternal Calm copyright | `Sg_MainLoop` | counter put back |
 | The video | `graphicVideoUpdate` | held; movies Repeat |
