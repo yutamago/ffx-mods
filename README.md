@@ -254,7 +254,7 @@ battle HUD the game places in PS2 coordinates land where the PS2 had them;
 the opening's staff credits get the PS2 size; the Flash screens (Esc menu,
 settings, save/load) are drawn inside the 4:3 picture. The HD movies are
 16:9: while one plays full screen the picture goes back to 16:9 for it
-(PS2 movies' movies are 4:3 and stay so).
+(the movies of PS2 movies are 4:3 and stay so).
 
 - PS2 disc: not needed. Code only.
 
