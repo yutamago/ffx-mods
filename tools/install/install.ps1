@@ -97,7 +97,7 @@ function Off-Text([string[]]$ids) {
 }
 
 # The new mods\loadorder from its lines: the shared library before the first mod of the family,
-# then the mods of $add that are not listed yet; without the switched-off mods ($off). With $all
+# then the mods of $add that are not listed yet (in $add's order); without the switched-off mods ($off). With $all
 # (a bundle's install.cmd), the bundles after the mods, and without yuta.demaster (FFX
 # Demaster's old all-in-one mod, which writes the same files).
 function New-LoadOrder([string[]]$lines, [string[]]$add, [string[]]$bundles, [string[]]$off, [bool]$all) {
@@ -109,7 +109,15 @@ function New-LoadOrder([string[]]$lines, [string[]]$add, [string[]]$bundles, [st
         $out.Add($l)
     }
     if (-not $placed) { $out.Add($Common) }
-    foreach ($t in $add) { if ($t -ne $Common -and $off -notcontains $t -and -not $out.Contains($t)) { $out.Add($t) } }
+    # A mod not listed yet goes before the next mod of $add that is (so a mod switched on again
+    # gets its place back), else at the end (the bundles go last below).
+    for ($i = 0; $i -lt $add.Count; $i++) {
+        $t = $add[$i]
+        if ($t -eq $Common -or $off -contains $t -or $out.Contains($t)) { continue }
+        $at = -1
+        for ($j = $i + 1; $j -lt $add.Count -and $at -lt 0; $j++) { if ($bundles -notcontains $add[$j]) { $at = $out.IndexOf($add[$j]) } }
+        if ($at -ge 0) { $out.Insert($at, $t) } else { $out.Add($t) }
+    }
     if ($all) {
         foreach ($b in $bundles) { if ($off -notcontains $b -and $out.Remove($b)) { $out.Add($b) } }
         [void]$out.Remove('yuta.demaster')
@@ -375,7 +383,7 @@ else {
 }
 foreach ($id in $toEnable) {
     if ($Targets -notcontains $id -and $off -notcontains $id) {
-        Write-Host "To install $id now, run mods\$id\install.cmd (or the PS2 bundle's)." -ForegroundColor Yellow
+        Write-Host "To install $id now, run mods\$id\install.cmd." -ForegroundColor Yellow
     }
 }
 

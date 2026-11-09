@@ -36,7 +36,7 @@ public sealed class Ps2BundleModule : FhModule {
     /// </summary>
     private static string why_off(string id) =>
         !File.Exists(Path.Combine(_mods_dir, id, $"{id}.manifest.json")) ? "not installed"
-        : _off.Contains(id) ? $"switched off (install.cmd -Enable {id["yuta.".Length..]} switches it on)"
+        : _off.Contains(id) ? $"switched off (install.cmd -Enable {id["yuta.".Length..]})"
         : "not in mods\\loadorder (run install.cmd)";
 
     /// <summary>The bundle's part of the F8 window: each of its mods and its state.</summary>

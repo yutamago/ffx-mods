@@ -67,6 +67,9 @@ Same (New-LoadOrder @('yuta.ffx-mods', 'yuta.ps2-movies', 'yuta.ps2-maps', 'yuta
 Same (New-LoadOrder @('yuta.ffx-mods', 'yuta.ps2-maps') @('yuta.ps2-maps', 'yuta.ps2-bundle') @('yuta.ps2-bundle') @('yuta.ps2-bundle') $true) `
     @('yuta.ffx-mods', 'yuta.ps2-maps') 'loadorder: a switched-off bundle is not added'
 
+Same (New-LoadOrder @('other', 'yuta.ffx-mods', 'yuta.a', 'yuta.c', 'yuta.ps2-bundle') @('yuta.a', 'yuta.b', 'yuta.c', 'yuta.d', 'yuta.ps2-bundle') @('yuta.ps2-bundle') @() $true) `
+    @('other', 'yuta.ffx-mods', 'yuta.a', 'yuta.b', 'yuta.c', 'yuta.d', 'yuta.ps2-bundle') 'loadorder: a mod switched on again gets its place back'
+
 Same (Removed-By-Hand @('yuta.ps2-movies', 'yuta.ps2-maps', 'yuta.gone') @('yuta.ffx-mods', 'yuta.ps2-maps') { param($i) $i -ne 'yuta.gone' }) @('yuta.ps2-movies') 'Removed-By-Hand'
 
 # ---- the settings merge ---------------------------------------------------------------------
