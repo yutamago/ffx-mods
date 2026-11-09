@@ -30,6 +30,8 @@ public enum Counter {
     CharactersInterpolated,
     /// <summary>Cloth meshes drawn between ticks (one per mesh per drawn frame).</summary>
     ClothInterpolated,
+    /// <summary>Map objects placed between ticks (one per object per drawn frame).</summary>
+    ObjectsInterpolated,
 }
 
 /// <summary>

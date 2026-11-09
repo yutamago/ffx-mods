@@ -189,6 +189,9 @@ characters = true
 bones = true
 # ... and its cloth and hair (needs hold.cloth).
 cloth = true
+# Draw the map's moving objects (field animated parts, lifts, gates, boats and
+# other objects the scripts move) between their last two ticks.
+objects = true
 # Also move the camera on frames of between_ticks = "repeat".
 repeats = true
 
@@ -200,10 +203,10 @@ camera_distance = 100.0
 camera_degrees = 45.0
 # A camera the game sets at once (scripts, magic) is a cut when its step jumps.
 game_sets = true
-# A character that moved further than this in one tick (world units) warped:
-# drawn as it is.
+# A character or map object that moved further than this in one tick (world
+# units) warped: drawn as it is.
 character_distance = 50.0
-# A character that turned more than this in one tick (degrees) warped.
+# A character or map object that turned more than this in one tick (degrees) warped.
 character_degrees = 120.0
 
 [frames.hold]

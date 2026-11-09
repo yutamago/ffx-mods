@@ -211,6 +211,9 @@ internal static class FpsUnlock {
             ImGui.SameLine();
             bool chars = s.InterpolateCharacters;
             if (ImGui.Checkbox("the characters", ref chars)) set(s with { InterpolateCharacters = chars });
+            ImGui.SameLine();
+            bool objects = s.InterpolateObjects;
+            if (ImGui.Checkbox("moving objects", ref objects)) set(s with { InterpolateObjects = objects });
             int effects = (int)s.Effects;
             if (ImGui.Combo("Effects between ticks", ref effects, EffectModes, EffectModes.Length)) set(s with { Effects = (EffectsMode)effects });
             ImGui.TreePop();
@@ -263,6 +266,7 @@ internal static class FpsUnlock {
             ImGui.Text($"Effects: {h.EffectDraws} draws recorded; replayed {st.Rate(Counter.EffectReplays):0}/s, gone {st.Rate(Counter.EffectsGone):0}/s");
             ImGui.Text($"Characters: {h.Characters} held, between ticks {st.Rate(Counter.CharactersInterpolated):0}/s; warps {h.CharacterCuts}");
             ImGui.Text($"Cloth: {h.ClothMeshesHeld} meshes held, blended {st.Rate(Counter.ClothInterpolated):0}/s");
+            ImGui.Text($"Map objects: {h.ObjectsHeld} held, placed between ticks {st.Rate(Counter.ObjectsInterpolated):0}/s; warps {h.ObjectCuts}");
             ImGui.TextColored(Grey, h.Status);
             ImGui.TreePop();
         }
@@ -294,8 +298,8 @@ internal static class FpsUnlock {
             bool cloth_lerp = s.InterpolateCloth;
             if (ImGui.Checkbox("Interpolate the characters' cloth (hair, shorts, coats); needs the cloth held", ref cloth_lerp)) set(s with { InterpolateCloth = cloth_lerp });
             float cdist = (float)s.CharacterCutDistance, cdeg = (float)s.CharacterCutDegrees;
-            if (ImGui.SliderFloat("Character warp: moved more than", ref cdist, 1f, 2000f, "%.0f units", ImGuiSliderFlags.Logarithmic)) set(s with { CharacterCutDistance = FrameSettings.FromFloat(cdist) });
-            if (ImGui.SliderFloat("Character warp: turned more than", ref cdeg, 1f, 180f, "%.0f°")) set(s with { CharacterCutDegrees = FrameSettings.FromFloat(cdeg) });
+            if (ImGui.SliderFloat("Character and object warp: moved more than", ref cdist, 1f, 2000f, "%.0f units", ImGuiSliderFlags.Logarithmic)) set(s with { CharacterCutDistance = FrameSettings.FromFloat(cdist) });
+            if (ImGui.SliderFloat("Character and object warp: turned more than", ref cdeg, 1f, 180f, "%.0f°")) set(s with { CharacterCutDegrees = FrameSettings.FromFloat(cdeg) });
             bool repeats = s.InterpolateRepeats;
             if (ImGui.Checkbox("Move the camera on repeated frames", ref repeats)) set(s with { InterpolateRepeats = repeats });
             float dist = (float)s.CutDistance, deg = (float)s.CutDegrees;

@@ -332,6 +332,8 @@ pub struct FrameInterpolate {
     pub characters: bool,
     pub bones: bool,
     pub cloth: bool,
+    /// The map's moving objects (field animated parts, objects the scripts move).
+    pub objects: bool,
     pub repeats: bool,
 }
 
@@ -342,6 +344,7 @@ impl Default for FrameInterpolate {
             characters: true,
             bones: true,
             cloth: true,
+            objects: true,
             repeats: true,
         }
     }
@@ -539,6 +542,7 @@ pub const SETTINGS: &[(&str, AppliedBy)] = {
         ("frames.interpolate.characters", Mod),
         ("frames.interpolate.bones", Mod),
         ("frames.interpolate.cloth", Mod),
+        ("frames.interpolate.objects", Mod),
         ("frames.interpolate.repeats", Mod),
         ("frames.cuts.camera_distance", Mod),
         ("frames.cuts.camera_degrees", Mod),

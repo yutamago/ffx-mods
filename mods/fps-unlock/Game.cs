@@ -170,6 +170,43 @@ internal sealed unsafe class Game(nint moduleBase) {
     /// <summary><c>g_GraphicSkipFrame</c> (<c>0x012fb7d0</c>): the VFX calls do nothing while it is set.</summary>
     public bool GraphicSkipFrame => *At<int>(0x012fb7d0) != 0;
 
+    // ---- Map objects (ObjectHistory). ----
+
+    /// <summary>
+    ///     The node of map object <paramref name="id"/> in the scene's object tree (head at scene <c>+0x1198</c>, root at
+    ///     head <c>+0xc</c>, children at node <c>+0</c>/<c>+4</c>, key <c>+0xc</c>, mesh list <c>+0x10</c>: <c>+0</c> count,
+    ///     <c>+8</c> meshes), as <c>PhyreScene_setObjectTranslation</c>/<c>Rotation</c> find it (<c>ObjectTree_Find</c>);
+    ///     its identity (the node and its mesh array) or 0 when the tree is not up (<c>+0x10d4</c>) or has no such id.
+    /// </summary>
+    public ulong ObjectIdentity(int id) {
+        nint scene = PhyreScene;
+        if (scene == 0 || *(int*)(scene + 0x10d4) == 0) return 0;
+        nint head = scene + 0x1198;
+        nint node = *(nint*)(head + 0xc);
+        uint key = (uint)id;
+        for (int depth = 0; node != head && node != 0 && depth < 64; depth++) {
+            uint k = *(uint*)(node + 0xc);
+            if (k == key) return (ulong)(uint)node << 32 | *(uint*)(node + 0x18);
+            node = *(nint*)(node + (key < k ? 0 : 4));
+        }
+        return 0;
+    }
+
+    /// <summary>The translation row of the first mesh's 3x4 world matrix (<c>*(mesh +4)</c>, floats 9 to 11) of map object <paramref name="id"/>, as the renderer reads it.</summary>
+    public bool ObjectMeshTranslation(int id, out Vector3 t) {
+        t = default;
+        ulong identity = ObjectIdentity(id);
+        if (identity == 0) return false;
+        nint node = (nint)(uint)(identity >> 32);
+        if ((*(uint*)(node + 0x10) & 0x7fffffff) == 0) return false;
+        nint meshes = *(nint*)(node + 0x18);
+        nint mesh = meshes == 0 ? 0 : *(nint*)meshes;
+        float* m = mesh == 0 ? null : *(float**)(mesh + 4);
+        if (m == null) return false;
+        t = new Vector3(m[9], m[10], m[11]);
+        return true;
+    }
+
     // ---- Characters (CharacterInterpolator). ----
 
     /// <summary><c>g_ChrCount</c> (<c>0x023c44e0</c>) and the character array (<c>0x023c44e4</c>, <see cref="ChrSize"/> bytes each).</summary>

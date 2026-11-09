@@ -186,6 +186,7 @@ pub const PROFILES: &[Profile] = &[
             "frames.interpolate.characters",
             "frames.interpolate.bones",
             "frames.interpolate.cloth",
+            "frames.interpolate.objects",
             "frames.interpolate.repeats",
             "frames.cuts.camera_distance",
             "frames.cuts.camera_degrees",
