@@ -1,0 +1,28 @@
+# {title} settings.
+#
+# After changing anything here: run install.cmd again, then restart the game.
+#
+# "ps2": the PS2 original (the default). "hd": the HD Remaster.
+#
+# Windows paths: use single quotes, 'C:\Games\FFX.iso' (in double quotes a
+# backslash starts an escape), or forward slashes.
+
+[source]
+# Your own PS2 disc of Final Fantasy X (any region): an image file
+# ('D:\PS2\Final Fantasy X.iso') or the disc drive with the disc in it ('E:').
+# install.cmd asks for it and writes it here.
+iso = ''
+# The game folder, the one with FFX.exe and data\FFX_Data.vbf. Leave empty to
+# look in the usual Steam folders.
+game = ''
+
+[audio]
+# "ps2": the game's "Original" soundtrack is the PS2 music rendered again from
+# the disc's sequences and instruments by a port of the PS2's sound driver,
+# instead of the PC's recordings of it. "hd": the PC's recordings.
+music = "ps2"
+# "ps2": a new game starts with the soundtrack option on "Original" (the
+# PC starts on the arranged one). Loaded saves keep their choice, and the
+# option in the game's Config menu still changes it. Needs only a restart.
+# "hd": new games start on the arranged soundtrack.
+soundtrack = "ps2"

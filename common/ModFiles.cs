@@ -5,11 +5,11 @@ namespace Yuta.FfxMods;
 /// <summary>
 /// The files the installed mods put in place of the game's: every mod's efl/x, in load order
 /// (Fahrenheit's file loader indexes them the same way, a later mod's file wins). The PS2 files
-/// are those whose winning mod was built by demaster.exe: a mod of this family, or FFX Demaster
-/// (any mod folder with build/files.json).
+/// are those whose winning mod was built by demaster.exe: a mod of this family (any mod
+/// folder with build/files.json, also the old all-in-one FFX Demaster).
 /// </summary>
 public static class ModFiles {
-    /// <summary>Mod ids of the family (the shared library and its seven mods; FFX Demaster builds with the same converter).</summary>
+    /// <summary>Mod ids of the family (the shared library and the mods that depend on it, or a folder demaster.exe built into).</summary>
     public static bool is_family(FhModContext m) =>
         m.Manifest.Id == "yuta.ffx-mods" || m.Manifest.Dependencies.Contains("yuta.ffx-mods") || built_by_converter(m.Paths.ModDir.FullName);
 

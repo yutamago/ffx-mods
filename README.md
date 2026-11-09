@@ -9,8 +9,13 @@ alone or together; each is a separate zip.
 | Mod | What it changes | PS2 disc | Installed size | Needs |
 |---|---|---|---|---|
 | [PS2 music engine](#ps2-music-engine) (`yuta.ps2-music-engine`) | the original soundtrack played by the PS2's own sound driver inside the game | yes | ~60 MB | — |
+| [PS2 soundtrack](#ps2-soundtrack) (`yuta.ps2-soundtrack`) | the original soundtrack rendered from the PS2 music by the PS2 sound driver; new games start with it | yes | ~650 MB | — |
+| [PS2 movies](#ps2-movies) (`yuta.ps2-movies`) | the PS2 movies (FMVs), 4:3, with the PS2 sound | yes | ~1.5 GB | PS2 aspect ratio recommended |
 | [PS2 characters](#ps2-characters) (`yuta.ps2-characters`) | PS2 models and textures for the party, NPCs, monsters, aeons, weapons, objects | yes | ~860 MB | — |
+| [PS2 maps](#ps2-maps) (`yuta.ps2-maps`) | PS2 textures of the field and battle maps, the PS2 painted backgrounds | yes | ~3 GB | PS2 aspect ratio recommended |
+| [PS2 effects](#ps2-effects) (`yuta.ps2-effects`) | PS2 textures of spells, summons and the other effects | yes | ~500 MB | — |
 | [PS2 lighting](#ps2-lighting) (`yuta.ps2-lighting`) | characters lit the PS2 way | optional | ~80 MB | — |
+| [No HD post-effects](#no-hd-post-effects) (`yuta.no-hd-post-effects`) | no HD glow, no shadow maps (the PS2's ground shadows) | no | <1 MB | — |
 | [PS2 interface](#ps2-interface) (`yuta.ps2-interface`) | PS2 menus, windows, font, portraits, title screen, button glyphs; a clean start-up | yes | ~180 MB | PS2 aspect ratio recommended |
 | [PS2 aspect ratio](#ps2-aspect-ratio) (`yuta.ps2-aspect-ratio`) | the 4:3 picture with the PS2 camera | no | <1 MB | — |
 | [PS2 game feel](#ps2-game-feel) (`yuta.ps2-game-feel`) | PS2 run speed, battle menu without input delay, battle subtitles | no | <1 MB | — |
@@ -28,8 +33,8 @@ computer from your own Final Fantasy X PS2 disc (any region): an image of
 it (`.iso`), or the disc itself in a disc drive. After that they need
 neither.
 
-[FFX Demaster](https://github.com/yutamago/ffx-demaster) is the whole
-package (the PS2 mods here plus the PS2 movies, maps, effects and more).
+[FFX Demaster](https://github.com/yutamago/ffx-demaster) is every PS2 mod
+here in one zip, installed and built in one step (one pass over the disc).
 
 ## Install
 
@@ -56,7 +61,9 @@ For each mod you want:
    terminal: `install.cmd -Iso 'D:\PS2\FFX.iso'`, `install.cmd -Drive E`,
    `-Game <game folder>`, `-NoDisc` (PS2 lighting only), `-Force`
    (rebuild everything). Running it again is safe: it redoes only what
-   changed.
+   changed. (FFX Demaster has one `install.cmd` for all its mods, in
+   `mods\yuta.ffx-mods\`: it takes the same options and builds every
+   installed mod from one pass over the disc.)
 3. Start the game through Fahrenheit (`bin\fhstage0.exe <path to FFX.exe>`).
 
 In the game, **F8** opens one window for every installed mod of the
@@ -92,6 +99,36 @@ recordings of the original soundtrack.
 - Setting: `audio.music_engine = "live"` (default here) or `"hd"`. Its log:
   `music\live.log`.
 
+### PS2 soundtrack
+
+The original soundtrack as the PS2 played it: every track rendered again
+from the disc's music sequences and instruments by a port of the PS2
+game's sound driver on a model of the SPU2, in place of the PC's
+recordings in the game's "Original" soundtrack (`audio.music`). New games
+start with the soundtrack option on "Original" (`audio.soundtrack`; the PC
+starts on the arranged one); loaded saves keep their choice. With PS2
+music engine too, that engine plays live and this bank is what it falls
+back on (the three tracks with streamed parts).
+
+- PS2 disc: needed. Size: ~650 MB (one sound bank). The build takes a few
+  minutes.
+
+### PS2 movies
+
+The PS2 movies (FMVs) with the PS2's sound, in place of the HD's re-made
+ones (`movies`). They are built for the picture the game shows: 4:3 (960 x
+720) when PS2 aspect ratio is installed with its 4:3 picture, else 16:9
+(1280 x 720) with the 4:3 picture between black bars. The converter reads
+that from PS2 aspect ratio's settings; installing, removing or switching
+it later shows PS2 movies as "rebuild needed" in the F8 window. The four
+movies the PC plays with the 3D scene drawn over them (the Farplane among
+them) stay HD.
+
+- PS2 disc: needed. Needs ffmpeg to encode (not included): if none is
+  found, `install.cmd` downloads an LGPL build of FFmpeg (168 MB) into the
+  mod's `tools\` and checks its SHA-256 ([`docs/movies.md`](docs/movies.md)).
+- Size: ~1.5 GB. The first build takes about 25 minutes.
+
 ### PS2 characters
 
 The PS2 models and textures: the party, NPCs, monsters and bosses, aeons,
@@ -107,6 +144,26 @@ default).
 - PS2 disc: needed. Size: ~860 MB (5,200 files). The build takes a few
   minutes.
 
+### PS2 maps
+
+The PS2 textures of the field maps (`maps.field`) and the battle maps
+(`maps.battle`), cut out of the PS2's graphics memory as the PS2 game
+loaded them, and the PS2's painted backgrounds of the fixed-camera rooms
+(`maps.backgrounds`). The rooms the HD re-framed for 16:9 get their (4:3)
+PS2 paintings only with PS2 aspect ratio's 4:3 picture; like PS2 movies,
+the mod is rebuilt when that changes ([`docs/maps.md`](docs/maps.md),
+[`docs/screen.md`](docs/screen.md)).
+
+- PS2 disc: needed. Size: ~3 GB. The build takes several minutes.
+
+### PS2 effects
+
+The PS2 textures of the effects: spells, summons, overdrives and the
+particles of the maps and monsters (`effects.textures`,
+[`docs/effects.md`](docs/effects.md)).
+
+- PS2 disc: needed. Size: ~500 MB.
+
 ### PS2 lighting
 
 Characters lit the PS2 way: the PS2's light colours and directions at its
@@ -118,6 +175,15 @@ close-up among them) also get the PS2's light colours back; without it
 they stay HD, and `install.cmd` (with "no disc" or `-NoDisc`) says so.
 
 - PS2 disc: optional. Size: ~80 MB (the event lights: 0.5 MB of that).
+
+### No HD post-effects
+
+Two things the HD draws that the PS2 didn't: its glow, the blurred bright
+parts added over the whole picture (`render.glow`), and its shadow maps
+(`render.shadows`): without them every character has one soft ground
+shadow under it, as on the PS2 ([`docs/render.md`](docs/render.md)).
+
+- PS2 disc: not needed. Code only.
 
 ### PS2 interface
 

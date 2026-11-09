@@ -1,5 +1,5 @@
 //! The converter as a library: the `demaster` binary (`main.rs`), the live
-//! music engine (`live/`), FFX Demaster and FFX Music Studio use these
+//! music engine (`live/`) and FFX Music Studio use these
 //! modules. The studio needs the disc reader (`disc`), the settings
 //! (`config`, `build::find_vbf`) and the music engine (`sqseq`, `spu2`,
 //! `musicjob`); keep their public API.

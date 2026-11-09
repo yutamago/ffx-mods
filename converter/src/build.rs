@@ -3,7 +3,8 @@
 //! the C# mod checks at startup. For a mod of ffx-mods (`--mod`, or the
 //! mod whose manifest is in the folder, `mods.rs`) only that mod's jobs and
 //! settings, from its `settings.toml`; without one, every job, from
-//! `demaster.toml` (FFX Demaster).
+//! `demaster.toml` (development: everything in one folder). `--all`: every
+//! installed mod, each as with `--mod`, sharing one opened disc.
 //!
 //! Files in the mod folder:
 //! - `efl/x/...`: the replacements (Fahrenheit's file loader).
@@ -15,6 +16,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result, bail};
@@ -34,7 +36,14 @@ pub const VERSION: &str = match option_env!("DEMASTER_VERSION") {
 /// The Steam folder name of FINAL FANTASY X/X-2 HD Remaster (app 359870).
 const STEAM_DIR: &str = "FINAL FANTASY FFX&FFX-2 HD Remaster";
 
-pub const USAGE: &str = "  demaster build [--mod <name>] [--config <settings.toml>] [--iso <disc.iso>|<drive>:]
+pub const USAGE: &str = "  demaster build --all [--mods-dir <Fahrenheit mods folder>] [--iso <disc.iso>|<drive>:]
+                 [--no-disc] [--game <game folder>] [--ffmpeg <ffmpeg program>] [--force] [--verbose]
+      builds every installed mod of ffx-mods that has PS2 files (listed in mods\\loadorder),
+      each into its own folder with its own settings.toml, from one pass over the disc.
+      The disc and game come from the arguments, else from the first mod's settings that
+      has them, and are saved in every mod's settings. Without --mods-dir: the folder
+      above demaster.exe's.
+  demaster build [--mod <name>] [--config <settings.toml>] [--iso <disc.iso>|<drive>:]
                  [--no-disc] [--game <game folder>] [--save-source] [--mod-dir <mod folder>]
                  [--ffmpeg <ffmpeg program>] [--only <job>,...] [--force] [--verbose]
       builds the PS2 files the settings ask for: of one mod of ffx-mods (--mod, or the
@@ -61,6 +70,10 @@ pub struct Args {
     pub mod_dir: Option<PathBuf>,
     /// The mod of ffx-mods to build (`mods.rs`).
     pub mod_name: Option<String>,
+    /// Build every installed mod (`--all`), in `mods_dir`.
+    pub all: bool,
+    /// Fahrenheit's `mods` folder, for `--all`.
+    pub mods_dir: Option<PathBuf>,
     /// Build without the PS2 disc: jobs that need it are left out.
     pub no_disc: bool,
     /// Write `--iso` and `--game` into the settings file's `[source]`.
@@ -86,6 +99,8 @@ impl Args {
                 "--ffmpeg" => args.ffmpeg = Some(value()?.into()),
                 "--mod-dir" => args.mod_dir = Some(value()?.into()),
                 "--mod" => args.mod_name = Some(value()?),
+                "--all" => args.all = true,
+                "--mods-dir" => args.mods_dir = Some(value()?.into()),
                 "--no-disc" => args.no_disc = true,
                 "--save-source" => args.save_source = true,
                 "--only" => args.only.extend(value()?.split(',').map(|s| s.trim().to_string())),
@@ -124,10 +139,27 @@ struct Stamp {
     settings: BTreeMap<String, String>,
     /// Their defaults, for keys missing from the file.
     defaults: BTreeMap<String, String>,
+    /// Settings of other mods the jobs read, by key.
+    #[serde(default)]
+    foreign: BTreeMap<String, StampForeign>,
     jobs: Vec<StampJob>,
     files: usize,
     /// No job failed.
     complete: bool,
+}
+
+/// A setting of another mod the build read ([`mods::Foreign`]).
+#[derive(Debug, Serialize, Deserialize)]
+struct StampForeign {
+    /// The mod it belongs to (`yuta.ps2-aspect-ratio`).
+    #[serde(rename = "mod")]
+    mod_id: String,
+    /// The value the files were built with.
+    value: String,
+    /// The value when that mod is installed and its settings.toml leaves the key out.
+    default: String,
+    /// The value when that mod is not installed.
+    absent: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -284,6 +316,37 @@ fn remove_with_dirs(path: &Path, stop: &Path) {
     }
 }
 
+/// The mods Fahrenheit loads from `mods_dir`: the ids in its `loadorder`.
+fn load_order(mods_dir: &Path) -> Vec<String> {
+    std::fs::read_to_string(mods_dir.join("loadorder"))
+        .map(|t| t.lines().map(|l| l.trim().to_string()).filter(|l| !l.is_empty()).collect())
+        .unwrap_or_default()
+}
+
+/// The folder of the mod `p` in `mods_dir` when it is installed: its folder
+/// with its manifest, listed in `mods\loadorder` (Fahrenheit loads only those).
+pub fn installed(mods_dir: &Path, p: &Profile) -> Option<PathBuf> {
+    let dir = mods_dir.join(p.id());
+    (dir.join(format!("{}.manifest.json", p.id())).is_file() && load_order(mods_dir).contains(&p.id())).then_some(dir)
+}
+
+/// The value of another mod's setting as the game will have it: from that
+/// mod's settings.toml (over its defaults) when it is installed next to
+/// `mod_dir`, else `f.absent`. Returns the value and whether it is installed.
+fn foreign_value(mod_dir: &Path, f: &mods::Foreign) -> Result<(String, bool)> {
+    let owner = mods::find(f.from).with_context(|| format!("no mod {}", f.from))?;
+    let Some(dir) = mod_dir.parent().and_then(|m| installed(m, owner)) else {
+        return Ok((f.absent.to_string(), false));
+    };
+    let path = dir.join("settings.toml");
+    let config = if path.is_file() {
+        Config::load_with_defaults(&path, Some(owner.default_toml))?.config
+    } else {
+        Config::parse_with_defaults("", owner.default_toml)?.0
+    };
+    Ok((config.settings()[f.key].clone(), true))
+}
+
 /// Prints the job list (`demaster jobs [--mod <name>]`).
 pub fn list_jobs(a: &[String]) -> Result<()> {
     let profile = match a {
@@ -338,8 +401,25 @@ pub fn find_game(a: &[String]) -> Result<()> {
     Ok(())
 }
 
+/// What `build --all` opens once for all its mods: the game's archive and the disc.
+struct Shared {
+    vbf: PathBuf,
+    pc: ffx_vbf::Archive,
+    iso: Option<PathBuf>,
+    disc: Arc<Mutex<Option<crate::disc::Disc>>>,
+    disc_id: Mutex<Option<String>>,
+}
+
 /// Runs `demaster build`; returns whether every job succeeded.
 pub fn run(args: &Args) -> Result<bool> {
+    if args.all {
+        return run_all(args);
+    }
+    run_one(args, None)
+}
+
+/// One mod (or, without one, every job into one folder).
+fn run_one(args: &Args, shared: Option<&Shared>) -> Result<bool> {
     let started = Instant::now();
     let base_dir = args.mod_dir.clone().unwrap_or_else(exe_dir);
     let profile = match &args.mod_name {
@@ -432,6 +512,27 @@ pub fn run(args: &Args) -> Result<bool> {
         .or_else(|| loaded.resolve(&config.build.mod_dir))
         .unwrap_or_else(exe_dir);
     std::fs::create_dir_all(&mod_dir).with_context(|| mod_dir.display().to_string())?;
+
+    // Settings of other mods the jobs read, as the game will have them.
+    let mut built_config = loaded.config.clone();
+    let mut foreign = BTreeMap::new();
+    let mut foreign_lines = Vec::new();
+    for f in profile.map_or(&[][..], |p| p.reads) {
+        let (value, there) = foreign_value(&mod_dir, f)?;
+        built_config.set(f.key, &value)?;
+        let owner = mods::find(f.from).context("owner")?;
+        let default = owner.defaults()[f.key].clone();
+        foreign_lines.push(if there {
+            format!("{} = {value} (from {})", f.key, owner.id())
+        } else {
+            format!("{} = {value} ({} is not installed)", f.key, owner.id())
+        });
+        foreign.insert(
+            f.key.to_string(),
+            StampForeign { mod_id: owner.id(), value, default, absent: f.absent.to_string() },
+        );
+    }
+    let config = &built_config;
     println!("demaster, the FFX PS2 mods converter, {VERSION}");
     if let Some(p) = profile {
         println!("mod:      {} ({})", p.id(), p.title);
@@ -447,6 +548,9 @@ pub fn run(args: &Args) -> Result<bool> {
     }
     println!("game:     {}", vbf.display());
     println!("folder:   {}", mod_dir.display());
+    for l in &foreign_lines {
+        println!("reads:    {l}");
+    }
     let manifest = format!("{}.manifest.json", profile.map_or("yuta.demaster".to_string(), |p| p.id()));
     if !mod_dir.join(&manifest).exists() {
         println!("note: no {manifest} there; is it the mod folder?");
@@ -458,11 +562,22 @@ pub fn run(args: &Args) -> Result<bool> {
     let old: Manifest = read_json(&manifest_path);
     let _ = std::fs::remove_file(&stamp_path);
 
-    let pc = ffx_vbf::Archive::open(&vbf).with_context(|| format!("opening {}", vbf.display()))?;
-    let mut ctx = match &iso {
-        Some(i) => Ctx::new(config, &pc, i, args.verbose),
-        None => Ctx::without_disc(config, &pc, args.verbose),
+    let own_pc;
+    let pc = match shared {
+        Some(sh) if sh.vbf == vbf => &sh.pc,
+        _ => {
+            own_pc = ffx_vbf::Archive::open(&vbf).with_context(|| format!("opening {}", vbf.display()))?;
+            &own_pc
+        }
     };
+    let shared = shared.filter(|sh| sh.vbf == vbf && sh.iso == iso);
+    let mut ctx = match &iso {
+        Some(i) => Ctx::new(config, pc, i, args.verbose),
+        None => Ctx::without_disc(config, pc, args.verbose),
+    };
+    if let Some(sh) = shared {
+        ctx.share_disc(sh.disc.clone());
+    }
     ctx.ffmpeg = args.ffmpeg.clone().or_else(|| loaded.resolve(&config.source.ffmpeg));
     ctx.tools_dir = Some(mod_dir.join("tools"));
     ctx.vbf = Some(vbf.clone());
@@ -474,7 +589,16 @@ pub fn run(args: &Args) -> Result<bool> {
     let vbf_id = identity(&vbf);
     let needs_disc = registry.iter().any(|j| j.needs_disc() && j.enabled(config));
     let disc_id = match &iso {
-        Some(i) if needs_disc => crate::disc::identity(i)?,
+        Some(i) if needs_disc => match shared {
+            Some(sh) => {
+                let mut id = sh.disc_id.lock().expect("disc id lock");
+                if id.is_none() {
+                    *id = Some(crate::disc::identity(i)?);
+                }
+                id.clone().unwrap_or_default()
+            }
+            None => crate::disc::identity(i)?,
+        },
         _ => String::new(),
     };
 
@@ -657,6 +781,7 @@ pub fn run(args: &Args) -> Result<bool> {
         config_path: config_path.display().to_string(),
         settings: conv,
         defaults,
+        foreign,
         jobs: report,
         files,
         complete: all_ok,
@@ -682,4 +807,161 @@ pub fn run(args: &Args) -> Result<bool> {
         started.elapsed().as_secs_f32()
     );
     Ok(all_ok)
+}
+
+/// `demaster build --all`: every installed mod with PS2 files, each into its
+/// own folder with its own settings, sharing one opened game archive and one
+/// opened disc. Returns whether every mod built.
+fn run_all(args: &Args) -> Result<bool> {
+    let started = Instant::now();
+    if args.mod_name.is_some() || args.config.is_some() || args.mod_dir.is_some() || !args.only.is_empty() {
+        bail!("--all builds every installed mod with its own settings: no --mod, --config, --mod-dir or --only with it");
+    }
+    let mods_dir = match &args.mods_dir {
+        Some(d) => d.clone(),
+        None => exe_dir().parent().map(Path::to_path_buf).context("the mods folder")?,
+    };
+    let targets: Vec<(&Profile, PathBuf)> = mods::PROFILES
+        .iter()
+        .filter(|p| p.disc != DiscUse::None)
+        .filter_map(|p| installed(&mods_dir, p).map(|d| (p, d)))
+        .collect();
+    if targets.is_empty() {
+        bail!(
+            "no mod with PS2 files is installed in {} (a mod folder with its manifest, listed in loadorder)",
+            mods_dir.display()
+        );
+    }
+    println!("demaster, the FFX PS2 mods converter, {VERSION}");
+    println!("mods:     {}", mods_dir.display());
+    println!("building: {}", targets.iter().map(|(p, _)| p.id()).collect::<Vec<_>>().join(", "));
+
+    // The disc and the game: the arguments, else the first mod's settings that name them.
+    let mut iso: Option<PathBuf> = args.iso.clone();
+    let mut game: Option<PathBuf> = args.game.clone();
+    let mut first: Option<Loaded> = None;
+    for (p, d) in &targets {
+        let path = d.join("settings.toml");
+        if !path.is_file() {
+            continue;
+        }
+        let loaded = Config::load_with_defaults(&path, Some(p.default_toml))?;
+        let text = loaded.config.source.iso.trim().to_string();
+        if iso.is_none() && !args.no_disc && !text.is_empty() {
+            let s = crate::disc::source_path(&text);
+            iso = Some(if crate::disc::is_device(&s) { s } else { loaded.resolve(&text).unwrap_or(s) });
+        }
+        if game.is_none() {
+            game = loaded.resolve(&loaded.config.source.game);
+        }
+        first.get_or_insert(loaded);
+    }
+    if args.no_disc {
+        iso = None;
+    }
+    let needs: Vec<String> = targets.iter().filter(|(p, _)| p.disc == DiscUse::Needed).map(|(p, _)| p.id()).collect();
+    if iso.is_none() && !args.no_disc && !needs.is_empty() {
+        bail!(
+            "no PS2 disc: pass --iso <disc image or drive> (or --no-disc to build only what needs none; {} need it)",
+            needs.join(", ")
+        );
+    }
+    if let Some(i) = &iso
+        && !crate::disc::exists(i)
+    {
+        bail!("the PS2 disc {} can't be read (no such image, or no disc in the drive)", i.display());
+    }
+    let first = first.unwrap_or_else(|| Loaded {
+        config: Config::default(),
+        path: mods_dir.join("settings.toml"),
+        unknown: Vec::new(),
+        text: String::new(),
+    });
+    let vbf = find_vbf(game.as_deref(), &first)?;
+    let pc = ffx_vbf::Archive::open(&vbf).with_context(|| format!("opening {}", vbf.display()))?;
+    let shared = Shared {
+        vbf: vbf.clone(),
+        pc,
+        iso: iso.clone(),
+        disc: Arc::new(Mutex::new(None)),
+        disc_id: Mutex::new(None),
+    };
+
+    let mut results = Vec::new();
+    let mut all_ok = true;
+    for (p, dir) in &targets {
+        println!();
+        println!("==== {} ({})", p.id(), p.title);
+        if iso.is_none() && p.disc == DiscUse::Needed {
+            println!("{}: needs the PS2 disc: not built", p.id());
+            results.push((p.id(), "not built (needs the PS2 disc)".to_string()));
+            continue;
+        }
+        let a = Args {
+            config: Some(dir.join("settings.toml")),
+            iso: iso.clone(),
+            game: game.clone(),
+            ffmpeg: args.ffmpeg.clone(),
+            mod_dir: Some(dir.clone()),
+            mod_name: Some(p.name.to_string()),
+            all: false,
+            mods_dir: None,
+            no_disc: iso.is_none(),
+            save_source: true,
+            only: Vec::new(),
+            force: args.force,
+            verbose: args.verbose,
+        };
+        if !a.config.as_ref().is_some_and(|c| c.is_file()) {
+            std::fs::write(dir.join("settings.toml"), p.default_toml)?;
+        }
+        match run_one(&a, Some(&shared)) {
+            Ok(true) => results.push((p.id(), "built".to_string())),
+            Ok(false) => {
+                all_ok = false;
+                results.push((p.id(), "some jobs FAILED".to_string()));
+            }
+            Err(e) => {
+                all_ok = false;
+                println!("{}: FAILED: {e:#}", p.id());
+                results.push((p.id(), format!("FAILED: {e:#}")));
+            }
+        }
+    }
+    println!();
+    println!("==== all mods");
+    for (id, r) in &results {
+        println!("{id:<26} {r}");
+    }
+    println!("done in {:.0} s. Restart the game to see the changes.", started.elapsed().as_secs_f32());
+    Ok(all_ok)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// render.aspect for PS2 movies: PS2 aspect ratio's value when it is
+    /// installed (folder, manifest, loadorder), else "hd".
+    #[test]
+    fn foreign_setting_follows_the_installed_mod() {
+        let mods_dir = std::env::temp_dir().join(format!("demaster-foreign-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&mods_dir);
+        let movies = mods_dir.join("yuta.ps2-movies");
+        let aspect = mods_dir.join("yuta.ps2-aspect-ratio");
+        std::fs::create_dir_all(&movies).unwrap();
+        let read = mods::find("ps2-movies").unwrap().reads;
+        let value = || foreign_value(&movies, &read[0]).unwrap();
+        assert_eq!(value(), ("hd".to_string(), false));
+        std::fs::create_dir_all(&aspect).unwrap();
+        std::fs::write(aspect.join("yuta.ps2-aspect-ratio.manifest.json"), "{}").unwrap();
+        // not in loadorder: Fahrenheit doesn't load it
+        assert_eq!(value(), ("hd".to_string(), false));
+        std::fs::write(mods_dir.join("loadorder"), "yuta.ffx-mods\r\nyuta.ps2-aspect-ratio\r\n").unwrap();
+        // no settings.toml: its default
+        assert_eq!(value(), ("ps2".to_string(), true));
+        std::fs::write(aspect.join("settings.toml"), "[render]\naspect = \"hd\"\n").unwrap();
+        assert_eq!(value(), ("hd".to_string(), true));
+        let _ = std::fs::remove_dir_all(&mods_dir);
+    }
 }

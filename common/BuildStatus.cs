@@ -38,9 +38,19 @@ public sealed class BuildStatus {
         public long built_at { get; set; }
         public Dictionary<string, string> settings { get; set; } = [];
         public Dictionary<string, string> defaults { get; set; } = [];
+        public Dictionary<string, StampForeign> foreign { get; set; } = [];
         public List<StampJob> jobs { get; set; } = [];
         public int files { get; set; }
         public bool complete { get; set; }
+    }
+
+    /// <summary>A setting of another mod the build read (converter/src/mods.rs, Foreign).</summary>
+    private sealed class StampForeign {
+        [System.Text.Json.Serialization.JsonPropertyName("mod")]
+        public string mod_id { get; set; } = "";
+        public string value { get; set; } = "";
+        public string @default { get; set; } = "";
+        public string absent { get; set; } = "";
     }
 
     private sealed class StampJob {
@@ -50,7 +60,23 @@ public sealed class BuildStatus {
         public string summary { get; set; } = "";
     }
 
-    public static BuildStatus check(string mod_dir, ModSettings settings, string mod_version) {
+    /// <summary>The folder of the loaded mod with this id, or null when Fahrenheit didn't load it.</summary>
+    private static string? loaded_mod_dir(string id) =>
+        FhApi.Mods.get_mods().FirstOrDefault(m => m.Manifest.Id == id)?.Paths.ModDir.FullName;
+
+    /// <summary>
+    /// What another mod's setting is now: from its settings.toml when that mod is loaded (its
+    /// default when the file leaves the key out), else the value the game has without it.
+    /// </summary>
+    public static string foreign_now(string? other_dir, string key, string fallback_default, string absent) {
+        if (other_dir is null) return absent;
+        string path = Path.Combine(other_dir, ModSettings.FILE);
+        if (!File.Exists(path)) return fallback_default;
+        MiniToml.Result r = MiniToml.parse(File.ReadAllText(path));
+        return r.Values.TryGetValue(key, out string? v) ? v : fallback_default;
+    }
+
+    public static BuildStatus check(string mod_dir, ModSettings settings, string mod_version, Func<string, string?>? mod_dir_of = null) {
         BuildStatus s = new();
         string stamp_path = Path.Combine(mod_dir, "build", "stamp.json");
         s.FilesFound = files_found(mod_dir);
@@ -84,10 +110,18 @@ public sealed class BuildStatus {
                        : built;
             if (now != built) s.Changed.Add((key, built, now));
         }
+        // Settings of another mod the files depend on (render.aspect for the PS2 movies).
+        foreach ((string key, StampForeign f) in stamp.foreign.OrderBy(p => p.Key, StringComparer.Ordinal)) {
+            string? other = (mod_dir_of ?? loaded_mod_dir)(f.mod_id);
+            string now = foreign_now(other, key, f.@default, f.absent);
+            if (now != f.value) s.Changed.Add(($"{key} ({f.mod_id}{(other is null ? ", not installed" : "")})", f.value, now));
+        }
 
         if (s.Changed.Count > 0) {
             s.State   = BuildState.Outdated;
-            s.Summary = $"settings.toml changed since the last build ({s.Changed.Count} setting{(s.Changed.Count == 1 ? "" : "s")}).";
+            s.Summary = s.Changed.All(c => c.Key.Contains(' '))
+                ? $"Another mod's setting these files depend on changed since the last build ({string.Join(", ", s.Changed.Select(c => c.Key))})."
+                : $"settings.toml changed since the last build ({s.Changed.Count} setting{(s.Changed.Count == 1 ? "" : "s")}).";
         }
         else if (!same_version(stamp.converter_version, mod_version)) {
             s.State   = BuildState.Outdated;

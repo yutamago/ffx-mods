@@ -1,0 +1,9 @@
+<Project Sdk="Fahrenheit.Sdk/1.0.0-alpha12">
+    <!-- Version, the shared library and the manifest's dependency: ../Directory.Build.props -->
+    <PropertyGroup>
+        <AssemblyName>yuta.ps2-movies</AssemblyName>
+        <RootNamespace>Yuta.FfxMods.Movies</RootNamespace>
+        <AssemblyTitle>PS2 movies</AssemblyTitle>
+        <Description>The PS2 movies (FMVs) in their 4:3 picture with the PS2 sound, built from your PS2 disc (install.cmd).</Description>
+    </PropertyGroup>
+</Project>

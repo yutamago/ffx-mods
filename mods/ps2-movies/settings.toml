@@ -1,0 +1,29 @@
+# {title} settings.
+#
+# After changing anything here: run install.cmd again, then restart the game.
+#
+# "ps2": the PS2 original (the default). "hd": the HD Remaster.
+#
+# Windows paths: use single quotes, 'C:\Games\FFX.iso' (in double quotes a
+# backslash starts an escape), or forward slashes.
+
+# Movies (FMVs): "ps2": the PS2's, with the PS2 sound. They are 4:3 (960 x 720)
+# when PS2 aspect ratio is installed with its 4:3 picture, else 16:9 (1280 x
+# 720) with the 4:3 picture between black bars; F8 says when that changed and
+# the movies need building again. The four movies with the 3D scene drawn over
+# them (Farplane and three more) stay HD. "hd": the HD movies.
+movies = "ps2"
+
+[source]
+# Your own PS2 disc of Final Fantasy X (any region): an image file
+# ('D:\PS2\Final Fantasy X.iso') or the disc drive with the disc in it ('E:').
+# install.cmd asks for it and writes it here.
+iso = ''
+# The game folder, the one with FFX.exe and data\FFX_Data.vbf. Leave empty to
+# look in the usual Steam folders.
+game = ''
+# ffmpeg.exe, which encodes the movies (https://ffmpeg.org, not included).
+# Leave empty to use ffmpeg.exe next to demaster.exe or in tools\, else the
+# one on your PATH; if there is none, the first build downloads an LGPL build
+# of FFmpeg (168 MB) into tools\ and checks it.
+ffmpeg = ''
