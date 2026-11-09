@@ -1637,13 +1637,12 @@ internal sealed unsafe class FrameHooks {
     /// <summary>The test trace: after the game's update and the mod's placing, each map object the game set lately with its first mesh's translation as the renderer will read it.</summary>
     private void TraceFrame() {
         double ms = _clock.Elapsed.TotalMilliseconds;
-        string head = $"{ms:0.000}\t{_frame.Kind}\t{_frame.Alpha:0.0000}\t{_frame.Plan.Ticks}\t{_game.Map}";
+        string head = FormattableString.Invariant($"{ms:0.000}\t{_frame.Kind}\t{_frame.Alpha:0.0000}\t{_frame.Plan.Ticks}\t{_game.Map}");
         bool any = false;
         foreach (int id in _objects.Ids()) {
             if (!_game.ObjectMeshTranslation(id, out Vector3 t, out Vector2 r)) continue;
             _objects.Truth(id, out _, out ObjectPose g);
-            _trace!.WriteLine($"{head}\t{id}\t{t.X:0.0000}\t{t.Y:0.0000}\t{t.Z:0.0000}\t{r.X:0.00000}\t{r.Y:0.00000}\t{(_objectsPlaced.Contains(id) ? 1 : 0)}"
-                + $"\t{g.Position.X:0.0000}\t{g.Position.Y:0.0000}\t{g.Position.Z:0.0000}\t{g.Angles.X:0.00000}\t{g.Angles.Y:0.00000}\t{g.Angles.Z:0.00000}");
+            _trace!.WriteLine(FormattableString.Invariant($"{head}\t{id}\t{t.X:0.0000}\t{t.Y:0.0000}\t{t.Z:0.0000}\t{r.X:0.00000}\t{r.Y:0.00000}\t{(_objectsPlaced.Contains(id) ? 1 : 0)}\t{g.Position.X:0.0000}\t{g.Position.Y:0.0000}\t{g.Position.Z:0.0000}\t{g.Angles.X:0.00000}\t{g.Angles.Y:0.00000}\t{g.Angles.Z:0.00000}"));
             any = true;
         }
         if (!any) _trace!.WriteLine($"{head}\t-1\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0");
