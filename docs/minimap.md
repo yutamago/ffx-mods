@@ -37,7 +37,7 @@ original does besides drawing, in the original's order:
    colour in `g_GuideMarkerPalette` (`0x00c5e370`, RGBA floats, 128 = 1),
    the next nibble the ring's colour, `0x100` square, `0x200` triangle,
    `0x400` ring, `0x800` the player (colour `0x00c5e3a0`), `0x1000`
-   blinks, `0x2000` destination, `0x10000` exit line (from
+   blinks (faded in and out as the game's minimap does: guide `+0x74 % 30` as a triangle wave, opacity phase / 15), `0x2000` destination, `0x10000` exit line (from
    `AtelGetActorStartPos`/`EndPos`, `0x0086a720`/`0x0086a390`, for actor
    types 2 and 5, `AtelGetActorType` `0x0086a7b0`), `0x20000` diamond.
    The original's exception is kept: on map `0x99` marker 6 is `0x107`
@@ -45,7 +45,8 @@ original does besides drawing, in the original's order:
 5. The fog of war (on four maps, guide `+0x70`) is revealed around the
    player: `Guide_RevealFog(guide, x, z)` (`0x0091f420`). The round
    minimap does not hide the unrevealed parts.
-6. The blink counter, guide `+0x74`, goes up by one.
+6. The blink counter, guide `+0x74`, goes up by one (after its phase is
+   read for the blink).
 
 An exception inside the hook turns the Modern Minimap off and the game's
 back on for the rest of the run (logged).
@@ -94,4 +95,4 @@ The frame from the hook is used for 150 ms; with no newer one (a battle,
 a menu, a cutscene without the minimap) nothing is drawn.
 
 Not checked yet: exit lines and destination arrows on a map that has them
-close by, the blink, the four fog-of-war maps, other window sizes.
+close by, the four fog-of-war maps, other window sizes.

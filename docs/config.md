@@ -3,22 +3,37 @@
 Every difference between the HD Remaster and the PS2 original that the
 PS2 mods restore is a setting, and so is every change of the other mods. **Each mod has its own settings file,
 `settings.toml` in its folder (`mods/yuta.<name>/`), with only its
-settings**; FFX Demaster has all of them in one `demaster.toml` next to
-its `demaster.exe` (the same keys and defaults). Every row of
-[`differences.md`](differences.md) has a setting here.
+settings**, also in FFX Demaster (the bundle of the PS2 mods). Every row of
+[`differences.md`](differences.md) has a setting here. (`converter/demaster.toml`
+holds every setting in one file, for `demaster build` without a mod: every
+job into one folder, for development.)
 
 | Mod | Settings |
 |---|---|
-| `yuta.ps2-music-engine` | `audio.music_engine` (default `"live"` in this mod) |
+| `yuta.ps2-music-engine` | `audio.music_engine` |
+| `yuta.ps2-soundtrack` | `audio.music`, `audio.soundtrack` |
+| `yuta.ps2-movies` | `movies` (reads `render.aspect` of `yuta.ps2-aspect-ratio`) |
 | `yuta.ps2-characters` | `models.party`, `models.npc`, `models.monster`, `models.aeon`, `models.weapon`, `models.object`, `render.texture_filter`, `render.texture_quality` |
+| `yuta.ps2-maps` | `maps.field`, `maps.battle`, `maps.backgrounds` (reads `render.aspect` of `yuta.ps2-aspect-ratio`) |
+| `yuta.ps2-effects` | `effects.textures` |
 | `yuta.ps2-lighting` | `render.lighting` |
+| `yuta.no-hd-post-effects` | `render.glow`, `render.shadows` |
 | `yuta.ps2-interface` | `ui.menus`, `ui.portraits`, `ui.font`, `ui.title`, `ui.loading`, `ui.button_glyphs`, `ui.boot_logo` |
 | `yuta.ps2-aspect-ratio` | `render.aspect` |
 | `yuta.ps2-game-feel` | `timing.run_speed`, `ui.battle_menu_delay`, `ui.battle_subtitles` |
 | `yuta.bug-fixes` | `fixes.npc_mouths`, `fixes.farplane_video`, `fixes.lulu_fury` |
 | `yuta.modern-minimap` | `minimap.style`, `minimap.size`, `minimap.corner` (not a PS2 part; see [Minimap](#minimap)) |
 | `yuta.fps-unlock` | `frames.*` (not a PS2 part; see [FPS unlock](#fps-unlock)) |
-| FFX Demaster only | `movies`, `maps.*`, `effects.textures`, `render.glow`, `render.shadows`, `audio.soundtrack`, `audio.music_engine = "ps2"` (the rendered bank) |
+| none yet | `maps.geometry` (nothing to build yet) |
+
+**Settings of another mod.** No mod reads another mod's settings, with one
+exception the converter handles: the PS2 movies and the 2D rooms'
+backgrounds are built for the picture the game will show, so the `movies`
+and `maps.backgrounds` jobs read `render.aspect` from PS2 aspect ratio's
+`settings.toml` when that mod is installed (in `mods\loadorder`), and take
+`"hd"` (16:9) when it isn't (`mods.rs`, `Foreign`). The build stamp records
+the value; when PS2 aspect ratio is installed, removed or switched later,
+the F8 window shows PS2 movies and PS2 maps as "rebuild needed".
 
 The converter's list is `converter/src/mods.rs`; each mod's own is its
 `mods/<name>/Mod.cs` (a test keeps them, the shipped `settings.toml` and
@@ -32,13 +47,15 @@ Game logic (balance, Eternal Calm, boosters, controls, PC text and voices,
 30 fps) always stays the PC's.
 
 **After changing a setting:** for a mod with PS2 files (music engine,
-characters, lighting, interface), run its `install.cmd` again (it runs
+soundtrack, movies, characters, maps, effects, lighting, interface), run
+its `install.cmd` again (or, for every mod at once, `install.cmd` in
+`mods\yuta.ffx-mods\`, in FFX Demaster) (it runs
 `demaster.exe build`, which redoes only what changed); then restart the
 game. Fahrenheit picks up the mods' files only when the game starts, and
 the mods read their settings only then. In the game, F8 shows every mod
 of the family and whether its built files match its settings.
 
-**Status.** Not every setting of FFX Demaster does something yet; the
+**Status.** Not every setting does something yet; the
 *Status* column below is as of this version.
 
 Who applies a setting:
@@ -63,7 +80,9 @@ quotes a backslash starts an escape sequence.
 The command line overrides the file: `demaster.exe build --mod <name>
 --iso <file or drive> --game <folder> --mod-dir <folder> --ffmpeg <ffmpeg.exe>
 --config <file>`. `--mod` picks the mod (without it: the mod whose manifest
-is in the mod folder, else every job, as FFX Demaster). `--no-disc` builds
+is in the mod folder, else every job from `demaster.toml`). `--all`
+builds every installed mod with PS2 files, each with its own settings,
+from one pass over the disc (FFX Demaster's installer runs it). `--no-disc` builds
 without the disc (PS2 lighting); `--save-source` writes `--iso`/`--game`
 into the settings file (as `install.cmd` does). More options:
 `--force` rebuilds jobs that are unchanged, `--only chr.monster,chr.npc`
@@ -84,7 +103,7 @@ every file.
 | `maps.geometry` | 6 | PS2 geometry where the HD maps changed it | HD | converter | not planned yet |
 | `maps.backgrounds` | 7 | the 4:3 PS2 paintings of fixed-camera rooms | the wider HD paintings | converter (`maps.backgrounds`; reads `render.aspect`) | with `render.aspect = "ps2"` all 105 rooms (the 37 the HD re-framed for 16:9 too); with `"hd"` the 68 whose HD painting keeps the PS2 framing. Animated parts stay HD except in re-framed rooms (`docs/screen.md`) |
 | `maps.battle` | 8 | PS2 battle map textures | HD | converter (`maps.battle`) | done (`docs/maps.md`) |
-| `effects.textures` | 9 | PS2 spell, summon and effect textures | HD (2x upscales) | converter | planned |
+| `effects.textures` | 9 | PS2 spell, summon and effect textures | HD (2x upscales) | converter (`fx.textures`) | done (`docs/effects.md`) |
 | `render.glow` | 10 | no glow/blow-out | the HD glow | mod | done (`docs/render.md`) |
 | `render.lighting` | 10 | characters lit by the PS2 formula: the PS2 light colours and directions at the PS2's level (254/128), `max(0, N.L)` falloff, no HD fill light, point lights only where the PS2 uses them (none in the opening) | the HD light levels and soft falloff | mod and converter (`render.lighting`: the patched character shaders; `render.lighting.events`: the PS2's `Light_Set` colours in the 6 event scripts the HD retuned) | done (`docs/render.md`); Gouraud-like (interpolated normal not renormalised) but clamped per pixel, no 2x clamp of the PS2 vertex colour; the opening's Tidus close-up within 1% of the PS2 at the same pose |
 | `render.shadows` | 11 | ground shadows only, no shadow maps | shadow maps | mod | done (`docs/render.md`) |
@@ -100,7 +119,8 @@ every file.
 | `ui.boot_logo` | 16 | the PS2's "SQUARESOFT® presents" screen at boot, before the FINAL FANTASY X PROJECT logo, with the PS2's fades and frame counts (`docs/ui.md`, "Boot logo"); off (`"hd"`) by default | none (the PC removed it) | converter (`ui.boot_logo`: the disc's `titl02` logo layers and the PC's boot event `memochek` with the PS2's wait) | done |
 | `ui.button_glyphs` | 22 | PlayStation button glyphs | Xbox-style | converter (`ui.glyphs`) | pad prompts done (`docs/ui.md`) |
 | `audio.soundtrack` | 20 | a New Game starts with the original soundtrack; loaded saves keep their own choice, and the game's menu still switches it | arranged | mod | done (`docs/patches.md`) |
-| `audio.music_engine` | 20 | the original soundtrack rendered from the PS2 disc's music sequences and instruments by our PS2 sound driver and SPU2 (what "Original" in the game's menu plays); `"live"`: that driver plays in the game, driven by the game's music commands (fades, pauses, tempo), with the rendered bank as the fallback | the PC's recordings of the original soundtrack | converter (`audio.music`; with `"live"` also `audio.live`: the disc's music files in `music/`) and mod (`"live"`: `demaster_live.dll`) | `"ps2"` done; `"live"` works in the game except the 3 tracks with streamed parts, which stay the bank's (`docs/music.md`, "Phase 2") |
+| `audio.music` | 20 | the original soundtrack rendered from the PS2 disc's music sequences and instruments by our PS2 sound driver and SPU2: the bank "Original" in the game's menu plays | the PC's recordings of the original soundtrack | converter (`audio.music`) | done (`docs/music.md`) |
+| `audio.music_engine` | 20 | `"live"` (its default; not `"ps2"`): the PS2 driver plays in the game, driven by the game's music commands (fades, pauses, tempo), while "Original" is chosen; what it can't play comes from the "Original" bank (the PC's, or the rendered one of `audio.music`) | `"hd"`: the bank alone | converter (`audio.live`: the disc's music files in `music/`) and mod (`demaster_live.dll`) | works in the game except the 3 tracks with streamed parts, which stay the bank's (`docs/music.md`, "Phase 2") |
 | `movies` | 15, 21 | the 4:3 PS2 movies with their audio | the cropped HD movies | converter (`movies`, needs ffmpeg; reads `render.aspect`) | 49 of 53, 960 x 720 with `render.aspect = "ps2"`, else with bars in 1280 x 720; the four with a 3D scene on top stay HD (cut to their middle 4:3 with `render.aspect = "ps2"`) (`docs/movies.md`) |
 
 `movies` is a top-level key: it goes above the first `[table]` in the file.
@@ -111,13 +131,10 @@ anisotropic; the PS2 filtered bilinearly too); `"nearest"` shows unfiltered
 texels on the 3D scene's models and maps (effects, 2D rooms, menus and
 post-processing keep theirs). Applied by the mod (`docs/render.md`).
 
-`audio.music_engine` (row 20) has three values: `"ps2"` (default) renders
-the original soundtrack bank from the disc; `"hd"` keeps the PC's
-recordings; `"live"` builds the bank too and copies the disc's music files
-into the mod's `music/` folder, and the mod loads `demaster_live.dll`,
-which plays them in the game while "Original" is chosen. Switching between
-`"ps2"` and `"live"` renders the bank again once (its build key holds the
-value).
+`audio.music_engine` (row 20) is `"live"` or `"hd"`. FFX Demaster's
+`demaster.toml` had a third value, `"ps2"`, for the rendered bank: that is
+`audio.music = "ps2"` now (mod PS2 soundtrack), and `audio.music_engine`
+no longer takes it.
 
 PS2 textures of the 3D scene (maps, effects, kept-mesh characters, sphere
 grid) whose HD texture has mip levels get a full mip chain

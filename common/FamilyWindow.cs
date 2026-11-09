@@ -51,7 +51,17 @@ public static class FamilyWindow {
     private static bool problem(ModHost h) =>
         (h.Status is { } s && s.State != BuildState.Ok)
         || h.Patches.Any(p => p.State == PatchState.Failed)
-        || !h.Settings.Found || h.Settings.Problems.Count > 0;
+        || h.Settings.Missing || h.Settings.Problems.Count > 0;
+
+    /// <summary>A mod's state as its header in the window shows it: "built", "rebuild needed", "on", ...</summary>
+    public static (Vector4 Colour, string State) state(ModHost h) => h.Status?.State switch {
+        null when h.Patches.Any(p => p.State == PatchState.Failed) => (RED, "a patch failed"),
+        null                  => (GREEN, "on"),
+        BuildState.Ok         => (GREEN, "built"),
+        BuildState.Incomplete => (YELLOW, "build incomplete"),
+        BuildState.NotBuilt   => (RED, "not built"),
+        _                     => (RED, "rebuild needed"),
+    };
 
     private static void text(string s) => ImGui.TextUnformatted(s);
     private static void coloured(Vector4 c, string s) => ImGui.TextColored(c, s.Replace("%", "%%"));
@@ -66,14 +76,7 @@ public static class FamilyWindow {
         if (ImGui.Begin($"FFX mods {version.Split('+')[0]} (F8)", ref _open)) {
             if (mods.Length == 0) wrapped("No mod of the family has started (see the game's logs).");
             foreach (ModHost h in mods) {
-                (Vector4 c, string state) = h.Status?.State switch {
-                    null when h.Patches.Any(p => p.State == PatchState.Failed) => (RED, "a patch failed"),
-                    null                  => (GREEN, "on"),
-                    BuildState.Ok         => (GREEN, "built"),
-                    BuildState.Incomplete => (YELLOW, "build incomplete"),
-                    BuildState.NotBuilt   => (RED, "not built"),
-                    _                     => (RED, "rebuild needed"),
-                };
+                (Vector4 c, string state) = FamilyWindow.state(h);
                 ImGui.PushID(h.Info.Name);
                 bool show = _show == h;
                 if (show) ImGui.SetNextItemOpen(true);
@@ -114,7 +117,7 @@ public static class FamilyWindow {
                 ImGui.TreePop();
             }
         }
-        if (!h.Settings.Found) coloured(YELLOW, $"{ModSettings.FILE} is missing: the defaults are used.");
+        if (h.Settings.Missing) coloured(YELLOW, $"{ModSettings.FILE} is missing: the defaults are used.");
         foreach (string p in h.Settings.Problems) coloured(YELLOW, $"{ModSettings.FILE}: {p}");
         foreach (string k in h.Settings.Unknown)  coloured(YELLOW, $"{ModSettings.FILE}: unknown setting {k}");
         if (h.Info.Section is { } section && !_failed_sections.Contains(h.Info.Name)) {

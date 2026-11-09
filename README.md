@@ -9,14 +9,20 @@ alone or together; each is a separate zip.
 | Mod | What it changes | PS2 disc | Installed size | Needs |
 |---|---|---|---|---|
 | [PS2 music engine](#ps2-music-engine) (`yuta.ps2-music-engine`) | the original soundtrack played by the PS2's own sound driver inside the game | yes | ~60 MB | — |
+| [PS2 soundtrack](#ps2-soundtrack) (`yuta.ps2-soundtrack`) | the original soundtrack rendered from the PS2 music by the PS2 sound driver; new games start with it | yes | ~890 MB | — |
+| [PS2 movies](#ps2-movies) (`yuta.ps2-movies`) | the PS2 movies (FMVs), 4:3, with the PS2 sound | yes | ~1.6 GB | PS2 aspect ratio recommended |
 | [PS2 characters](#ps2-characters) (`yuta.ps2-characters`) | PS2 models and textures for the party, NPCs, monsters, aeons, weapons, objects | yes | ~860 MB | — |
+| [PS2 maps](#ps2-maps) (`yuta.ps2-maps`) | PS2 textures of the field and battle maps, the PS2 painted backgrounds | yes | ~2.3 GB | PS2 aspect ratio recommended |
+| [PS2 effects](#ps2-effects) (`yuta.ps2-effects`) | PS2 textures of spells, summons and the other effects | yes | ~1.3 GB | — |
 | [PS2 lighting](#ps2-lighting) (`yuta.ps2-lighting`) | characters lit the PS2 way | optional | ~80 MB | — |
+| [No HD post-effects](#no-hd-post-effects) (`yuta.no-hd-post-effects`) | no HD glow, no shadow maps (the PS2's ground shadows) | no | <1 MB | — |
 | [PS2 interface](#ps2-interface) (`yuta.ps2-interface`) | PS2 menus, windows, font, portraits, title screen, button glyphs; a clean start-up | yes | ~180 MB | PS2 aspect ratio recommended |
 | [PS2 aspect ratio](#ps2-aspect-ratio) (`yuta.ps2-aspect-ratio`) | the 4:3 picture with the PS2 camera | no | <1 MB | — |
 | [PS2 game feel](#ps2-game-feel) (`yuta.ps2-game-feel`) | PS2 run speed, battle menu without input delay, battle subtitles | no | <1 MB | — |
 | [Bug fixes](#bug-fixes) (`yuta.bug-fixes`) | NPC mouths, the Farplane video, Lulu's Fury spins | no | <1 MB | — |
 | [Modern Minimap](#modern-minimap) (`yuta.modern-minimap`) | a round field minimap, centred on you and turned with the camera | no | <1 MB | — |
 | [FPS unlock](#fps-unlock) (`yuta.fps-unlock`) | the game drawn at your monitor's refresh rate (or uncapped) at its own speed; slow motion and fast-forward | no | <1 MB | — |
+| **[PS2 bundle](#ps2-bundle)** (`yuta.ps2-bundle`) | all twelve PS2 mods above (not Modern Minimap, FPS unlock) in one zip with one install step | yes | ~7.3 GB | — |
 
 Every mod needs the shared library `yuta.ffx-mods` (in every zip; its
 manifest dependency). Sizes are the files `install.cmd` builds with the
@@ -28,8 +34,8 @@ computer from your own Final Fantasy X PS2 disc (any region): an image of
 it (`.iso`), or the disc itself in a disc drive. After that they need
 neither.
 
-[FFX Demaster](https://github.com/yutamago/ffx-demaster) is the whole
-package (the PS2 mods here plus the PS2 movies, maps, effects and more).
+The [PS2 bundle](#ps2-bundle) (formerly FFX Demaster) is every PS2 mod
+here in one zip, installed and built in one step (one pass over the disc).
 
 ## Install
 
@@ -56,7 +62,9 @@ For each mod you want:
    terminal: `install.cmd -Iso 'D:\PS2\FFX.iso'`, `install.cmd -Drive E`,
    `-Game <game folder>`, `-NoDisc` (PS2 lighting only), `-Force`
    (rebuild everything). Running it again is safe: it redoes only what
-   changed.
+   changed. (The PS2 bundle has one `install.cmd` for all its mods, in
+   `mods\yuta.ps2-bundle\`: it takes the same options and builds every
+   installed mod from one pass over the disc.)
 3. Start the game through Fahrenheit (`bin\fhstage0.exe <path to FFX.exe>`).
 
 In the game, **F8** opens one window for every installed mod of the
@@ -72,6 +80,47 @@ again if it has PS2 files, then restart the game.
 **Uninstall:** delete `mods\yuta.<mod>\` and its line in `mods\loadorder`
 (the PS2 files it built are in its folder and go with it). When no mod of
 the family is left, delete `mods\yuta.ffx-mods\` and its line too.
+
+## PS2 bundle
+
+The PS2 bundle (`yuta.ps2-bundle`, formerly
+[FFX Demaster](https://github.com/yutamago/ffx-demaster)) is the HD
+Remaster with the look and sound of the PS2 game: the twelve PS2 mods in
+one zip, `yuta.ps2-bundle-<version>.zip`, installed and built in one step.
+
+| In the bundle | |
+|---|---|
+| PS2 files | [PS2 music engine](#ps2-music-engine), [PS2 soundtrack](#ps2-soundtrack), [PS2 movies](#ps2-movies), [PS2 characters](#ps2-characters), [PS2 maps](#ps2-maps), [PS2 effects](#ps2-effects), [PS2 lighting](#ps2-lighting), [PS2 interface](#ps2-interface) |
+| code only | [No HD post-effects](#no-hd-post-effects), [PS2 aspect ratio](#ps2-aspect-ratio), [PS2 game feel](#ps2-game-feel), [Bug fixes](#bug-fixes) |
+
+- PS2 disc: needed. Size: ~7.3 GB of PS2 files with the default settings
+  (German PAL disc), plus ffmpeg for the movies (168 MB, downloaded if none
+  is found); the zip is 2.6 MB. The first build takes about an hour, half
+  of it the movies.
+- The zip holds each mod's folder as in its own zip (without its own
+  `demaster.exe`), the shared library `mods\yuta.ffx-mods\` with the one
+  `demaster.exe`, and `mods\yuta.ps2-bundle\`: the bundle's README, its
+  installer and a small mod whose manifest lists the twelve (its
+  `Dependencies`); in the game its section of the F8 window shows which of
+  them are on.
+
+**Install:** unpack the zip into your Fahrenheit folder and double-click
+`mods\yuta.ps2-bundle\install.cmd`. It adds `yuta.ffx-mods`, every mod and
+then `yuta.ps2-bundle` to `mods\loadorder`, asks where your disc is, finds
+the game, and builds every mod's PS2 files from one pass over the disc,
+each into its own folder (options as for a mod's `install.cmd`, above).
+Start the game through Fahrenheit. Each mod keeps its own
+`settings.toml`; after changing one, run the bundle's `install.cmd` again
+(it rebuilds only what changed). Unpacking a newer zip over an install
+replaces every `settings.toml` with the defaults: keep a copy of the ones
+you changed.
+
+**Switching one mod off:** delete its folder `mods\yuta.<mod>\` and its
+line in `mods\loadorder` (only the line: the next `install.cmd` puts it
+back). F8's "PS2 bundle" section then shows it as off. A part of a mod is
+a setting in its `settings.toml` (`"hd"`, or `false` for a fix). The other
+mods (Modern Minimap, FPS unlock) install next to the bundle from their own
+zips.
 
 ## The mods
 
@@ -92,6 +141,36 @@ recordings of the original soundtrack.
 - Setting: `audio.music_engine = "live"` (default here) or `"hd"`. Its log:
   `music\live.log`.
 
+### PS2 soundtrack
+
+The original soundtrack as the PS2 played it: every track rendered again
+from the disc's music sequences and instruments by a port of the PS2
+game's sound driver on a model of the SPU2, in place of the PC's
+recordings in the game's "Original" soundtrack (`audio.music`). New games
+start with the soundtrack option on "Original" (`audio.soundtrack`; the PC
+starts on the arranged one); loaded saves keep their choice. With PS2
+music engine too, that engine plays live and this bank is what it falls
+back on (the three tracks with streamed parts).
+
+- PS2 disc: needed. Size: ~890 MB (one sound bank). The build takes about
+  five minutes.
+
+### PS2 movies
+
+The PS2 movies (FMVs) with the PS2's sound, in place of the HD's re-made
+ones (`movies`). They are built for the picture the game shows: 4:3 (960 x
+720) when PS2 aspect ratio is installed with its 4:3 picture, else 16:9
+(1280 x 720) with the 4:3 picture between black bars. The converter reads
+that from PS2 aspect ratio's settings; installing, removing or switching
+it later shows PS2 movies as "rebuild needed" in the F8 window. The four
+movies the PC plays with the 3D scene drawn over them (the Farplane among
+them) stay HD.
+
+- PS2 disc: needed. Needs ffmpeg to encode (not included): if none is
+  found, `install.cmd` downloads an LGPL build of FFmpeg (168 MB) into the
+  mod's `tools\` and checks its SHA-256 ([`docs/movies.md`](docs/movies.md)).
+- Size: ~1.6 GB. The first build takes 30 to 35 minutes.
+
 ### PS2 characters
 
 The PS2 models and textures: the party, NPCs, monsters and bosses, aeons,
@@ -107,6 +186,26 @@ default).
 - PS2 disc: needed. Size: ~860 MB (5,200 files). The build takes a few
   minutes.
 
+### PS2 maps
+
+The PS2 textures of the field maps (`maps.field`) and the battle maps
+(`maps.battle`), cut out of the PS2's graphics memory as the PS2 game
+loaded them, and the PS2's painted backgrounds of the fixed-camera rooms
+(`maps.backgrounds`). The rooms the HD re-framed for 16:9 get their (4:3)
+PS2 paintings only with PS2 aspect ratio's 4:3 picture; like PS2 movies,
+the mod is rebuilt when that changes ([`docs/maps.md`](docs/maps.md),
+[`docs/screen.md`](docs/screen.md)).
+
+- PS2 disc: needed. Size: ~2.3 GB. The build takes about 15 minutes.
+
+### PS2 effects
+
+The PS2 textures of the effects: spells, summons, overdrives and the
+particles of the maps and monsters (`effects.textures`,
+[`docs/effects.md`](docs/effects.md)).
+
+- PS2 disc: needed. Size: ~1.3 GB. The build takes a few minutes.
+
 ### PS2 lighting
 
 Characters lit the PS2 way: the PS2's light colours and directions at its
@@ -118,6 +217,15 @@ close-up among them) also get the PS2's light colours back; without it
 they stay HD, and `install.cmd` (with "no disc" or `-NoDisc`) says so.
 
 - PS2 disc: optional. Size: ~80 MB (the event lights: 0.5 MB of that).
+
+### No HD post-effects
+
+Two things the HD draws that the PS2 didn't: its glow, the blurred bright
+parts added over the whole picture (`render.glow`), and its shadow maps
+(`render.shadows`): without them every character has one soft ground
+shadow under it, as on the PS2 ([`docs/render.md`](docs/render.md)).
+
+- PS2 disc: not needed. Code only.
 
 ### PS2 interface
 
@@ -145,8 +253,8 @@ projection (the HD widened the view for 16:9). The menus, windows and
 battle HUD the game places in PS2 coordinates land where the PS2 had them;
 the opening's staff credits get the PS2 size; the Flash screens (Esc menu,
 settings, save/load) are drawn inside the 4:3 picture. The HD movies are
-16:9: while one plays full screen the picture goes back to 16:9 for it (FFX
-Demaster's PS2 movies are 4:3 and stay so).
+16:9: while one plays full screen the picture goes back to 16:9 for it
+(the movies of PS2 movies are 4:3 and stay so).
 
 - PS2 disc: not needed. Code only.
 
@@ -234,7 +342,7 @@ stay at their own speed.
 | `mods/<name>/` | the mods (C#, .NET 10, `Fahrenheit.Sdk/1.0.0-alpha12`), each with its `settings.toml` and players' `README.txt` |
 | `tests/` | C# tests (`tests/fps-unlock`: FPS unlock's portable part, built from its sources) |
 | `tools/install/` | `install.ps1` and `install.cmd`, in every mod's zip |
-| `tools/package.cs` | one zip per mod |
+| `tools/package.cs` | one zip per mod, and the PS2 bundle's |
 
 ```bash
 cargo build --release -p demaster                     # Linux: target/release/demaster
@@ -243,15 +351,14 @@ tools/build-windows.sh                                # demaster.exe (cargo-xwin
 tools/build-live.sh                                   # demaster_live.dll (32-bit)
 dotnet build -c Release ffx-mods.slnx                 # artifacts/deploy/rel/mods/yuta.*/
 dotnet test -c Release --no-build ffx-mods.slnx       # C# tests (FFX_GAME_DIR=<game folder> for those on FFX.exe)
-dotnet run tools/package.cs -- dist 0.1.0             # dist/yuta.<mod>-0.1.0.zip
+dotnet run tools/package.cs -- dist 0.1.0             # dist/yuta.<mod>-0.1.0.zip, dist/yuta.ps2-bundle-0.1.0.zip
 ```
 
 The converter builds one mod at a time: `demaster build --mod <name>
 --mod-dir <mod folder> --iso <disc image or drive>` (`demaster mods` lists
 the mods, their settings and jobs; `demaster jobs --mod <name>` the jobs).
 A `demaster.exe` inside a mod's folder builds that mod. Without a mod it
-builds every job into one folder from `demaster.toml`, as FFX Demaster
-does.
+builds every job into one folder from `demaster.toml` (development).
 
 The disc can be a drive letter (`E:`): on Windows the converter reads the
 drive's raw volume (`\\.\E:`) in whole 2048-byte sectors at sector offsets
@@ -260,7 +367,7 @@ read the same way.
 
 CI (`.github/workflows/build.yml`) builds the mods and runs their tests,
 runs the converter tests on Linux, builds `demaster.exe` and `demaster_live.dll` on Windows,
-packages every mod's zip and checks that they hold no game data, on every
+packages every mod's zip and the PS2 bundle's and checks that they hold no game data, on every
 push and pull request; a tag `v*` publishes a release with the zips
 (`release.yml`); no secrets are needed ([`docs/ci.md`](docs/ci.md)).
 
@@ -310,7 +417,9 @@ A new mod is a folder `mods/<name>/` (its Fahrenheit id is `yuta.<name>`):
    mod has disc jobs (`demaster mods`), and adds the mod to `mods\loadorder`.
 6. **Package and CI.** Add the mod to `MODS` in `tools/package.cs` (whether
    it ships `demaster.exe`) and to the zip check in
-   `.github/workflows/build.yml`; describe it in this README (what it
+   `.github/workflows/build.yml`; a PS2 mod also goes into the PS2 bundle
+   (its id in `FfxModsDependencies` of `mods/ps2-bundle/yuta.ps2-bundle.csproj`,
+   in the converter's order, and in the bundle's `README.txt`); describe it in this README (what it
    changes for the player, disc, size, dependencies) and in its
    `README.txt`. Tests of a mod's portable code go in `tests/<name>/`
    (in `ffx-mods.slnx`; CI runs them).

@@ -59,10 +59,10 @@ Start from those two edits.
 ## Before starting
 
 - **Where the test tools live:** the harness replays, `tools/shotrun`,
-  `tools/calllist`, `tools/compare`, `tools/pcsx2ctl` were in ffx-demaster
-  when this was written; ffx-demaster was being turned into the bundle of
-  these mods (2026-11-09), with the tools kept there or moved here. Check
-  which, and where `wip/ui-last-items` ended up.
+  `tools/calllist`, `tools/compare`, `tools/pcsx2ctl` stay in ffx-demaster,
+  now the research and test-tool home of the PS2 mods (the bundle moved
+  here as `mods/ps2-bundle` on 2026-11-09); `wip/ui-last-items` is a
+  branch there.
 - **PS2 states:** item 5 needs a PS2 battle with a full Overdrive gauge
   (e.g. set the gauge byte through PINE in the `battle-kami` state, and the
   same in the PC replay; the PS2 actor's gauge address is not looked up

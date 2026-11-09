@@ -4,7 +4,9 @@
 //! by the mod's manifest there) runs only that mod's jobs, reads only its
 //! settings from its `settings.toml` and keeps the build bookkeeping
 //! (`build/files.json`, `build/stamp.json`) in its folder. Without a mod the
-//! converter builds everything into one folder, as FFX Demaster does.
+//! converter builds everything into one folder (`demaster.toml`, for
+//! development); `build --all` builds every installed mod (the installer of
+//! the PS2 bundle, `mods/ps2-bundle`).
 //!
 //! The C# side keeps the same lists (`mods/<name>/Mod.cs`); the tests below
 //! check that they agree, and that `mods/<name>/settings.toml` holds the
@@ -27,6 +29,22 @@ pub enum DiscUse {
     None,
 }
 
+/// A setting of another mod that one of this mod's jobs reads: its output
+/// depends on what that mod does in the game (PS2 movies are 4:3 when PS2
+/// aspect ratio draws a 4:3 picture). The build takes the value from that
+/// mod's `settings.toml` when the mod is installed, else [`Foreign::absent`],
+/// and records it in the stamp, so the F8 window says "rebuild needed" when
+/// that mod or its setting changes.
+pub struct Foreign {
+    pub key: &'static str,
+    /// The mod the setting belongs to (`ps2-aspect-ratio`).
+    pub from: &'static str,
+    /// What the game does without that mod (`hd`).
+    pub absent: &'static str,
+}
+
+const ASPECT: Foreign = Foreign { key: "render.aspect", from: "ps2-aspect-ratio", absent: "hd" };
+
 pub struct Profile {
     /// The folder in ffx-mods (`mods/<name>`); the Fahrenheit id is `yuta.<name>`.
     pub name: &'static str,
@@ -40,6 +58,8 @@ pub struct Profile {
     pub default_toml: &'static str,
     /// What stays HD without the disc ([`DiscUse::Optional`]).
     pub without_disc: &'static str,
+    /// Settings of other mods its jobs read.
+    pub reads: &'static [Foreign],
 }
 
 impl Profile {
@@ -59,9 +79,9 @@ impl Profile {
     }
 }
 
-/// The mods. The seven PS2 ones' settings and defaults are FFX Demaster's, except
-/// `audio.music_engine`, whose default is `"live"` here: the mod is the live
-/// engine (the rendered bank, `"ps2"`, stays FFX Demaster's).
+/// The mods, in the order `demaster build --all` builds them and the
+/// installer lists them in `mods\loadorder`. Their defaults are
+/// [`Config::default`]'s.
 pub const PROFILES: &[Profile] = &[
     Profile {
         name: "ps2-music-engine",
@@ -71,6 +91,27 @@ pub const PROFILES: &[Profile] = &[
         disc: DiscUse::Needed,
         default_toml: include_str!("../../mods/ps2-music-engine/settings.toml"),
         without_disc: "",
+        reads: &[],
+    },
+    Profile {
+        name: "ps2-soundtrack",
+        title: "PS2 soundtrack",
+        settings: &["audio.music", "audio.soundtrack"],
+        jobs: &["audio.music"],
+        disc: DiscUse::Needed,
+        default_toml: include_str!("../../mods/ps2-soundtrack/settings.toml"),
+        without_disc: "",
+        reads: &[],
+    },
+    Profile {
+        name: "ps2-movies",
+        title: "PS2 movies",
+        settings: &["movies"],
+        jobs: &["movies"],
+        disc: DiscUse::Needed,
+        default_toml: include_str!("../../mods/ps2-movies/settings.toml"),
+        without_disc: "",
+        reads: &[ASPECT],
     },
     Profile {
         name: "ps2-characters",
@@ -102,6 +143,27 @@ pub const PROFILES: &[Profile] = &[
         disc: DiscUse::Needed,
         default_toml: include_str!("../../mods/ps2-characters/settings.toml"),
         without_disc: "",
+        reads: &[],
+    },
+    Profile {
+        name: "ps2-maps",
+        title: "PS2 maps",
+        settings: &["maps.field", "maps.battle", "maps.backgrounds"],
+        jobs: &["maps.field", "maps.battle", "maps.backgrounds"],
+        disc: DiscUse::Needed,
+        default_toml: include_str!("../../mods/ps2-maps/settings.toml"),
+        without_disc: "",
+        reads: &[ASPECT],
+    },
+    Profile {
+        name: "ps2-effects",
+        title: "PS2 effects",
+        settings: &["effects.textures"],
+        jobs: &["fx.textures"],
+        disc: DiscUse::Needed,
+        default_toml: include_str!("../../mods/ps2-effects/settings.toml"),
+        without_disc: "",
+        reads: &[],
     },
     Profile {
         name: "ps2-lighting",
@@ -111,6 +173,17 @@ pub const PROFILES: &[Profile] = &[
         disc: DiscUse::Optional,
         default_toml: include_str!("../../mods/ps2-lighting/settings.toml"),
         without_disc: "the event lights (the PS2's light colours in the 6 cutscene scripts the HD retuned) stay HD",
+        reads: &[],
+    },
+    Profile {
+        name: "no-hd-post-effects",
+        title: "No HD post-effects",
+        settings: &["render.glow", "render.shadows"],
+        jobs: &[],
+        disc: DiscUse::None,
+        default_toml: include_str!("../../mods/no-hd-post-effects/settings.toml"),
+        without_disc: "",
+        reads: &[],
     },
     Profile {
         name: "ps2-interface",
@@ -128,6 +201,7 @@ pub const PROFILES: &[Profile] = &[
         disc: DiscUse::Needed,
         default_toml: include_str!("../../mods/ps2-interface/settings.toml"),
         without_disc: "",
+        reads: &[],
     },
     Profile {
         name: "ps2-aspect-ratio",
@@ -137,6 +211,7 @@ pub const PROFILES: &[Profile] = &[
         disc: DiscUse::None,
         default_toml: include_str!("../../mods/ps2-aspect-ratio/settings.toml"),
         without_disc: "",
+        reads: &[],
     },
     Profile {
         name: "ps2-game-feel",
@@ -146,6 +221,7 @@ pub const PROFILES: &[Profile] = &[
         disc: DiscUse::None,
         default_toml: include_str!("../../mods/ps2-game-feel/settings.toml"),
         without_disc: "",
+        reads: &[],
     },
     Profile {
         name: "bug-fixes",
@@ -155,6 +231,7 @@ pub const PROFILES: &[Profile] = &[
         disc: DiscUse::None,
         default_toml: include_str!("../../mods/bug-fixes/settings.toml"),
         without_disc: "",
+        reads: &[],
     },
     Profile {
         name: "modern-minimap",
@@ -164,6 +241,7 @@ pub const PROFILES: &[Profile] = &[
         disc: DiscUse::None,
         default_toml: include_str!("../../mods/modern-minimap/settings.toml"),
         without_disc: "",
+        reads: &[],
     },
     Profile {
         name: "fps-unlock",
@@ -206,6 +284,7 @@ pub const PROFILES: &[Profile] = &[
         disc: DiscUse::None,
         default_toml: include_str!("../../mods/fps-unlock/settings.toml"),
         without_disc: "",
+        reads: &[],
     },
 ];
 
@@ -250,9 +329,14 @@ mod tests {
                     .find(|x| x.name() == *j)
                     .unwrap_or_else(|| panic!("{}: no job {j}", p.name));
                 assert!(job_names.insert(*j), "{j} is in two mods");
-                // a job may read only its own mod's settings
+                // a job may read only its own mod's settings, and those of
+                // other mods it declares (`reads`)
                 for s in job.settings() {
-                    assert!(p.settings.contains(s), "{}: job {j} reads {s}, another mod's setting", p.name);
+                    assert!(
+                        p.settings.contains(s) || p.reads.iter().any(|f| f.key == *s),
+                        "{}: job {j} reads {s}, another mod's setting",
+                        p.name
+                    );
                 }
             }
             let reads_disc = p.jobs.iter().filter(|j| registry.iter().any(|x| x.name() == **j && x.needs_disc())).count();
@@ -262,12 +346,22 @@ mod tests {
                 DiscUse::Optional => reads_disc > 0 && reads_disc < p.jobs.len() && !p.without_disc.is_empty(),
             };
             assert!(expected, "{}: disc use {:?} does not match its jobs", p.name, p.disc);
+            for f in p.reads {
+                let owner = find(f.from).unwrap_or_else(|| panic!("{}: reads {} from no mod {}", p.name, f.key, f.from));
+                assert!(owner.settings.contains(&f.key), "{}: {} is not {}'s", p.name, f.key, f.from);
+                assert!(!p.settings.contains(&f.key), "{}: reads its own {}", p.name, f.key);
+                assert!(
+                    registry.iter().any(|x| p.jobs.contains(&x.name()) && x.settings().contains(&f.key)),
+                    "{}: no job reads {}",
+                    p.name,
+                    f.key
+                );
+            }
         }
     }
 
-    /// Each mod's settings.toml holds exactly its settings with FFX Demaster's
-    /// defaults (`audio.music_engine` excepted, see [`PROFILES`]); `[source]`
-    /// only for mods that build.
+    /// Each mod's settings.toml holds exactly its settings with the
+    /// defaults of [`Config::default`]; `[source]` only for mods that build.
     #[test]
     fn default_files_hold_the_defaults() {
         let base = Config::default().settings();
@@ -285,8 +379,7 @@ mod tests {
             assert_eq!(settings, want, "{}: settings.toml", p.name);
             assert_eq!(keys.iter().any(|k| k == "source.iso"), p.disc != DiscUse::None, "{}: [source]", p.name);
             for (k, v) in p.defaults() {
-                let expected = if k == "audio.music_engine" { "live" } else { base[&k].as_str() };
-                assert_eq!(v, expected, "{}: {k}", p.name);
+                assert_eq!(v, base[&k], "{}: {k}", p.name);
             }
         }
     }
@@ -335,6 +428,15 @@ mod tests {
                 assert_eq!(patch, by != AppliedBy::Converter, "{key}: code patch in mods/{}/Mod.cs", p.name);
                 assert!(docs.contains(&format!("`{key}`")), "{key} missing from docs/config.md");
             }
+        }
+    }
+
+    /// Every setting has a mod (`maps.geometry` has nothing to build yet).
+    #[test]
+    fn every_setting_has_a_mod() {
+        for (k, _) in SETTINGS {
+            let owners = PROFILES.iter().filter(|p| p.settings.contains(k)).count();
+            assert_eq!(owners, usize::from(*k != "maps.geometry"), "{k}");
         }
     }
 

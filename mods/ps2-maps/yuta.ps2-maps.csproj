@@ -1,0 +1,9 @@
+<Project Sdk="Fahrenheit.Sdk/1.0.0-alpha12">
+    <!-- Version, the shared library and the manifest's dependency: ../Directory.Build.props -->
+    <PropertyGroup>
+        <AssemblyName>yuta.ps2-maps</AssemblyName>
+        <RootNamespace>Yuta.FfxMods.Maps</RootNamespace>
+        <AssemblyTitle>PS2 maps</AssemblyTitle>
+        <Description>The PS2 textures of the field and battle maps and the PS2 painted backgrounds, built from your PS2 disc (install.cmd).</Description>
+    </PropertyGroup>
+</Project>

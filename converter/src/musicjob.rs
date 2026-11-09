@@ -1,4 +1,4 @@
-//! `audio.music_engine = "ps2"`: every track of the PC's "Original"
+//! `audio.music = "ps2"` (mod `ps2-soundtrack`): every track of the PC's "Original"
 //! soundtrack bank (`sound_pc/music_ps2/ffx_music_ps2_bank00.fsb`) rendered
 //! again from the PS2 disc's sequences and instruments by our driver
 //! (`sqseq.rs`) and SPU2 (`spu2.rs`), and written as a replacement bank
@@ -408,10 +408,10 @@ impl Job for MusicJob {
         "audio.music"
     }
     fn settings(&self) -> &'static [&'static str] {
-        &["audio.music_engine"]
+        &["audio.music"]
     }
     fn enabled(&self, config: &Config) -> bool {
-        config.audio.music_engine.bank()
+        config.audio.music.ps2()
     }
     /// 2: long samples in pieces play through (music143, music149).
     fn version(&self) -> u32 {

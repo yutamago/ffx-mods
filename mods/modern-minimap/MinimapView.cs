@@ -21,10 +21,10 @@ internal static unsafe class MinimapView {
     /// <summary>The camera's forward and right from its view matrix, and eye to look-at.</summary>
     public readonly record struct Camera(Vector3 Forward, Vector3 Right, Vector3 EyeToLookAt);
 
-    public sealed record Frame(float Shown, Marker? Player, List<Marker> Markers, Camera Camera, uint Blink);
+    public sealed record Frame(float Shown, Marker? Player, List<Marker> Markers, Camera Camera, float Blink);
 
     /// <summary>The mesh on the ground (x, z): its triangles and its outline (edges of one triangle).</summary>
-    private sealed record Ground(nint Mesh, Vector2[] Triangles, Vector2[] Outline);
+    private sealed record Ground(nint Mesh, Vector2[] Triangles, Vector2[] Outline, int Seams);
 
     /// <summary>World units from the centre to the edge (a character is about 20 tall).</summary>
     private const float RANGE = 120f;
@@ -54,9 +54,9 @@ internal static unsafe class MinimapView {
             if (_logged_mesh != mesh && log is not null) {
                 _logged_mesh = mesh;
                 Camera c = f.Camera;
-                log.Info($"minimap: mesh 0x{mesh:x8}: {ground?.Triangles.Length / 3 ?? 0} triangles, {ground?.Outline.Length / 2 ?? 0} outline edges;"
+                log.Info($"minimap: mesh 0x{mesh:x8}: {ground?.Triangles.Length / 3 ?? 0} triangles, {ground?.Outline.Length / 2 ?? 0} outline pieces ({ground?.Seams ?? 0} inner seam edges left out);"
                     + $" player ({f.Player.Pos.X:0.0}, {f.Player.Pos.Y:0.0}, {f.Player.Pos.Z:0.0}) facing {f.Player.Heading:0.00};"
-                    + $" camera forward {fmt(c.Forward)} right {fmt(c.Right)} eye->look-at {fmt(c.EyeToLookAt)}; {f.Markers.Count} markers");
+                    + $" camera forward {fmt(c.Forward)} right {fmt(c.Right)} eye->look-at {fmt(c.EyeToLookAt)}; {f.Markers.Count} markers: {string.Join(" ", f.Markers.Select(k => $"0x{k.Flags:x}"))}");
             }
         }
         lock (_lock) {
@@ -126,23 +126,71 @@ internal static unsafe class MinimapView {
         Vector2[] a = place(true), b = place(false);
         Vector2[] p = distance(a) <= distance(b) ? a : b;
         Vector2[] triangles = new Vector2[tris.Count * 3];
-        Dictionary<(ushort, ushort), int> edges = [];
+        // Edges of one triangle only (by vertex index), with that triangle.
+        Dictionary<(ushort, ushort), (int Count, int Tri)> edges = [];
         for (int i = 0; i < tris.Count; i++) {
             var (t0, t1, t2) = tris[i];
             triangles[3 * i] = p[t0]; triangles[3 * i + 1] = p[t1]; triangles[3 * i + 2] = p[t2];
             foreach (var (u, v) in new[] { (t0, t1), (t1, t2), (t2, t0) }) {
                 var key = (Math.Min(u, v), Math.Max(u, v));
-                edges[key] = edges.GetValueOrDefault(key) + 1;
+                edges[key] = (edges.GetValueOrDefault(key).Count + 1, i);
             }
         }
+        // Not every such edge is the walkable area's edge: where the mesh has a seam (its
+        // pieces meet with vertices of their own, or one long edge against two short ones),
+        // other triangles lie on the far side. An edge stays only where the ground just
+        // outside it is uncovered; it is checked in pieces, so a seam that runs on into a
+        // real edge keeps its real part.
         List<Vector2> outline = [];
-        foreach (var ((u, v), k) in edges.OrderBy(e => e.Key)) {
-            if (k != 1) continue;
-            outline.Add(p[u]);
-            outline.Add(p[v]);
+        int seams = 0;
+        foreach (var ((u, v), e) in edges.OrderBy(e => e.Key)) {
+            if (e.Count != 1) continue;
+            int before = outline.Count;
+            outer_parts(p[u], p[v], e.Tri, triangles, outline);
+            if (outline.Count == before) seams++;
         }
-        return new Ground(mesh, triangles, [.. outline]);
+        return new Ground(mesh, triangles, [.. outline], seams);
     }
+
+    private const int EDGE_PIECES = 8;
+
+    /// <summary>The parts of edge a-b of triangle <paramref name="own"/> with no other triangle just outside them, into <paramref name="outline"/>.</summary>
+    private static void outer_parts(Vector2 a, Vector2 b, int own, Vector2[] triangles, List<Vector2> outline) {
+        Vector2 d = b - a;
+        float length = d.Length();
+        if (length < 1e-4f) return;
+        // Outward: away from the triangle's third corner.
+        Vector2 c = triangles[3 * own] + triangles[3 * own + 1] + triangles[3 * own + 2] - a - b;
+        Vector2 n = new(-d.Y / length, d.X / length);
+        if (Vector2.Dot(c - a, n) > 0) n = -n;
+        float step = Math.Clamp(length * 0.01f, 0.05f, 0.5f);
+        int start = -1;
+        for (int k = 0; k <= EDGE_PIECES; k++) {
+            bool outer = k < EDGE_PIECES && !covered(a + d * ((k + 0.5f) / EDGE_PIECES) + n * step, own, triangles);
+            if (outer && start < 0) start = k;
+            if (!outer && start >= 0) {
+                outline.Add(a + d * ((float)start / EDGE_PIECES));
+                outline.Add(a + d * ((float)k / EDGE_PIECES));
+                start = -1;
+            }
+        }
+    }
+
+    /// <summary>Whether a triangle other than <paramref name="own"/> holds the point.</summary>
+    private static bool covered(Vector2 q, int own, Vector2[] triangles) {
+        for (int i = 0; i + 2 < triangles.Length; i += 3) {
+            if (i == 3 * own) continue;
+            Vector2 t0 = triangles[i], t1 = triangles[i + 1], t2 = triangles[i + 2];
+            if (q.X < MathF.Min(t0.X, MathF.Min(t1.X, t2.X)) || q.X > MathF.Max(t0.X, MathF.Max(t1.X, t2.X))
+                || q.Y < MathF.Min(t0.Y, MathF.Min(t1.Y, t2.Y)) || q.Y > MathF.Max(t0.Y, MathF.Max(t1.Y, t2.Y))) continue;
+            float d0 = cross(t1 - t0, q - t0), d1 = cross(t2 - t1, q - t1), d2 = cross(t0 - t2, q - t2);
+            bool neg = d0 < 0 || d1 < 0 || d2 < 0, pos = d0 > 0 || d1 > 0 || d2 > 0;
+            if (!(neg && pos)) return true;
+        }
+        return false;
+    }
+
+    private static float cross(Vector2 a, Vector2 b) => a.X * b.Y - a.Y * b.X;
 
     // ---- ImGui (render_imgui) -------------------------------------------------------------
 
@@ -277,12 +325,12 @@ internal static unsafe class MinimapView {
         draw.AddCircle(centre, radius + 1f, black(0.63f * alpha), 64, 1f);
         draw.AddCircle(centre, radius, col(RIM, 0.9f * alpha), 64, 2f);
 
-        // The markers: inside at their place, beyond on the rim.
+        // The markers: inside at their place, beyond on the rim. Those with the blink flag
+        // (0x1000) fade in and out as on the game's minimap (f.Blink).
         float icon = MathF.Max(radius * 0.075f, 4f);
-        bool blink_on = f.Blink / 15 % 2 == 0;
         foreach (Marker k in f.Markers) {
-            if ((k.Flags & MinimapPatches.BLINK) != 0 && !blink_on) continue;
-            marker(draw, k, to_px, centre, radius - icon, radius, icon, alpha);
+            float a = (k.Flags & MinimapPatches.BLINK) != 0 ? alpha * f.Blink : alpha;
+            if (a > 0f) marker(draw, k, to_px, centre, radius - icon, radius, icon, a);
         }
 
         // The player: an arrow of the character's facing in a ring.

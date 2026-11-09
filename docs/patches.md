@@ -4,8 +4,7 @@ The mods' changes to `FFX.exe`'s code, each keyed in its mod's `Mod.cs`
 by its `settings.toml` setting: `mods/ps2-game-feel/GameFeelPatches.cs`
 (`ui.battle_menu_delay`, `ui.battle_subtitles`, `timing.run_speed`),
 `mods/bug-fixes/FixPatches.cs` (`fixes.*`) and
-`mods/ps2-interface/LoadingPatches.cs` (`ui.loading`). `audio.soundtrack`
-is FFX Demaster's (its `mod/GamePatches.cs`); it stays described here. Addresses are VAs of
+`mods/ps2-interface/LoadingPatches.cs` (`ui.loading`). `mods/ps2-soundtrack/SoundtrackPatches.cs` (`audio.soundtrack`). Addresses are VAs of
 ffx-rust's `symbols/ffx.sym` (image base `0x00400000`; Fahrenheit's
 `FhCallLocation` takes VA − `0x400000`, the file offset in `.text` is
 VA − `0x400c00`). A byte patch is written only when the bytes there are the
@@ -117,7 +116,7 @@ run; not watched in a battle there.
 
 ## `audio.soundtrack` (row 20)
 
-(FFX Demaster's patch, not one of the seven mods'.)
+Mod PS2 soundtrack (`mods/ps2-soundtrack/SoundtrackPatches.cs`).
 
 **Where the choice lives.** In the save: `g_SaveData` (`0x0112ca90`,
 `MsGetSaveEventAddress`) byte `+0x5ec`, 0 = arranged, 1 = original.

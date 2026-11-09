@@ -23,6 +23,8 @@ public sealed class ModSettings {
     public readonly SettingInfo[] All;
     public readonly string Path;
     public readonly bool   Found;
+    /// <summary>The file is missing although the mod has settings (a mod without settings needs none).</summary>
+    public bool Missing => !Found && All.Length > 0;
     /// <summary>Values as written in the file ("ps2", "true"); missing keys are absent.</summary>
     public readonly Dictionary<string, string> Values;
     /// <summary>Keys in the file that are not this mod's (a typo, or another mod's setting).</summary>

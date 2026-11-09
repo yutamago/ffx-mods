@@ -51,7 +51,7 @@ public sealed class ModHost {
     public static ModHost start(FhModule module, FhLogger log, FhModContext ctx, ModInfo info) {
         ModHost h = new(info, module, log, ctx.Paths.ModDir.FullName);
         log.Info($"{info.Title} {h.Version}, mod folder {h.mod_dir}");
-        if (!h.Settings.Found) log.Warning($"{h.Settings.Path} is missing; using the defaults.");
+        if (h.Settings.Missing) log.Warning($"{h.Settings.Path} is missing; using the defaults.");
         foreach (string p in h.Settings.Problems) log.Warning($"{ModSettings.FILE}: {p}");
         foreach (string k in h.Settings.Unknown)  log.Warning($"{ModSettings.FILE}: unknown setting {k}, ignored");
 

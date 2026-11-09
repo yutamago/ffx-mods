@@ -125,8 +125,8 @@ every HD placement as it is and costs a filtered horizontal downscale.
 
 ## Not done
 
-- **HD movies with `movies = "hd"`** (or without FFX Demaster's `movies`
-  job, as with the PS2 aspect ratio mod alone): a 1280 x 720 movie fills
+- **HD movies with `movies = "hd"`** (or without PS2 movies, as with the
+  PS2 aspect ratio mod alone): a 1280 x 720 movie fills
   the target and would be squeezed to 4:3. The aspect patch now watches
   for it (`mods/ps2-aspect-ratio/AspectPatches.cs`, "HD movies at 16:9"):
   hooks on `mkvparser_VideoTrack_GetWidth`/`GetHeight` (`0x00428db0`,

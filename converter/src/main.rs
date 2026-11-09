@@ -30,7 +30,7 @@ fn main() -> Result<()> {
     let a: Vec<String> = std::env::args().collect();
     let Some(cmd) = a.get(1) else {
         // No arguments: build the mod folder the exe is in (its settings.toml;
-        // demaster.toml for FFX Demaster).
+        // demaster.toml without a mod's manifest there).
         let ok = build::run(&build::Args::default()).unwrap_or_else(|e| {
             eprintln!("error: {e:#}");
             false

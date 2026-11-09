@@ -169,8 +169,8 @@ internal static unsafe class TexturePatches {
     /// The PS2 textures load at their full size at every texture quality: while a PS2 file is
     /// loading, the texture quality reads as TQ_HIGH (no mip level dropped); the game's own files
     /// keep the quality of the graphics options. The PS2 files are those of every installed mod
-    /// that demaster.exe built (this one, PS2 interface, PS2 lighting, FFX Demaster's maps and
-    /// effects), where that mod's file is the one the game gets (a later mod in the load order
+    /// that demaster.exe built (this one, PS2 interface, PS2 lighting, PS2 maps, PS2
+    /// effects, ...), where that mod's file is the one the game gets (a later mod in the load order
     /// wins): ModFiles.ps2_files, read once at start-up, like Fahrenheit's file index.
     /// </summary>
     public static bool texture_quality(ModHost m, string value) {

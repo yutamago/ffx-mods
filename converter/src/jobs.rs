@@ -6,7 +6,7 @@
 //! manifest, removing files of jobs that are off, the build stamp).
 
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use anyhow::{Context, Result};
 
@@ -69,7 +69,8 @@ pub struct Ctx<'a> {
     pub pc: &'a ffx_vbf::Archive,
     /// The disc image or drive volume (`disc::source_path`); `None` in a build without the disc.
     iso: Option<PathBuf>,
-    disc: Mutex<Option<Disc>>,
+    /// Shared by the mods of one `build --all` ([`Ctx::share_disc`]).
+    disc: Arc<Mutex<Option<Disc>>>,
     /// Print per-item details.
     pub verbose: bool,
     /// ffmpeg, from `--ffmpeg` or `source.ffmpeg`; `None`: look for it
@@ -87,7 +88,7 @@ impl<'a> Ctx<'a> {
             config,
             pc,
             iso: Some(iso.to_path_buf()),
-            disc: Mutex::new(None),
+            disc: Arc::new(Mutex::new(None)),
             verbose,
             ffmpeg: None,
             tools_dir: None,
@@ -100,6 +101,12 @@ impl<'a> Ctx<'a> {
         let mut ctx = Ctx::new(config, pc, Path::new(""), verbose);
         ctx.iso = None;
         ctx
+    }
+
+    /// Uses `cell` for the disc: one opened disc for several builds (of the
+    /// same disc and game).
+    pub fn share_disc(&mut self, cell: Arc<Mutex<Option<Disc>>>) {
+        self.disc = cell;
     }
 
     /// The PS2 disc, opened on first use (a build where every job is

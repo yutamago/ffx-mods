@@ -116,7 +116,7 @@ internal static unsafe class AspectPatches {
 
     /// <summary>
     /// The HD movies are 16:9 (the PS2's, cut at the top and bottom). Drawn over the whole frame,
-    /// the 4:3 squeeze would make them narrow; FFX Demaster's PS2 movies (movies = "ps2") are 4:3
+    /// the 4:3 squeeze would make them narrow; the PS2 movies of PS2 movies (movies = "ps2") are 4:3
     /// and fit it. So while a full-screen movie plays whose picture isn't 4:3, the output aspect
     /// is the HD's 16:9 again (<see cref="per_frame"/>). Movie pictures with the 3D scene over
     /// them (MovieStartPicture: the Farplane, mst, far, ggm, sns) keep the 4:3, so that the 3D

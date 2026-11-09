@@ -1,0 +1,21 @@
+# {title} settings.
+#
+# After changing anything here: run install.cmd again, then restart the game.
+#
+# "ps2": the PS2 original (the default). "hd": the HD Remaster.
+#
+# Windows paths: use single quotes, 'C:\Games\FFX.iso' (in double quotes a
+# backslash starts an escape), or forward slashes.
+
+[source]
+# Your own PS2 disc of Final Fantasy X (any region): an image file
+# ('D:\PS2\Final Fantasy X.iso') or the disc drive with the disc in it ('E:').
+# install.cmd asks for it and writes it here.
+iso = ''
+# The game folder, the one with FFX.exe and data\FFX_Data.vbf. Leave empty to
+# look in the usual Steam folders.
+game = ''
+
+[effects]
+# Spell, summon and effect textures (the maps' and monsters' particles too).
+textures = "ps2"

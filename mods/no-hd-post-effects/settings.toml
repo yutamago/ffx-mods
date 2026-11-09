@@ -1,0 +1,11 @@
+# No HD post-effects settings. After changing anything here, restart the game.
+#
+# "ps2": as on the PS2 (the default). "hd": the HD Remaster's.
+
+[render]
+# "ps2": no glow (the HD's blurred bright parts added over the picture).
+# "hd": the HD Remaster's glow.
+glow = "ps2"
+# "ps2": one soft ground shadow under each character, no shadow maps.
+# "hd": the HD's shadow maps.
+shadows = "ps2"

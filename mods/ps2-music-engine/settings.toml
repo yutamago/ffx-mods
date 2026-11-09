@@ -20,5 +20,6 @@ game = ''
 # install.cmd), driven by the game's music commands (fades, pauses, tempo as
 # the scripts ask). It plays while the game's soundtrack option is "Original";
 # the three tracks with streamed parts, and anything the engine can't play,
-# stay the PC's recordings. "hd": the PC's recordings.
+# come from the soundtrack bank (the PC's recordings, or with PS2 soundtrack
+# installed its rendering of the PS2 music). "hd": the bank alone.
 music_engine = "live"
