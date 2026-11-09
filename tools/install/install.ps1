@@ -4,10 +4,12 @@
 #  1. adds it and the shared library yuta.ffx-mods to Fahrenheit's mods\loadorder;
 #  2. for a mod with PS2 files, builds them from your PS2 disc (an image file, or the disc
 #     in a drive) and your PC game into this folder, with demaster.exe (next to this
-#     script, or in mods\yuta.ffx-mods as in FFX Demaster).
-# In mods\yuta.ffx-mods (FFX Demaster, the bundle) it installs every mod of the family in
-# the mods folder: all of them into mods\loadorder, then one build of all their PS2 files
-# from one pass over the disc (demaster.exe build --all), each with its own settings.toml.
+#     script, or in mods\yuta.ffx-mods as in the PS2 bundle).
+# In a bundle's folder (mods\yuta.ps2-bundle: a mod whose manifest depends on other mods of
+# the family) and in mods\yuta.ffx-mods it installs every mod of the family in the mods
+# folder: all of them into mods\loadorder (the bundles after the mods), then one build of
+# all their PS2 files from one pass over the disc (demaster.exe build --all), each with its
+# own settings.toml.
 # After that the mods need neither the disc nor the image. Running it again is safe: the
 # build only redoes what changed (after a change in a settings.toml, run it again).
 #
@@ -53,15 +55,25 @@ if (-not $manifest) { Fail "there is no mod manifest in $ModDir. Run install.cmd
 $ModId = $manifest.Name -replace '\.manifest\.json$', ''
 $Name = $ModId -replace '^yuta\.', ''
 $ModsDir = Split-Path -Parent $ModDir
-# In the shared library's folder: every mod of the family.
-$All = $ModId -eq $Common
+
+# A bundle: a mod whose manifest depends on mods of the family besides the shared library.
+function Bundled([string]$file) {
+    try { $deps = @((Get-Content -LiteralPath $file -Raw | ConvertFrom-Json).Dependencies) }
+    catch { return @() }
+    return @($deps | Where-Object { $_ -and $_ -ne $Common })
+}
+# The bundles in the mods folder.
+$Bundles = @(Get-ChildItem -LiteralPath $ModsDir -Directory -Filter 'yuta.*' -ErrorAction SilentlyContinue |
+    Where-Object { $_.Name -ne 'yuta.demaster' -and (Bundled (Join-Path $_.FullName "$($_.Name).manifest.json")).Count -gt 0 } | ForEach-Object { $_.Name })
+# In the shared library's or a bundle's folder: every mod of the family.
+$All = $ModId -eq $Common -or $Bundles -contains $ModId
 $SharedExe = Join-Path (Join-Path $ModsDir $Common) 'demaster.exe'
 $exe = Join-Path $ModDir 'demaster.exe'
 if (-not (Test-Path -LiteralPath $exe) -and (Test-Path -LiteralPath $SharedExe)) { $exe = $SharedExe }
 $hasExe = Test-Path -LiteralPath $exe
 $Targets = @()
 if ($All) {
-    if (-not $hasExe) { Fail "there is no demaster.exe in $ModDir. Unpack the whole FFX Demaster zip into the Fahrenheit folder." }
+    if (-not $hasExe) { Fail "there is no demaster.exe in $(Split-Path -Parent $SharedExe). Unpack the whole zip into the Fahrenheit folder." }
     # The mods in the converter's order (demaster mods), those that are in the mods folder.
     foreach ($line in (& $exe mods)) {
         if ($line -match '^(yuta\.[a-z0-9-]+) \(') {
@@ -70,6 +82,11 @@ if ($All) {
         }
     }
     if ($Targets.Count -eq 0) { Fail "no mod of the family is in $ModsDir. Unpack the whole zip into the Fahrenheit folder." }
+    foreach ($b in $Bundles) {
+        $missing = @(Bundled (Join-Path (Join-Path $ModsDir $b) "$b.manifest.json") | Where-Object { $Targets -notcontains $_ })
+        if ($missing) { Write-Host "$b`: of its mods these have no folder in $ModsDir and stay off: $($missing -join ', ')" -ForegroundColor Yellow }
+    }
+    $Targets += $Bundles
     Write-Host "Installing $($Targets.Count) mods into $ModsDir`: $($Targets -join ', ')"
 }
 else {
@@ -97,6 +114,10 @@ foreach ($l in $lines) {
 }
 if (-not $placed) { $out.Add($Common) }
 foreach ($t in $Targets) { if ($t -ne $Common -and -not $out.Contains($t)) { $out.Add($t) } }
+# A bundle after the mods it lists (it only shows them in F8; Fahrenheit needs no order).
+if ($All) {
+    foreach ($b in $Bundles) { if ($out.Remove($b)) { $out.Add($b) } }
+}
 # FFX Demaster's old all-in-one mod writes the same files as these mods: take it out.
 if ($All -and $out.Contains('yuta.demaster')) {
     [void]$out.Remove('yuta.demaster')

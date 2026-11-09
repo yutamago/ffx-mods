@@ -5,6 +5,7 @@
   <Project Path="mods/modern-minimap/yuta.modern-minimap.csproj" />
   <Project Path="mods/no-hd-post-effects/yuta.no-hd-post-effects.csproj" />
   <Project Path="mods/ps2-aspect-ratio/yuta.ps2-aspect-ratio.csproj" />
+  <Project Path="mods/ps2-bundle/yuta.ps2-bundle.csproj" />
   <Project Path="mods/ps2-characters/yuta.ps2-characters.csproj" />
   <Project Path="mods/ps2-effects/yuta.ps2-effects.csproj" />
   <Project Path="mods/ps2-game-feel/yuta.ps2-game-feel.csproj" />

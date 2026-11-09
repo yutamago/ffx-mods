@@ -22,6 +22,7 @@ alone or together; each is a separate zip.
 | [Bug fixes](#bug-fixes) (`yuta.bug-fixes`) | NPC mouths, the Farplane video, Lulu's Fury spins | no | <1 MB | — |
 | [Modern Minimap](#modern-minimap) (`yuta.modern-minimap`) | a round field minimap, centred on you and turned with the camera | no | <1 MB | — |
 | [FPS unlock](#fps-unlock) (`yuta.fps-unlock`) | the game drawn at your monitor's refresh rate (or uncapped) at its own speed; slow motion and fast-forward | no | <1 MB | — |
+| **[PS2 bundle](#ps2-bundle)** (`yuta.ps2-bundle`) | all twelve PS2 mods above (not Modern Minimap, FPS unlock) in one zip with one install step | yes | ~7.3 GB | — |
 
 Every mod needs the shared library `yuta.ffx-mods` (in every zip; its
 manifest dependency). Sizes are the files `install.cmd` builds with the
@@ -33,7 +34,7 @@ computer from your own Final Fantasy X PS2 disc (any region): an image of
 it (`.iso`), or the disc itself in a disc drive. After that they need
 neither.
 
-[FFX Demaster](https://github.com/yutamago/ffx-demaster) is every PS2 mod
+The [PS2 bundle](#ps2-bundle) (formerly FFX Demaster) is every PS2 mod
 here in one zip, installed and built in one step (one pass over the disc).
 
 ## Install
@@ -61,8 +62,8 @@ For each mod you want:
    terminal: `install.cmd -Iso 'D:\PS2\FFX.iso'`, `install.cmd -Drive E`,
    `-Game <game folder>`, `-NoDisc` (PS2 lighting only), `-Force`
    (rebuild everything). Running it again is safe: it redoes only what
-   changed. (FFX Demaster has one `install.cmd` for all its mods, in
-   `mods\yuta.ffx-mods\`: it takes the same options and builds every
+   changed. (The PS2 bundle has one `install.cmd` for all its mods, in
+   `mods\yuta.ps2-bundle\`: it takes the same options and builds every
    installed mod from one pass over the disc.)
 3. Start the game through Fahrenheit (`bin\fhstage0.exe <path to FFX.exe>`).
 
@@ -79,6 +80,47 @@ again if it has PS2 files, then restart the game.
 **Uninstall:** delete `mods\yuta.<mod>\` and its line in `mods\loadorder`
 (the PS2 files it built are in its folder and go with it). When no mod of
 the family is left, delete `mods\yuta.ffx-mods\` and its line too.
+
+## PS2 bundle
+
+The PS2 bundle (`yuta.ps2-bundle`, formerly
+[FFX Demaster](https://github.com/yutamago/ffx-demaster)) is the HD
+Remaster with the look and sound of the PS2 game: the twelve PS2 mods in
+one zip, `yuta.ps2-bundle-<version>.zip`, installed and built in one step.
+
+| In the bundle | |
+|---|---|
+| PS2 files | [PS2 music engine](#ps2-music-engine), [PS2 soundtrack](#ps2-soundtrack), [PS2 movies](#ps2-movies), [PS2 characters](#ps2-characters), [PS2 maps](#ps2-maps), [PS2 effects](#ps2-effects), [PS2 lighting](#ps2-lighting), [PS2 interface](#ps2-interface) |
+| code only | [No HD post-effects](#no-hd-post-effects), [PS2 aspect ratio](#ps2-aspect-ratio), [PS2 game feel](#ps2-game-feel), [Bug fixes](#bug-fixes) |
+
+- PS2 disc: needed. Size: ~7.3 GB of PS2 files with the default settings
+  (German PAL disc), plus ffmpeg for the movies (168 MB, downloaded if none
+  is found); the zip is 2.6 MB. The first build takes about an hour, half
+  of it the movies.
+- The zip holds each mod's folder as in its own zip (without its own
+  `demaster.exe`), the shared library `mods\yuta.ffx-mods\` with the one
+  `demaster.exe`, and `mods\yuta.ps2-bundle\`: the bundle's README, its
+  installer and a small mod whose manifest lists the twelve (its
+  `Dependencies`); in the game its section of the F8 window shows which of
+  them are on.
+
+**Install:** unpack the zip into your Fahrenheit folder and double-click
+`mods\yuta.ps2-bundle\install.cmd`. It adds `yuta.ffx-mods`, every mod and
+then `yuta.ps2-bundle` to `mods\loadorder`, asks where your disc is, finds
+the game, and builds every mod's PS2 files from one pass over the disc,
+each into its own folder (options as for a mod's `install.cmd`, above).
+Start the game through Fahrenheit. Each mod keeps its own
+`settings.toml`; after changing one, run the bundle's `install.cmd` again
+(it rebuilds only what changed). Unpacking a newer zip over an install
+replaces every `settings.toml` with the defaults: keep a copy of the ones
+you changed.
+
+**Switching one mod off:** delete its folder `mods\yuta.<mod>\` and its
+line in `mods\loadorder` (only the line: the next `install.cmd` puts it
+back). F8's "PS2 bundle" section then shows it as off. A part of a mod is
+a setting in its `settings.toml` (`"hd"`, or `false` for a fix). The other
+mods (Modern Minimap, FPS unlock) install next to the bundle from their own
+zips.
 
 ## The mods
 
@@ -211,8 +253,8 @@ projection (the HD widened the view for 16:9). The menus, windows and
 battle HUD the game places in PS2 coordinates land where the PS2 had them;
 the opening's staff credits get the PS2 size; the Flash screens (Esc menu,
 settings, save/load) are drawn inside the 4:3 picture. The HD movies are
-16:9: while one plays full screen the picture goes back to 16:9 for it (FFX
-Demaster's PS2 movies are 4:3 and stay so).
+16:9: while one plays full screen the picture goes back to 16:9 for it
+(PS2 movies' movies are 4:3 and stay so).
 
 - PS2 disc: not needed. Code only.
 
@@ -299,7 +341,7 @@ stay at their own speed.
 | `mods/<name>/` | the mods (C#, .NET 10, `Fahrenheit.Sdk/1.0.0-alpha12`), each with its `settings.toml` and players' `README.txt` |
 | `tests/` | C# tests (`tests/fps-unlock`: FPS unlock's portable part, built from its sources) |
 | `tools/install/` | `install.ps1` and `install.cmd`, in every mod's zip |
-| `tools/package.cs` | one zip per mod |
+| `tools/package.cs` | one zip per mod, and the PS2 bundle's |
 
 ```bash
 cargo build --release -p demaster                     # Linux: target/release/demaster
@@ -308,15 +350,14 @@ tools/build-windows.sh                                # demaster.exe (cargo-xwin
 tools/build-live.sh                                   # demaster_live.dll (32-bit)
 dotnet build -c Release ffx-mods.slnx                 # artifacts/deploy/rel/mods/yuta.*/
 dotnet test -c Release --no-build ffx-mods.slnx       # C# tests (FFX_GAME_DIR=<game folder> for those on FFX.exe)
-dotnet run tools/package.cs -- dist 0.1.0             # dist/yuta.<mod>-0.1.0.zip
+dotnet run tools/package.cs -- dist 0.1.0             # dist/yuta.<mod>-0.1.0.zip, dist/yuta.ps2-bundle-0.1.0.zip
 ```
 
 The converter builds one mod at a time: `demaster build --mod <name>
 --mod-dir <mod folder> --iso <disc image or drive>` (`demaster mods` lists
 the mods, their settings and jobs; `demaster jobs --mod <name>` the jobs).
 A `demaster.exe` inside a mod's folder builds that mod. Without a mod it
-builds every job into one folder from `demaster.toml`, as FFX Demaster
-does.
+builds every job into one folder from `demaster.toml` (development).
 
 The disc can be a drive letter (`E:`): on Windows the converter reads the
 drive's raw volume (`\\.\E:`) in whole 2048-byte sectors at sector offsets
@@ -325,7 +366,7 @@ read the same way.
 
 CI (`.github/workflows/build.yml`) builds the mods and runs their tests,
 runs the converter tests on Linux, builds `demaster.exe` and `demaster_live.dll` on Windows,
-packages every mod's zip and checks that they hold no game data, on every
+packages every mod's zip and the PS2 bundle's and checks that they hold no game data, on every
 push and pull request; a tag `v*` publishes a release with the zips
 (`release.yml`); no secrets are needed ([`docs/ci.md`](docs/ci.md)).
 
@@ -375,7 +416,9 @@ A new mod is a folder `mods/<name>/` (its Fahrenheit id is `yuta.<name>`):
    mod has disc jobs (`demaster mods`), and adds the mod to `mods\loadorder`.
 6. **Package and CI.** Add the mod to `MODS` in `tools/package.cs` (whether
    it ships `demaster.exe`) and to the zip check in
-   `.github/workflows/build.yml`; describe it in this README (what it
+   `.github/workflows/build.yml`; a PS2 mod also goes into the PS2 bundle
+   (its id in `FfxModsDependencies` of `mods/ps2-bundle/yuta.ps2-bundle.csproj`,
+   in the converter's order, and in the bundle's `README.txt`); describe it in this README (what it
    changes for the player, disc, size, dependencies) and in its
    `README.txt`. Tests of a mod's portable code go in `tests/<name>/`
    (in `ffx-mods.slnx`; CI runs them).

@@ -5,8 +5,8 @@
 //! settings from its `settings.toml` and keeps the build bookkeeping
 //! (`build/files.json`, `build/stamp.json`) in its folder. Without a mod the
 //! converter builds everything into one folder (`demaster.toml`, for
-//! development); `build --all` builds every installed mod (FFX Demaster's
-//! installer).
+//! development); `build --all` builds every installed mod (the installer of
+//! the PS2 bundle, `mods/ps2-bundle`).
 //!
 //! The C# side keeps the same lists (`mods/<name>/Mod.cs`); the tests below
 //! check that they agree, and that `mods/<name>/settings.toml` holds the

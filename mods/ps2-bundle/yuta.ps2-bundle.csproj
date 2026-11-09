@@ -1,0 +1,14 @@
+<Project Sdk="Fahrenheit.Sdk/1.0.0-alpha12">
+    <!-- Version and the shared library: ../Directory.Build.props.
+         The bundle is its manifest's dependencies: the mods below (after the shared library),
+         in the converter's order. tools/package.cs puts exactly these into
+         yuta.ps2-bundle-<version>.zip, CI checks the zip against them, and the mod's F8
+         section shows which of them are on. -->
+    <PropertyGroup>
+        <AssemblyName>yuta.ps2-bundle</AssemblyName>
+        <RootNamespace>Yuta.FfxMods.Ps2Bundle</RootNamespace>
+        <AssemblyTitle>PS2 bundle</AssemblyTitle>
+        <Description>Every PS2 mod of the FFX mods in one: the look and sound of the PS2 game with the PC version's game logic underneath.</Description>
+        <FfxModsDependencies>yuta.ffx-mods,yuta.ps2-music-engine,yuta.ps2-soundtrack,yuta.ps2-movies,yuta.ps2-characters,yuta.ps2-maps,yuta.ps2-effects,yuta.ps2-lighting,yuta.no-hd-post-effects,yuta.ps2-interface,yuta.ps2-aspect-ratio,yuta.ps2-game-feel,yuta.bug-fixes</FfxModsDependencies>
+    </PropertyGroup>
+</Project>

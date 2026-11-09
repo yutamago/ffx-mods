@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 //
-// Zips the release: one zip per mod, yuta.<name>-<version>.zip, ready to unpack into the
-// Fahrenheit folder. Each holds
+// Zips the release: one zip per mod, yuta.<name>-<version>.zip, and one per bundle, all ready
+// to unpack into the Fahrenheit folder. Each mod's zip holds
 //   mods/yuta.ffx-mods/   the shared library every mod needs (its DLL and manifest)
 //   mods/yuta.<name>/     the mod: DLL and manifest, settings.toml, README.txt, LICENSES.txt,
 //                         install.cmd + install.ps1; for mods with PS2 files demaster.exe
@@ -12,14 +12,13 @@
 // compiled into it with its licence and the licence files those crates ship (from `cargo
 // metadata`, so cargo must be able to fetch ffx-rust), then THIRD-PARTY-NOTICES.
 //
-// A bundle (--bundle <name> --mods <mod,...> --readme <README.txt>, FFX Demaster) is one zip,
-// <name>-<version>.zip, with those mods and the shared library, which holds the one
-// demaster.exe, the installer for all of them (install.cmd: every mod, one build) and the
-// bundle's README.txt; the mods' folders have no demaster.exe of their own (their
-// install.cmd uses the shared one).
+// A bundle (BUNDLES: mods/ps2-bundle, yuta.ps2-bundle) is a mod whose manifest depends on
+// other mods; its zip, yuta.<bundle>-<version>.zip, holds exactly those mods, the shared
+// library with the one demaster.exe and the installer, and the bundle's folder (its DLL and
+// manifest, README.txt, install.cmd + install.ps1: every mod, one build). The mods' folders
+// have no demaster.exe of their own (their install.cmd uses the shared one).
 //
 // usage: dotnet run tools/package.cs -- <out dir> <version> [demaster.exe]
-//          [--bundle <name> --mods <mod,...> --readme <README.txt>]
 //   after: dotnet build -c Release ffx-mods.slnx
 //   and:   tools/build-windows.sh and tools/build-live.sh (Linux/WSL), or the cargo builds
 //          for x86_64-pc-windows-msvc and i686-pc-windows-msvc (Windows)
@@ -30,19 +29,8 @@ using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
 
-List<string> positional = [];
-string? bundle = null, bundle_readme = null;
-string[] bundle_mods = [];
-for (int i = 0; i < args.Length; i++) {
-    switch (args[i]) {
-        case "--bundle" when i + 1 < args.Length: bundle = args[++i]; break;
-        case "--mods" when i + 1 < args.Length:   bundle_mods = args[++i].Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries); break;
-        case "--readme" when i + 1 < args.Length: bundle_readme = Path.GetFullPath(args[++i]); break;
-        default: positional.Add(args[i]); break;
-    }
-}
-if (positional.Count is < 2 or > 3 || (bundle is not null && (bundle_mods.Length == 0 || bundle_readme is null))) {
-    Console.Error.WriteLine("usage: dotnet run tools/package.cs -- <out dir> <version> [demaster.exe] [--bundle <name> --mods <mod,...> --readme <README.txt>]");
+if (args.Length is < 2 or > 3) {
+    Console.Error.WriteLine("usage: dotnet run tools/package.cs -- <out dir> <version> [demaster.exe]");
     return 1;
 }
 
@@ -64,23 +52,20 @@ const string COMMON = "yuta.ffx-mods";
     ("modern-minimap",    false, false),
     ("fps-unlock",       false, false),
 ];
+// The bundles: mods (mods/<name>) whose manifest lists the mods they bundle (their csproj's
+// FfxModsDependencies).
+string[] BUNDLES = ["ps2-bundle"];
 
 string root    = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(this_file())!, ".."));
 string deploy  = Path.Combine(root, "artifacts", "deploy", "rel", "mods");
-string out_dir = Path.GetFullPath(positional[0]);
-string version = positional[1].TrimStart('v');
-string exe = positional.Count > 2
-    ? Path.GetFullPath(positional[2])
+string out_dir = Path.GetFullPath(args[0]);
+string version = args[1].TrimStart('v');
+string exe = args.Length > 2
+    ? Path.GetFullPath(args[2])
     : Path.Combine(root, "target", "x86_64-pc-windows-msvc", "release", "demaster.exe");
 string live = Path.Combine(root, "target", "i686-pc-windows-msvc", "release", "demaster_live.dll");
 
-foreach (string name in bundle_mods) {
-    if (!MODS.Any(m => m.Name == name)) {
-        Console.Error.WriteLine($"--mods: no mod {name}");
-        return 1;
-    }
-}
-foreach (string id in MODS.Select(m => $"yuta.{m.Name}").Prepend(COMMON)) {
+foreach (string id in MODS.Select(m => m.Name).Concat(BUNDLES).Select(n => $"yuta.{n}").Prepend(COMMON)) {
     if (!File.Exists(Path.Combine(deploy, id, $"{id}.dll"))) {
         Console.Error.WriteLine($"{id} is not built: dotnet build -c Release ffx-mods.slnx");
         return 1;
@@ -105,25 +90,25 @@ try {
     return 1;
 }
 
-Directory.CreateDirectory(out_dir);
-if (bundle is not null) {
-    string zip_path = Path.Combine(out_dir, $"{bundle}-{version}.zip");
-    File.Delete(zip_path);
-    using (ZipArchive zip = ZipFile.Open(zip_path, ZipArchiveMode.Create)) {
-        Zip z = new(zip, deploy);
-        string dir = $"mods/{COMMON}";
-        z.dll(COMMON);
-        z.add(exe, $"{dir}/demaster.exe");
-        z.text(File.ReadAllText(bundle_readme!), $"{dir}/README.txt");
-        z.text(File.ReadAllText(Path.Combine(root, "tools", "install", "install.cmd")), $"{dir}/install.cmd");
-        z.text(File.ReadAllText(Path.Combine(root, "tools", "install", "install.ps1")), $"{dir}/install.ps1");
-        z.text(header + crates + "\n\n" + notices, $"{dir}/LICENSES.txt");
-        foreach (var m in MODS.Where(m => bundle_mods.Contains(m.Name)))
-            add_mod(z, m, with_exe: false);
+// The mods of each bundle, from its built manifest (what the game sees).
+Dictionary<string, string[]> bundle_mods = [];
+foreach (string b in BUNDLES) {
+    string id = $"yuta.{b}";
+    using JsonDocument manifest = JsonDocument.Parse(File.ReadAllText(Path.Combine(deploy, id, $"{id}.manifest.json")));
+    string[] names = [.. manifest.RootElement.GetProperty("Dependencies").EnumerateArray()
+                                 .Select(d => d.GetString()!).Where(d => d != COMMON).Select(d => d["yuta.".Length..])];
+    foreach (string n in names.Where(n => !MODS.Any(m => m.Name == n))) {
+        Console.Error.WriteLine($"{id}: its manifest lists yuta.{n}, which is no mod here");
+        return 1;
     }
-    Console.WriteLine(zip_path);
-    return 0;
+    if (names.Length == 0) {
+        Console.Error.WriteLine($"{id}: its manifest lists no mod");
+        return 1;
+    }
+    bundle_mods[b] = names;
 }
+
+Directory.CreateDirectory(out_dir);
 foreach (var m in MODS) {
     string id = $"yuta.{m.Name}";
     string zip_path = Path.Combine(out_dir, $"{id}-{version}.zip");
@@ -135,7 +120,35 @@ foreach (var m in MODS) {
     }
     Console.WriteLine(zip_path);
 }
+foreach (string b in BUNDLES) {
+    string id = $"yuta.{b}";
+    string zip_path = Path.Combine(out_dir, $"{id}-{version}.zip");
+    File.Delete(zip_path);
+    using (ZipArchive zip = ZipFile.Open(zip_path, ZipArchiveMode.Create)) {
+        Zip z = new(zip, deploy);
+        // The shared library with the one demaster.exe (and the same installer as the bundle's).
+        string common = $"mods/{COMMON}";
+        z.dll(COMMON);
+        z.add(exe, $"{common}/demaster.exe");
+        add_installer(z, common);
+        z.text(header + crates + "\n\n" + notices, $"{common}/LICENSES.txt");
+        foreach (var m in MODS.Where(m => bundle_mods[b].Contains(m.Name)))
+            add_mod(z, m, with_exe: false);
+        // The bundle's folder: its DLL and manifest, README.txt, the installer for all its mods.
+        string dir = $"mods/{id}";
+        z.dll(id);
+        z.text(File.ReadAllText(Path.Combine(root, "mods", b, "README.txt")), $"{dir}/README.txt");
+        add_installer(z, dir);
+        z.text(header + $"demaster.exe is in ../{COMMON}/; its crates and their licences: ../{COMMON}/LICENSES.txt\n\n\n" + notices, $"{dir}/LICENSES.txt");
+    }
+    Console.WriteLine(zip_path);
+}
 return 0;
+
+void add_installer(Zip z, string dir) {
+    z.text(File.ReadAllText(Path.Combine(root, "tools", "install", "install.cmd")), $"{dir}/install.cmd");
+    z.text(File.ReadAllText(Path.Combine(root, "tools", "install", "install.ps1")), $"{dir}/install.ps1");
+}
 
 // A mod's folder: DLL and manifest, settings.toml, README.txt, install.cmd + .ps1, LICENSES.txt;
 // demaster.exe for the mods with PS2 files (in a bundle the shared library has the one copy).
@@ -146,8 +159,7 @@ void add_mod(Zip z, (string Name, bool Builds, bool Live) m, bool with_exe) {
     z.dll(id);
     z.text(File.ReadAllText(Path.Combine(src, "settings.toml")), $"{dir}/settings.toml");
     z.text(File.ReadAllText(Path.Combine(src, "README.txt")), $"{dir}/README.txt");
-    z.text(File.ReadAllText(Path.Combine(root, "tools", "install", "install.cmd")), $"{dir}/install.cmd");
-    z.text(File.ReadAllText(Path.Combine(root, "tools", "install", "install.ps1")), $"{dir}/install.ps1");
+    add_installer(z, dir);
     if (m.Builds && with_exe) z.add(exe, $"{dir}/demaster.exe");
     if (m.Live) z.add(live, $"{dir}/demaster_live.dll");
     string crate_text = !m.Builds && !m.Live ? "(none)\n"

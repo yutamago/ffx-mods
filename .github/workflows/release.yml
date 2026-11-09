@@ -1,7 +1,8 @@
 # SPDX-License-Identifier: MIT
 # Pushing a tag such as v0.2.0 builds everything as CI does (build.yml), with
 # that version in the converter and the mods, and publishes a GitHub release
-# with the mod zips (each unpacks straight into the Fahrenheit folder). A tag with a "-" (v0.2.0-alpha) makes a prerelease.
+# with the mod zips and the PS2 bundle's zip (each unpacks straight into the Fahrenheit
+# folder). A tag with a "-" (v0.2.0-alpha) makes a prerelease.
 name: Release
 
 on:
@@ -42,8 +43,11 @@ jobs:
         (\`mods\\yuta.<name>\`). It adds the mod to \`mods\\loadorder\` and, for the mods with PS2
         files, builds them from your own Final Fantasy X PS2 disc (an image, or the disc in a
         drive). No game data is included. Each zip's README.txt has the details; the project
-        README lists what each mod does. FFX Demaster (github.com/yutamago/ffx-demaster) is all
-        the PS2 mods in one zip with one install step.
+        README lists what each mod does.
+
+        **The PS2 bundle** (\`yuta.ps2-bundle-${TAG#v}.zip\`, formerly FFX Demaster) is all twelve PS2
+        mods in one zip: unpack it and run \`mods\\yuta.ps2-bundle\\install.cmd\`, which installs
+        them all and builds their PS2 files from one pass over the disc.
         EOF
         args=(release create "$TAG" dist/*.zip
               --repo "$REPO" --verify-tag --title "FFX mods $TAG"

@@ -1,10 +1,11 @@
 # SPDX-License-Identifier: MIT
-# CI: builds and tests everything, and packages the release zips (one per mod) as an artifact.
+# CI: builds and tests everything, and packages the release zips (one per mod, one per
+# bundle: yuta.ps2-bundle) as an artifact.
 #   mod        the shared library and the C# mods, and the C# tests (Linux)
 #   linux      converter and live engine tests (Linux)
 #   windows    demaster.exe (MSVC, static CRT) and demaster_live.dll (32-bit), the
-#              release zips (tools/package.cs) with a check that they hold no
-#              game data
+#              release zips (tools/package.cs) with a check of each (what it must
+#              hold, one demaster.exe at most, no game data)
 # release.yml calls this workflow with the tag, so a release is built the same way.
 #
 # The converter's ffx-rust crates (github.com/yutamago/ffx-rust, public) come
@@ -130,8 +131,9 @@ jobs:
                      'ps2-maps' = $true; 'ps2-effects' = $true; 'ps2-lighting' = $true; 'no-hd-post-effects' = $false;
                      'ps2-interface' = $true; 'ps2-aspect-ratio' = $false; 'ps2-game-feel' = $false; 'bug-fixes' = $false;
                      'modern-minimap' = $false; 'fps-unlock' = $false }
+        $bundles = @('ps2-bundle')
         $zips = @(Get-ChildItem dist -Filter '*.zip')
-        if ($zips.Count -ne $builds.Count) { throw "expected $($builds.Count) zips, found $($zips.Count)" }
+        if ($zips.Count -ne $builds.Count + $bundles.Count) { throw "expected $($builds.Count + $bundles.Count) zips, found $($zips.Count)" }
         foreach ($name in $builds.Keys) {
           $id = "yuta.$name"
           $zip = $zips | Where-Object { $_.Name -like "$id-*.zip" }
@@ -147,6 +149,40 @@ jobs:
           foreach ($f in $need) { if ($names -notcontains $f) { throw "$($zip.Name) has no $f" } }
           if (-not $builds[$name] -and ($names -like '*/demaster.exe')) { throw "$($zip.Name) has demaster.exe, but $name builds nothing" }
           $bad = $names | Where-Object { ($_ -notlike "mods/$id/*" -and $_ -notlike 'mods/yuta.ffx-mods/*') -or $_ -match '/(efl|build|tools|preview|music)/|\.(phyre|iso|bin|img|png|dds|webm|fsb|wav|vbf|bgm|wd|irx)$' }
+          if ($bad) { throw "$($zip.Name) contains files it must not: $bad" }
+        }
+        # Every bundle: exactly the mods its manifest lists, each as in its own zip but without
+        # demaster.exe; the shared library with the one demaster.exe and the installer; the
+        # bundle's folder with its DLL, manifest, README, licences and the installer.
+        foreach ($name in $bundles) {
+          $id = "yuta.$name"
+          $zip = $zips | Where-Object { $_.Name -like "$id-*.zip" }
+          if (-not $zip) { throw "no zip for $id" }
+          $z = [IO.Compression.ZipFile]::OpenRead($zip.FullName)
+          $names = $z.Entries.FullName
+          $entry = $z.GetEntry("mods/$id/$id.manifest.json")
+          if (-not $entry) { $z.Dispose(); throw "$($zip.Name) has no mods/$id/$id.manifest.json" }
+          $reader = New-Object IO.StreamReader($entry.Open())
+          $manifest = $reader.ReadToEnd() | ConvertFrom-Json
+          $reader.Dispose(); $z.Dispose()
+          "$($zip.Name):"; $names | ForEach-Object { "  $_" }
+          $members = @($manifest.Dependencies | Where-Object { $_ -ne 'yuta.ffx-mods' })
+          "  bundles: $($members -join ', ')"
+          if ($manifest.Dependencies[0] -ne 'yuta.ffx-mods') { throw "$id's manifest does not depend on yuta.ffx-mods first" }
+          if ($members.Count -eq 0) { throw "$id's manifest lists no mod" }
+          $common = 'mods/yuta.ffx-mods'
+          $need = @('yuta.ffx-mods.dll', 'yuta.ffx-mods.manifest.json', 'demaster.exe', 'install.cmd', 'install.ps1', 'LICENSES.txt') | ForEach-Object { "$common/$_" }
+          $need += @("$id.dll", "$id.manifest.json", 'README.txt', 'LICENSES.txt', 'install.cmd', 'install.ps1') | ForEach-Object { "mods/$id/$_" }
+          foreach ($m in $members) {
+            if (-not $builds.ContainsKey(($m -replace '^yuta\.', ''))) { throw "$id lists $m, which is no mod" }
+            foreach ($f in "$m.dll", "$m.manifest.json", 'settings.toml', 'README.txt', 'LICENSES.txt', 'install.cmd', 'install.ps1') { $need += "mods/$m/$f" }
+            if ($m -eq 'yuta.ps2-music-engine') { $need += "mods/$m/demaster_live.dll" }
+          }
+          foreach ($f in $need) { if ($names -notcontains $f) { throw "$($zip.Name) has no $f" } }
+          $exes = @($names | Where-Object { $_ -like '*/demaster.exe' })
+          if ($exes.Count -ne 1) { throw "$($zip.Name): expected one demaster.exe, found: $exes" }
+          $allowed = @('yuta.ffx-mods', $id) + $members | ForEach-Object { "mods/$_/*" }
+          $bad = $names | Where-Object { $n = $_; -not ($allowed | Where-Object { $n -like $_ }) -or $n -match '/(efl|build|tools|preview|music)/|\.(phyre|iso|bin|img|png|dds|webm|fsb|wav|vbf|bgm|wd|irx)$' }
           if ($bad) { throw "$($zip.Name) contains files it must not: $bad" }
         }
 

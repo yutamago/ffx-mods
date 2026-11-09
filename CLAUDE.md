@@ -6,14 +6,15 @@ builds the PS2 mods' files from the player's own disc. Most are PS2 mods
 (they restore parts of the PS2 version: presentation from the PS2, logic
 from the PC); others are the user's own changes (`modern-minimap`, `fps-unlock`). Every
 change is a setting. The PS2 mods were split out of ffx-demaster (github.com/yutamago/ffx-demaster,
-history kept up to its 314bbfc). ffx-demaster is now the bundle of the PS2
-mods: its `bundle.toml` pins a revision of this repo and lists the mods,
-its CI builds one zip with them (`tools/package.cs --bundle`) whose
-`mods\yuta.ffx-mods\install.cmd` installs and builds them all
-(`demaster build --all`). It also keeps the PS2-vs-PC test tools
-(`tools/shotrun`, `tools/calllist`, `tools/replays`, `tools/compare`,
-`docs/compare.md`, `docs/debugger.md` there). README.md describes each mod
-for players.
+history kept up to its 314bbfc). Their bundle (formerly FFX Demaster) is the
+mod `mods/ps2-bundle` (`yuta.ps2-bundle`): its manifest's dependencies (its
+csproj's `FfxModsDependencies`) are the twelve PS2 mods, `tools/package.cs`
+makes `yuta.ps2-bundle-<version>.zip` with exactly those, and its
+`install.cmd` installs and builds them all (`demaster build --all`).
+ffx-demaster is now the research and test-tool home of the PS2 mods: the
+PS2-vs-PC tools (`tools/shotrun`, `tools/calllist`, `tools/replays`,
+`tools/compare`, `docs/compare.md`, `docs/debugger.md`) are there.
+README.md describes each mod and the bundle for players.
 
 ## Rules
 
@@ -48,9 +49,10 @@ for players.
 | `live/` | crate `demaster-live`: `demaster_live.dll` (32-bit, the live PS2 music engine, `tools/build-live.sh`) |
 | `common/` | `yuta.ffx-mods`, the shared C# library (itself a Fahrenheit mod): `Native`/`Fn`, `ModHost` (settings.toml, build status, patches), the one F8 window (`FamilyWindow`), `ModFiles` (the PS2 files of every installed mod) |
 | `mods/<name>/` | the mods, `yuta.<name>`: `Mod.cs` (settings with defaults, code patches), the patch code, `settings.toml` (defaults), `README.txt` (for the zip) |
+| `mods/ps2-bundle/` | the PS2 bundle, `yuta.ps2-bundle`: no settings, no patches, not in `mods.rs`; its csproj lists the bundle's mods (manifest `Dependencies`), its `Mod.cs` shows them in F8, its `README.txt` is the bundle zip's |
 | `tests/<name>/` | C# tests of a mod's portable part (its sources linked in; the mods build for win-x86 against Fahrenheit): `tests/fps-unlock`. Tests that need the game read `FFX_GAME_DIR` and skip without it |
 | `tools/install/` | `install.ps1` + `install.cmd`, shipped in every mod folder |
-| `tools/package.cs` | one zip per mod |
+| `tools/package.cs` | one zip per mod, one per bundle (`BUNDLES`) |
 | `docs/` | moved from ffx-demaster: the research and design docs of every feature (also of the parts that stay in ffx-demaster) |
 
 The mods and what is in each: README.md and `converter/src/mods.rs`.
@@ -85,6 +87,12 @@ The mods and what is in each: README.md and `converter/src/mods.rs`.
   `demaster build` keeps the old files.
 - Jobs must be deterministic (same input, same bytes): no HashMap iteration
   order in results; parallel work writes in a fixed order.
+- A new PS2 mod goes into the bundle: `FfxModsDependencies` in
+  `mods/ps2-bundle/yuta.ps2-bundle.csproj` (converter order) and its
+  `README.txt`. The installer treats any mod whose manifest depends on
+  family mods besides `yuta.ffx-mods` as a bundle (installs everything, puts
+  it after the mods in `mods\loadorder`); a mod with no settings needs no
+  `settings.toml` (`ModSettings.Missing`).
 - The converter is a library too (`src/lib.rs`, every module `pub`) for
   ffx-demaster and FFX Music Studio: keep the public API of `sqseq`,
   `spu2`, `musicjob`, `disc`, `config`, `build`.
@@ -99,8 +107,7 @@ RUSTC_WRAPPER= cargo test --release -p demaster -p demaster-live   # disc tests 
 tools/build-windows.sh && tools/build-live.sh       # demaster.exe, demaster_live.dll
 dotnet build -c Release ffx-mods.slnx               # artifacts/deploy/rel/mods/yuta.*/
 dotnet test -c Release --no-build ffx-mods.slnx     # C# tests; FFX_GAME_DIR=<game folder> for the FFX.exe ones
-dotnet run tools/package.cs -- <out dir> <version>  # one zip per mod
-dotnet run tools/package.cs -- <out> <version> --bundle <name> --mods a,b --readme <file>   # one zip (ffx-demaster)
+dotnet run tools/package.cs -- <out dir> <version>  # one zip per mod + yuta.ps2-bundle-<version>.zip
 ```
 
 CI and tag releases: `docs/ci.md` (no secrets needed).
@@ -123,13 +130,14 @@ give them the real path (`\\wsl.localhost\Ubuntu\home\angelo\ffx-ps2\Final Fanta
 
 - Fahrenheit install for these mods: `C:\_workspaces\fh-mods-test` (alpha12;
   `mods/` holds whatever is under test); `C:\_workspaces\fh-bundle-test`
-  for the bundle. Never touch `C:\_workspaces\fh-demaster-test` (the
+  for the PS2 bundle. Never touch `C:\_workspaces\fh-demaster-test` (the
   user's install).
 - Install a mod as a player does: unpack its zip (`tools/package.cs`) into
   the install and run its `install.cmd` (`-Iso <real Windows path> -Game
-  <game> -NoPause`); it writes `mods\loadorder`. In `mods\yuta.ffx-mods\`
-  (a bundle) `install.cmd` installs every mod there; a mod folder without
-  `demaster.exe` uses the shared one.
+  <game> -NoPause`); it writes `mods\loadorder`. In `mods\yuta.ps2-bundle\`
+  (and `mods\yuta.ffx-mods\`) `install.cmd` installs every mod there; a mod
+  folder without `demaster.exe` uses the shared one. From WSL:
+  `powershell.exe -File <Windows path>\install.ps1 ...`.
 - Every game run under `flock /home/angelo/ffx-work/demaster/fh-test.lock`
   (the user's other sessions use it), one game at a time. Launch
   `bin\fhstage0.exe '\\wsl.localhost\Ubuntu\home\angelo\ffx-work\demaster\game\FFX.exe' --extdbg`
