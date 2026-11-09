@@ -129,6 +129,10 @@ drawing faster ran the game faster. The mod changes that:
   site for the expected `call`. If a check fails it installs nothing and logs
   why. Once Fahrenheit has applied the hooks, the first call through each one checks its chain. A
   bad chain switches the mod to pass-through. The details are below ("Hooking: why the first run crashed").
+  A function another program hooked before Fahrenheit's hooks went in (its first 5 bytes a `jmp`,
+  the rest as expected: ffx-rust's harness hook on `Renderer_PresentFlip`) is not refused: MinHook
+  takes that `jmp` along in its trampoline, so this mod's hook runs first, then the other program's,
+  then the function (`CodeScan.PrologueMatches`, logged once).
 
 ## The research: how FFX.exe times its frames
 
@@ -903,8 +907,8 @@ renderer reads them, whether the mod placed it, and the game's own pose. ffx-rem
 `tools/fpsunlock-compat.sh` runs it in harness slots and `tools/fpsunlock-compat.py` counts, per
 object, how many frames a second its drawn matrix changed (the frame rate when it is drawn between
 ticks, about 30 when not). The ffx-rust harness hook patches `Renderer_PresentFlip` before
-Fahrenheit's hooks go in; the mod hooks after it ("Hooking" below: a function that starts with
-another program's `jmp` and is otherwise as expected).
+Fahrenheit's hooks go in; the mod hooks after it ("Limits", the paragraph on hooking: a function that
+starts with another program's `jmp` and is otherwise as expected).
 
 ### Other things that advance per drawn frame
 
