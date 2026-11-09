@@ -126,8 +126,9 @@ jobs:
       shell: pwsh
       run: |
         Add-Type -AssemblyName System.IO.Compression.FileSystem
-        $builds = @{ 'ps2-music-engine' = $true; 'ps2-characters' = $true; 'ps2-lighting' = $true; 'ps2-interface' = $true;
-                     'ps2-aspect-ratio' = $false; 'ps2-game-feel' = $false; 'bug-fixes' = $false;
+        $builds = @{ 'ps2-music-engine' = $true; 'ps2-soundtrack' = $true; 'ps2-movies' = $true; 'ps2-characters' = $true;
+                     'ps2-maps' = $true; 'ps2-effects' = $true; 'ps2-lighting' = $true; 'no-hd-post-effects' = $false;
+                     'ps2-interface' = $true; 'ps2-aspect-ratio' = $false; 'ps2-game-feel' = $false; 'bug-fixes' = $false;
                      'modern-minimap' = $false; 'fps-unlock' = $false }
         $zips = @(Get-ChildItem dist -Filter '*.zip')
         if ($zips.Count -ne $builds.Count) { throw "expected $($builds.Count) zips, found $($zips.Count)" }

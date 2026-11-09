@@ -12,7 +12,14 @@
 // compiled into it with its licence and the licence files those crates ship (from `cargo
 // metadata`, so cargo must be able to fetch ffx-rust), then THIRD-PARTY-NOTICES.
 //
+// A bundle (--bundle <name> --mods <mod,...> --readme <README.txt>, FFX Demaster) is one zip,
+// <name>-<version>.zip, with those mods and the shared library, which holds the one
+// demaster.exe, the installer for all of them (install.cmd: every mod, one build) and the
+// bundle's README.txt; the mods' folders have no demaster.exe of their own (their
+// install.cmd uses the shared one).
+//
 // usage: dotnet run tools/package.cs -- <out dir> <version> [demaster.exe]
+//          [--bundle <name> --mods <mod,...> --readme <README.txt>]
 //   after: dotnet build -c Release ffx-mods.slnx
 //   and:   tools/build-windows.sh and tools/build-live.sh (Linux/WSL), or the cargo builds
 //          for x86_64-pc-windows-msvc and i686-pc-windows-msvc (Windows)
@@ -23,8 +30,19 @@ using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
 
-if (args.Length is < 2 or > 3) {
-    Console.Error.WriteLine("usage: dotnet run tools/package.cs -- <out dir> <version> [demaster.exe]");
+List<string> positional = [];
+string? bundle = null, bundle_readme = null;
+string[] bundle_mods = [];
+for (int i = 0; i < args.Length; i++) {
+    switch (args[i]) {
+        case "--bundle" when i + 1 < args.Length: bundle = args[++i]; break;
+        case "--mods" when i + 1 < args.Length:   bundle_mods = args[++i].Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries); break;
+        case "--readme" when i + 1 < args.Length: bundle_readme = Path.GetFullPath(args[++i]); break;
+        default: positional.Add(args[i]); break;
+    }
+}
+if (positional.Count is < 2 or > 3 || (bundle is not null && (bundle_mods.Length == 0 || bundle_readme is null))) {
+    Console.Error.WriteLine("usage: dotnet run tools/package.cs -- <out dir> <version> [demaster.exe] [--bundle <name> --mods <mod,...> --readme <README.txt>]");
     return 1;
 }
 
@@ -32,8 +50,13 @@ const string COMMON = "yuta.ffx-mods";
 // The mods, and which of them build PS2 files (ship the converter and install it with install.cmd).
 (string Name, bool Builds, bool Live)[] MODS = [
     ("ps2-music-engine", true,  true),
+    ("ps2-soundtrack",   true,  false),
+    ("ps2-movies",       true,  false),
     ("ps2-characters",   true,  false),
+    ("ps2-maps",         true,  false),
+    ("ps2-effects",      true,  false),
     ("ps2-lighting",     true,  false),
+    ("no-hd-post-effects", false, false),
     ("ps2-interface",    true,  false),
     ("ps2-aspect-ratio", false, false),
     ("ps2-game-feel",    false, false),
@@ -44,13 +67,19 @@ const string COMMON = "yuta.ffx-mods";
 
 string root    = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(this_file())!, ".."));
 string deploy  = Path.Combine(root, "artifacts", "deploy", "rel", "mods");
-string out_dir = Path.GetFullPath(args[0]);
-string version = args[1].TrimStart('v');
-string exe = args.Length > 2
-    ? Path.GetFullPath(args[2])
+string out_dir = Path.GetFullPath(positional[0]);
+string version = positional[1].TrimStart('v');
+string exe = positional.Count > 2
+    ? Path.GetFullPath(positional[2])
     : Path.Combine(root, "target", "x86_64-pc-windows-msvc", "release", "demaster.exe");
 string live = Path.Combine(root, "target", "i686-pc-windows-msvc", "release", "demaster_live.dll");
 
+foreach (string name in bundle_mods) {
+    if (!MODS.Any(m => m.Name == name)) {
+        Console.Error.WriteLine($"--mods: no mod {name}");
+        return 1;
+    }
+}
 foreach (string id in MODS.Select(m => $"yuta.{m.Name}").Prepend(COMMON)) {
     if (!File.Exists(Path.Combine(deploy, id, $"{id}.dll"))) {
         Console.Error.WriteLine($"{id} is not built: dotnet build -c Release ffx-mods.slnx");
@@ -77,41 +106,55 @@ try {
 }
 
 Directory.CreateDirectory(out_dir);
+if (bundle is not null) {
+    string zip_path = Path.Combine(out_dir, $"{bundle}-{version}.zip");
+    File.Delete(zip_path);
+    using (ZipArchive zip = ZipFile.Open(zip_path, ZipArchiveMode.Create)) {
+        Zip z = new(zip, deploy);
+        string dir = $"mods/{COMMON}";
+        z.dll(COMMON);
+        z.add(exe, $"{dir}/demaster.exe");
+        z.text(File.ReadAllText(bundle_readme!), $"{dir}/README.txt");
+        z.text(File.ReadAllText(Path.Combine(root, "tools", "install", "install.cmd")), $"{dir}/install.cmd");
+        z.text(File.ReadAllText(Path.Combine(root, "tools", "install", "install.ps1")), $"{dir}/install.ps1");
+        z.text(header + crates + "\n\n" + notices, $"{dir}/LICENSES.txt");
+        foreach (var m in MODS.Where(m => bundle_mods.Contains(m.Name)))
+            add_mod(z, m, with_exe: false);
+    }
+    Console.WriteLine(zip_path);
+    return 0;
+}
 foreach (var m in MODS) {
     string id = $"yuta.{m.Name}";
     string zip_path = Path.Combine(out_dir, $"{id}-{version}.zip");
     File.Delete(zip_path);
     using (ZipArchive zip = ZipFile.Open(zip_path, ZipArchiveMode.Create)) {
-        // Entry names use '/' on every OS, so the zip unpacks the same on Windows.
-        void add(string file, string name) => zip.CreateEntryFromFile(file, name);
-        // Text files get CRLF, for Notepad.
-        void add_text(string text, string name) {
-            ZipArchiveEntry entry = zip.CreateEntry(name);
-            using StreamWriter w = new(entry.Open(), new UTF8Encoding(false));
-            w.Write(text.ReplaceLineEndings("\r\n"));
-        }
-        // What a mod build may contain; anything else (efl/, build/ from a local test) stays out.
-        void add_dll(string mod_id) {
-            foreach (string ext in new[] { ".dll", ".deps.json", ".runtimeconfig.json", ".manifest.json", ".pdb" }) {
-                string p = Path.Combine(deploy, mod_id, mod_id + ext);
-                if (File.Exists(p)) add(p, $"mods/{mod_id}/{mod_id}{ext}");
-            }
-        }
-        string dir = $"mods/{id}";
-        string src = Path.Combine(root, "mods", m.Name);
-        add_dll(COMMON);
-        add_dll(id);
-        add_text(File.ReadAllText(Path.Combine(src, "settings.toml")), $"{dir}/settings.toml");
-        add_text(File.ReadAllText(Path.Combine(src, "README.txt")), $"{dir}/README.txt");
-        add_text(File.ReadAllText(Path.Combine(root, "tools", "install", "install.cmd")), $"{dir}/install.cmd");
-        add_text(File.ReadAllText(Path.Combine(root, "tools", "install", "install.ps1")), $"{dir}/install.ps1");
-        if (m.Builds) add(exe, $"{dir}/demaster.exe");
-        if (m.Live) add(live, $"{dir}/demaster_live.dll");
-        add_text(header + (m.Builds ? crates : "(none)\n") + "\n\n" + notices, $"{dir}/LICENSES.txt");
+        Zip z = new(zip, deploy);
+        z.dll(COMMON);
+        add_mod(z, m, with_exe: true);
     }
     Console.WriteLine(zip_path);
 }
 return 0;
+
+// A mod's folder: DLL and manifest, settings.toml, README.txt, install.cmd + .ps1, LICENSES.txt;
+// demaster.exe for the mods with PS2 files (in a bundle the shared library has the one copy).
+void add_mod(Zip z, (string Name, bool Builds, bool Live) m, bool with_exe) {
+    string id  = $"yuta.{m.Name}";
+    string dir = $"mods/{id}";
+    string src = Path.Combine(root, "mods", m.Name);
+    z.dll(id);
+    z.text(File.ReadAllText(Path.Combine(src, "settings.toml")), $"{dir}/settings.toml");
+    z.text(File.ReadAllText(Path.Combine(src, "README.txt")), $"{dir}/README.txt");
+    z.text(File.ReadAllText(Path.Combine(root, "tools", "install", "install.cmd")), $"{dir}/install.cmd");
+    z.text(File.ReadAllText(Path.Combine(root, "tools", "install", "install.ps1")), $"{dir}/install.ps1");
+    if (m.Builds && with_exe) z.add(exe, $"{dir}/demaster.exe");
+    if (m.Live) z.add(live, $"{dir}/demaster_live.dll");
+    string crate_text = !m.Builds && !m.Live ? "(none)\n"
+                      : with_exe ? crates
+                      : $"demaster.exe is in ../{COMMON}/; its crates and their licences: ../{COMMON}/LICENSES.txt\n";
+    z.text(header + crate_text + "\n\n" + notices, $"{dir}/LICENSES.txt");
+}
 
 static string this_file([CallerFilePath] string path = "") => path;
 
@@ -193,4 +236,22 @@ static string crate_licences(string root) {
         sb.AppendLine(t);
     }
     return sb.ToString();
+}
+
+// Entries of one zip. Names use '/' on every OS, so the zip unpacks the same on Windows.
+sealed class Zip(ZipArchive zip, string deploy) {
+    public void add(string file, string name) => zip.CreateEntryFromFile(file, name);
+    // Text files get CRLF, for Notepad.
+    public void text(string text, string name) {
+        ZipArchiveEntry entry = zip.CreateEntry(name);
+        using StreamWriter w = new(entry.Open(), new UTF8Encoding(false));
+        w.Write(text.ReplaceLineEndings("\r\n"));
+    }
+    // What a mod build may contain; anything else (efl/, build/ from a local test) stays out.
+    public void dll(string mod_id) {
+        foreach (string ext in new[] { ".dll", ".deps.json", ".runtimeconfig.json", ".manifest.json", ".pdb" }) {
+            string p = Path.Combine(deploy, mod_id, mod_id + ext);
+            if (File.Exists(p)) add(p, $"mods/{mod_id}/{mod_id}{ext}");
+        }
+    }
 }

@@ -2,10 +2,14 @@
 #
 # Installs one mod of ffx-mods (the folder this script is in, mods\yuta.<name>):
 #  1. adds it and the shared library yuta.ffx-mods to Fahrenheit's mods\loadorder;
-#  2. for a mod with PS2 files (demaster.exe next to this script), builds them from your
-#     PS2 disc (an image file, or the disc in a drive) and your PC game into this folder.
-# After that the mod needs neither the disc nor the image. Running it again is safe: the
-# build only redoes what changed (after a change in settings.toml, run it again).
+#  2. for a mod with PS2 files, builds them from your PS2 disc (an image file, or the disc
+#     in a drive) and your PC game into this folder, with demaster.exe (next to this
+#     script, or in mods\yuta.ffx-mods as in FFX Demaster).
+# In mods\yuta.ffx-mods (FFX Demaster, the bundle) it installs every mod of the family in
+# the mods folder: all of them into mods\loadorder, then one build of all their PS2 files
+# from one pass over the disc (demaster.exe build --all), each with its own settings.toml.
+# After that the mods need neither the disc nor the image. Running it again is safe: the
+# build only redoes what changed (after a change in a settings.toml, run it again).
 #
 # Double-click install.cmd, or from a terminal:
 #   install.cmd                         asks where the disc is
@@ -49,7 +53,29 @@ if (-not $manifest) { Fail "there is no mod manifest in $ModDir. Run install.cmd
 $ModId = $manifest.Name -replace '\.manifest\.json$', ''
 $Name = $ModId -replace '^yuta\.', ''
 $ModsDir = Split-Path -Parent $ModDir
-Write-Host "Installing $ModId into $ModsDir"
+# In the shared library's folder: every mod of the family.
+$All = $ModId -eq $Common
+$SharedExe = Join-Path (Join-Path $ModsDir $Common) 'demaster.exe'
+$exe = Join-Path $ModDir 'demaster.exe'
+if (-not (Test-Path -LiteralPath $exe) -and (Test-Path -LiteralPath $SharedExe)) { $exe = $SharedExe }
+$hasExe = Test-Path -LiteralPath $exe
+$Targets = @()
+if ($All) {
+    if (-not $hasExe) { Fail "there is no demaster.exe in $ModDir. Unpack the whole FFX Demaster zip into the Fahrenheit folder." }
+    # The mods in the converter's order (demaster mods), those that are in the mods folder.
+    foreach ($line in (& $exe mods)) {
+        if ($line -match '^(yuta\.[a-z0-9-]+) \(') {
+            $id = $Matches[1]
+            if (Test-Path -LiteralPath (Join-Path (Join-Path $ModsDir $id) "$id.manifest.json")) { $Targets += $id }
+        }
+    }
+    if ($Targets.Count -eq 0) { Fail "no mod of the family is in $ModsDir. Unpack the whole zip into the Fahrenheit folder." }
+    Write-Host "Installing $($Targets.Count) mods into $ModsDir`: $($Targets -join ', ')"
+}
+else {
+    $Targets = @($ModId)
+    Write-Host "Installing $ModId into $ModsDir"
+}
 
 # ---- 1. the load order ----------------------------------------------------------------------
 if (-not (Test-Path -LiteralPath (Join-Path (Join-Path $ModsDir $Common) "$Common.dll"))) {
@@ -70,7 +96,12 @@ foreach ($l in $lines) {
     $out.Add($l)
 }
 if (-not $placed) { $out.Add($Common) }
-if (-not $out.Contains($ModId)) { $out.Add($ModId) }
+foreach ($t in $Targets) { if ($t -ne $Common -and -not $out.Contains($t)) { $out.Add($t) } }
+# FFX Demaster's old all-in-one mod writes the same files as these mods: take it out.
+if ($All -and $out.Contains('yuta.demaster')) {
+    [void]$out.Remove('yuta.demaster')
+    Write-Host "mods\loadorder: removed yuta.demaster (the old all-in-one FFX Demaster; these mods replace it). Its folder mods\yuta.demaster can be deleted." -ForegroundColor Yellow
+}
 $lines = $out.ToArray()
 if (($lines -join "`n") -ne $before) {
     [System.IO.File]::WriteAllLines($loadorder, [string[]]$lines)
@@ -80,17 +111,24 @@ else {
     Write-Host 'mods\loadorder already lists the mod.'
 }
 
-$exe = Join-Path $ModDir 'demaster.exe'
 $settings = Join-Path $ModDir 'settings.toml'
-if (-not (Test-Path -LiteralPath $exe)) {
+$codeOnly = -not $hasExe
+if ($hasExe -and -not $All) { $codeOnly = [bool](& $exe mods | Where-Object { $_ -like "$ModId (*code only*" }) }
+if ($All) {
+    $builders = @(& $exe mods | Where-Object { $_ -notlike '*code only*' } | ForEach-Object { if ($_ -match '^(yuta\.[a-z0-9-]+) \(') { $Matches[1] } } | Where-Object { $Targets -contains $_ })
+    $codeOnly = $builders.Count -eq 0
+}
+if ($codeOnly) {
     Write-Host ''
-    Write-Host "$ModId has no PS2 files to build: it is installed. Its settings: $settings" -ForegroundColor Green
+    if ($All) { Write-Host 'None of these mods has PS2 files to build: they are installed.' -ForegroundColor Green }
+    else { Write-Host "$ModId has no PS2 files to build: it is installed. Its settings: $settings" -ForegroundColor Green }
     Write-Host 'Start the game through Fahrenheit; F8 in the game shows the mods and their state.'
     Finish 0
 }
 
 # ---- 2. the disc ----------------------------------------------------------------------------
-$optional = [bool](& $exe mods | Where-Object { $_ -like "$ModId (*optional*" })
+# All mods: without the disc, only what needs none is built (PS2 lighting's shaders).
+$optional = $All -or [bool](& $exe mods | Where-Object { $_ -like "$ModId (*optional*" })
 
 # A native program's output as one line (Windows PowerShell wraps its stderr lines in error records).
 function Text($lines) {
@@ -177,6 +215,7 @@ elseif (-not $NoDisc) {
 }
 
 if ($NoDisc -and -not $optional) { Fail "$ModId needs the PS2 disc." }
+if ($NoDisc -and $All) { Write-Host 'No disc: the mods that need it are not built (run install.cmd again with the disc).' -ForegroundColor Yellow }
 if ($source) {
     $check = & $exe disc-check $source 2>&1
     if ($LASTEXITCODE -ne 0) { Fail "$source can't be used: $(Text $check)" }
@@ -217,7 +256,8 @@ if ($LASTEXITCODE -ne 0) {
 Write-Host "Game: $(Text $found)"
 
 # ---- 4. the build ---------------------------------------------------------------------------
-$buildArgs = @('build', '--mod', $Name, '--mod-dir', $ModDir, '--config', $settings, '--save-source') + $gameArgs
+if ($All) { $buildArgs = @('build', '--all', '--mods-dir', $ModsDir) + $gameArgs }
+else { $buildArgs = @('build', '--mod', $Name, '--mod-dir', $ModDir, '--config', $settings, '--save-source') + $gameArgs }
 if ($source) { $buildArgs += @('--iso', $source) }
 if ($NoDisc) { $buildArgs += '--no-disc' }
 if ($Force) { $buildArgs += '--force' }
@@ -225,7 +265,14 @@ Write-Host ''
 & $exe @buildArgs
 if ($LASTEXITCODE -ne 0) { Fail "the build did not finish (see above). The game shows the HD version of what is missing; run install.cmd again to retry." }
 Write-Host ''
-Write-Host "$ModId is installed." -ForegroundColor Green
-Write-Host 'Start the game through Fahrenheit; F8 in the game shows the mods and their state.'
-Write-Host "After changing $settings, run install.cmd again."
+if ($All) {
+    Write-Host "Installed: $($Targets -join ', ')." -ForegroundColor Green
+    Write-Host 'Start the game through Fahrenheit; F8 in the game shows the mods and their state.'
+    Write-Host "Each mod has its settings in mods\yuta.<mod>\settings.toml. After changing one, run $(Join-Path $ModDir 'install.cmd') again (or that mod's own install.cmd)."
+}
+else {
+    Write-Host "$ModId is installed." -ForegroundColor Green
+    Write-Host 'Start the game through Fahrenheit; F8 in the game shows the mods and their state.'
+    Write-Host "After changing $settings, run install.cmd again."
+}
 Finish 0
