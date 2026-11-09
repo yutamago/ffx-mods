@@ -125,10 +125,16 @@ function New-LoadOrder([string[]]$lines, [string[]]$add, [string[]]$bundles, [st
     return $out.ToArray()
 }
 
+# Whether install.cmd switches a mod on and off: not the shared library, not yuta.demaster, not
+# ffx-remix's yuta.ffxremix.* (its launcher adds and removes them in mods\loadorder).
+function Switchable([string]$id) {
+    return $id -like 'yuta.*' -and $id -ne $Common -and $id -ne 'yuta.demaster' -and $id -notlike 'yuta.ffxremix.*'
+}
+
 # The mods install.cmd put into mods\loadorder that are no longer in it: switched off by hand.
 # $exists tells whether a mod's folder (with its manifest) is still there.
 function Removed-By-Hand([string[]]$record, [string[]]$lines, [scriptblock]$exists) {
-    return @($record | Where-Object { $_ -ne $Common -and $lines -notcontains $_ -and (& $exists $_) })
+    return @($record | Where-Object { (Switchable $_) -and $lines -notcontains $_ -and (& $exists $_) })
 }
 
 # The lines of a settings file and what each is: a table header, a key, a comment, a blank, or
@@ -308,12 +314,13 @@ $hasLoadOrder = Test-Path -LiteralPath $loadorder
 if ($hasLoadOrder) {
     $lines = @(Get-Content -LiteralPath $loadorder | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne '' })
 }
-$off = @(Read-Ids $OffFile | Where-Object { $_ -ne $Common })
+$off = @(Read-Ids $OffFile | Where-Object { Switchable $_ })
 $offBefore = $off -join "`n"
 $toDisable = @(Split-Ids $Disable)
 $toEnable = @(Split-Ids $Enable)
 foreach ($id in $toDisable + $toEnable) {
     if ($id -eq $Common) { Fail "$Common is the shared library every mod of the family needs: it is not switched on or off." }
+    if (-not (Switchable $id)) { Fail "$id is not switched on or off by install.cmd$(if ($id -like 'yuta.ffxremix.*') { " (ffx-remix's launcher installs it)" })." }
 }
 foreach ($id in $toDisable) {
     if (-not (Has-Mod $id)) { Fail "-Disable: there is no mod $id in $ModsDir (no folder mods\$id with its manifest)." }
@@ -401,7 +408,7 @@ elseif ($Targets.Count -gt 0) {
     Write-Host "mods\loadorder already lists $(if ($All) { 'the mods' } else { 'the mod' })."
 }
 # What install.cmd put into mods\loadorder, to notice a line deleted by hand next time.
-$record = @($new | Where-Object { $_ -like 'yuta.*' -and $_ -ne $Common -and $_ -ne 'yuta.demaster' })
+$record = @($new | Where-Object { Switchable $_ })
 [IO.File]::WriteAllLines($RecordFile, [string[]](@('# Written by install.cmd: the mods of the family it found in mods\loadorder. A mod listed here that is no longer in mods\loadorder was switched off by hand.') + $record))
 if (-not $All -and $Targets.Count -eq 0) { Finish 0 }
 

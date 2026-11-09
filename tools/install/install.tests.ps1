@@ -70,7 +70,8 @@ Same (New-LoadOrder @('yuta.ffx-mods', 'yuta.ps2-maps') @('yuta.ps2-maps', 'yuta
 Same (New-LoadOrder @('other', 'yuta.ffx-mods', 'yuta.a', 'yuta.c', 'yuta.ps2-bundle') @('yuta.a', 'yuta.b', 'yuta.c', 'yuta.d', 'yuta.ps2-bundle') @('yuta.ps2-bundle') @() $true) `
     @('other', 'yuta.ffx-mods', 'yuta.a', 'yuta.b', 'yuta.c', 'yuta.d', 'yuta.ps2-bundle') 'loadorder: a mod switched on again gets its place back'
 
-Same (Removed-By-Hand @('yuta.ps2-movies', 'yuta.ps2-maps', 'yuta.gone') @('yuta.ffx-mods', 'yuta.ps2-maps') { param($i) $i -ne 'yuta.gone' }) @('yuta.ps2-movies') 'Removed-By-Hand'
+Same (Removed-By-Hand @('yuta.ps2-movies', 'yuta.ps2-maps', 'yuta.gone', 'yuta.ffxremix.core', 'yuta.ffx-mods') @('yuta.ps2-maps') { param($i) $i -ne 'yuta.gone' }) @('yuta.ps2-movies') 'Removed-By-Hand (not the shared library, not ffx-remix''s mods)'
+Check (-not (Switchable 'yuta.ffxremix.core') -and -not (Switchable 'yuta.ffx-mods') -and -not (Switchable 'yuta.demaster') -and (Switchable 'yuta.ps2-movies')) 'Switchable'
 
 # ---- the settings merge ---------------------------------------------------------------------
 $defaults = @'
@@ -244,6 +245,17 @@ Same (LoadOrder $mods) @('someone.else', 'yuta.ffx-mods', 'yuta.bug-fixes', 'yut
 Check (-not (Test-Path (Join-Path $mods 'ffx-mods-off.txt'))) 'the empty off list is deleted'
 $r = Run-Install $feel @('-Disable', 'yuta.ffx-mods')
 Check ($r.Code -ne 0) 'the shared library cannot be switched off'
+# ffx-remix's mods: its launcher adds and removes their lines; install.cmd leaves them alone
+$remix = Add-Mod $mods 'ffxremix.core' $null
+$lines = @(LoadOrder $mods)
+Set-Content -LiteralPath (Join-Path $mods 'loadorder') -Value ($lines + 'yuta.ffxremix.core')
+$r = Run-Install $feel @()
+Set-Content -LiteralPath (Join-Path $mods 'loadorder') -Value $lines
+$r = Run-Install $feel @()
+Check (-not (Test-Path (Join-Path $mods 'ffx-mods-off.txt'))) 'a yuta.ffxremix.* line removed from loadorder does not go on the off list'
+$r = Run-Install $feel @('-Disable', 'ffxremix.core')
+Check ($r.Code -ne 0) 'install.cmd does not switch ffx-remix''s mods off'
+Remove-Item -Recurse -Force $remix
 $r = Run-Install $feel @('-Disable', 'no-such-mod')
 Check ($r.Code -ne 0) 'an unknown mod cannot be switched off'
 
