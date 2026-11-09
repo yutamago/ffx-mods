@@ -9,11 +9,11 @@ alone or together; each is a separate zip.
 | Mod | What it changes | PS2 disc | Installed size | Needs |
 |---|---|---|---|---|
 | [PS2 music engine](#ps2-music-engine) (`yuta.ps2-music-engine`) | the original soundtrack played by the PS2's own sound driver inside the game | yes | ~60 MB | — |
-| [PS2 soundtrack](#ps2-soundtrack) (`yuta.ps2-soundtrack`) | the original soundtrack rendered from the PS2 music by the PS2 sound driver; new games start with it | yes | ~650 MB | — |
-| [PS2 movies](#ps2-movies) (`yuta.ps2-movies`) | the PS2 movies (FMVs), 4:3, with the PS2 sound | yes | ~1.5 GB | PS2 aspect ratio recommended |
+| [PS2 soundtrack](#ps2-soundtrack) (`yuta.ps2-soundtrack`) | the original soundtrack rendered from the PS2 music by the PS2 sound driver; new games start with it | yes | ~890 MB | — |
+| [PS2 movies](#ps2-movies) (`yuta.ps2-movies`) | the PS2 movies (FMVs), 4:3, with the PS2 sound | yes | ~1.6 GB | PS2 aspect ratio recommended |
 | [PS2 characters](#ps2-characters) (`yuta.ps2-characters`) | PS2 models and textures for the party, NPCs, monsters, aeons, weapons, objects | yes | ~860 MB | — |
-| [PS2 maps](#ps2-maps) (`yuta.ps2-maps`) | PS2 textures of the field and battle maps, the PS2 painted backgrounds | yes | ~3 GB | PS2 aspect ratio recommended |
-| [PS2 effects](#ps2-effects) (`yuta.ps2-effects`) | PS2 textures of spells, summons and the other effects | yes | ~500 MB | — |
+| [PS2 maps](#ps2-maps) (`yuta.ps2-maps`) | PS2 textures of the field and battle maps, the PS2 painted backgrounds | yes | ~2.3 GB | PS2 aspect ratio recommended |
+| [PS2 effects](#ps2-effects) (`yuta.ps2-effects`) | PS2 textures of spells, summons and the other effects | yes | ~1.3 GB | — |
 | [PS2 lighting](#ps2-lighting) (`yuta.ps2-lighting`) | characters lit the PS2 way | optional | ~80 MB | — |
 | [No HD post-effects](#no-hd-post-effects) (`yuta.no-hd-post-effects`) | no HD glow, no shadow maps (the PS2's ground shadows) | no | <1 MB | — |
 | [PS2 interface](#ps2-interface) (`yuta.ps2-interface`) | PS2 menus, windows, font, portraits, title screen, button glyphs; a clean start-up | yes | ~180 MB | PS2 aspect ratio recommended |
@@ -110,8 +110,8 @@ starts on the arranged one); loaded saves keep their choice. With PS2
 music engine too, that engine plays live and this bank is what it falls
 back on (the three tracks with streamed parts).
 
-- PS2 disc: needed. Size: ~650 MB (one sound bank). The build takes a few
-  minutes.
+- PS2 disc: needed. Size: ~890 MB (one sound bank). The build takes about
+  five minutes.
 
 ### PS2 movies
 
@@ -127,7 +127,7 @@ them) stay HD.
 - PS2 disc: needed. Needs ffmpeg to encode (not included): if none is
   found, `install.cmd` downloads an LGPL build of FFmpeg (168 MB) into the
   mod's `tools\` and checks its SHA-256 ([`docs/movies.md`](docs/movies.md)).
-- Size: ~1.5 GB. The first build takes about 25 minutes.
+- Size: ~1.6 GB. The first build takes 30 to 35 minutes.
 
 ### PS2 characters
 
@@ -154,7 +154,7 @@ PS2 paintings only with PS2 aspect ratio's 4:3 picture; like PS2 movies,
 the mod is rebuilt when that changes ([`docs/maps.md`](docs/maps.md),
 [`docs/screen.md`](docs/screen.md)).
 
-- PS2 disc: needed. Size: ~3 GB. The build takes several minutes.
+- PS2 disc: needed. Size: ~2.3 GB. The build takes about 15 minutes.
 
 ### PS2 effects
 
@@ -162,7 +162,7 @@ The PS2 textures of the effects: spells, summons, overdrives and the
 particles of the maps and monsters (`effects.textures`,
 [`docs/effects.md`](docs/effects.md)).
 
-- PS2 disc: needed. Size: ~500 MB.
+- PS2 disc: needed. Size: ~1.3 GB. The build takes a few minutes.
 
 ### PS2 lighting
 

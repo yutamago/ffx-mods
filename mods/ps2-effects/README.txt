@@ -12,7 +12,7 @@ particles of the maps and monsters, in place of the HD Remaster's redrawn
 ones.
 
 PS2 disc: needed (read once, by install.cmd)
-Size: about 500 MB
+Size: about 1.3 GB
 Dependencies: Needs the shared library yuta.ffx-mods (in this zip). Works alone and
 with any other mod of the family.
 

@@ -18,10 +18,10 @@ cameras.
 
 The converter encodes the movies with ffmpeg. If none is found, install.cmd
 downloads an LGPL build of FFmpeg 8.1.3 (168 MB) into the mod's tools\
-folder and checks its SHA-256. The first build takes about 25 minutes.
+folder and checks its SHA-256. The first build takes 30 to 35 minutes.
 
 PS2 disc: needed (read once, by install.cmd)
-Size: about 1.5 GB
+Size: about 1.6 GB
 Dependencies: Needs the shared library yuta.ffx-mods (in this zip). Works alone and
 with any other mod of the family.
 

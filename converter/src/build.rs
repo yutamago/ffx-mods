@@ -916,7 +916,7 @@ fn run_all(args: &Args) -> Result<bool> {
             std::fs::write(dir.join("settings.toml"), p.default_toml)?;
         }
         match run_one(&a, Some(&shared)) {
-            Ok(true) => results.push((p.id(), "built".to_string())),
+            Ok(true) => results.push((p.id(), "ok".to_string())),
             Ok(false) => {
                 all_ok = false;
                 results.push((p.id(), "some jobs FAILED".to_string()));

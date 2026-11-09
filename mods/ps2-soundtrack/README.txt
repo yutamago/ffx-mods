@@ -20,7 +20,7 @@ this mod's bank is what it falls back on (the three tracks with streamed
 parts).
 
 PS2 disc: needed (read once, by install.cmd)
-Size: about 650 MB
+Size: about 890 MB
 Dependencies: Needs the shared library yuta.ffx-mods (in this zip). Works alone and
 with any other mod of the family.
 

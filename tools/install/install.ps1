@@ -108,7 +108,7 @@ if (($lines -join "`n") -ne $before) {
     Write-Host "mods\loadorder: $($lines -join ', ')"
 }
 else {
-    Write-Host 'mods\loadorder already lists the mod.'
+    Write-Host "mods\loadorder already lists $(if ($All) { 'the mods' } else { 'the mod' })."
 }
 
 $settings = Join-Path $ModDir 'settings.toml'

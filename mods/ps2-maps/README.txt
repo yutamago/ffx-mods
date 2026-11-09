@@ -15,7 +15,7 @@ or remove PS2 aspect ratio and the F8 window says the backgrounds need
 building again.
 
 PS2 disc: needed (read once, by install.cmd)
-Size: about 3 GB
+Size: about 2.3 GB
 Dependencies: Needs the shared library yuta.ffx-mods (in this zip). Works alone and
 with any other mod of the family.
 
