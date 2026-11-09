@@ -192,9 +192,10 @@ internal sealed unsafe class Game(nint moduleBase) {
         return 0;
     }
 
-    /// <summary>The translation row of the first mesh's 3x4 world matrix (<c>*(mesh +4)</c>, floats 9 to 11) of map object <paramref name="id"/>, as the renderer reads it.</summary>
-    public bool ObjectMeshTranslation(int id, out Vector3 t) {
+    /// <summary>The translation row (floats 9 to 11) and floats 0 and 2 (a turn about y shows there) of the first mesh's 3x4 world matrix (<c>*(mesh +4)</c>) of map object <paramref name="id"/>, as the renderer reads it.</summary>
+    public bool ObjectMeshTranslation(int id, out Vector3 t, out Vector2 r) {
         t = default;
+        r = default;
         ulong identity = ObjectIdentity(id);
         if (identity == 0) return false;
         nint node = (nint)(uint)(identity >> 32);
@@ -204,6 +205,7 @@ internal sealed unsafe class Game(nint moduleBase) {
         float* m = mesh == 0 ? null : *(float**)(mesh + 4);
         if (m == null) return false;
         t = new Vector3(m[9], m[10], m[11]);
+        r = new Vector2(m[0], m[2]);
         return true;
     }
 

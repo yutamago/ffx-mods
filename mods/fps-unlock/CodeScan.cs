@@ -84,6 +84,30 @@ internal static class CodeScan {
     public static int PrologueBranch(ReadOnlySpan<byte> body, uint va, ReadOnlySpan<bool> relocated = default) =>
         BranchInto(body, va, va + 1, va + PatchSize, relocated);
 
+    /// <summary>
+    ///     Whether a function's live bytes are the expected ones (<paramref name="pattern"/>: hex bytes, <c>??</c> for any).
+    ///     <paramref name="preHooked"/>: another program hooked it before Fahrenheit's hooks went in (ffx-rust's harness hook,
+    ///     an overlay): it starts with a <c>jmp rel32</c> over its first 5 bytes and the rest is as expected. MinHook hooks
+    ///     over such a <c>jmp</c> (its trampoline takes the <c>jmp</c> along), so the chain runs the other program's hook,
+    ///     then the function.
+    /// </summary>
+    public static bool PrologueMatches(ReadOnlySpan<byte> live, string pattern, out bool preHooked) {
+        string[] want = pattern.Split(' ');
+        preHooked = false;
+        if (live.Length < want.Length) return false;
+        if (Same(live, want, 0)) return true;
+        if (live[0] != JmpRel32 || want[0] == "e9" || want.Length <= PatchSize || !Same(live, want, PatchSize)) return false;
+        preHooked = true;
+        return true;
+    }
+
+    private static bool Same(ReadOnlySpan<byte> live, string[] want, int from) {
+        for (int i = from; i < want.Length; i++) {
+            if (want[i] != "??" && live[i] != Convert.ToByte(want[i], 16)) return false;
+        }
+        return true;
+    }
+
     /// <summary>The target of the <c>call rel32</c> at <paramref name="siteVa"/>, if <paramref name="code"/> starts with one.</summary>
     public static bool TryCallTarget(ReadOnlySpan<byte> code, uint siteVa, out uint target) {
         target = 0;

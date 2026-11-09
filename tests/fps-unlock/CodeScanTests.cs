@@ -151,4 +151,20 @@ public class CodeScanTests {
 
     [Fact]
     public void A_trampoline_that_does_not_start_like_the_function_is_a_problem() => Assert.NotNull(CodeScan.ChainProblem(0x1000, 0x2000, 0xe9, 0xcc, 0x55));
+
+    [Fact]
+    public void A_prologue_matches_exactly_or_after_another_programs_jmp() {
+        const string Want = "56 8b f1 8b 56 74 85 d2";
+        Assert.True(CodeScan.PrologueMatches([0x56, 0x8b, 0xf1, 0x8b, 0x56, 0x74, 0x85, 0xd2], Want, out bool pre));
+        Assert.False(pre);
+        // ffx-rust's harness hook on Renderer_PresentFlip: jmp rel32 over the first 5 bytes, the 6th left as it was.
+        Assert.True(CodeScan.PrologueMatches([0xe9, 0x10, 0x20, 0x30, 0x40, 0x74, 0x85, 0xd2], Want, out pre));
+        Assert.True(pre);
+        // A jmp and different code after it: another game version, refused.
+        Assert.False(CodeScan.PrologueMatches([0xe9, 0x10, 0x20, 0x30, 0x40, 0x75, 0x85, 0xd2], Want, out _));
+        Assert.False(CodeScan.PrologueMatches([0x55, 0x8b, 0xf1, 0x8b, 0x56, 0x74, 0x85, 0xd2], Want, out _));
+        // Wildcards still match anything; a pattern of 5 bytes or fewer cannot tell a jmp from a different function.
+        Assert.True(CodeScan.PrologueMatches([0xa1, 1, 2, 3, 4], "a1 ?? ?? ?? ??", out pre));
+        Assert.False(CodeScan.PrologueMatches([0xe9, 1, 2, 3, 4], "a1 ?? ?? ?? ??", out _));
+    }
 }

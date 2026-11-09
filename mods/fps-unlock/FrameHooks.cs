@@ -123,6 +123,8 @@ internal sealed unsafe class FrameHooks {
     private readonly DrawCounters _drawCounters = new(Game.DrawCountersSize);
     private readonly ClothHistory _cloth = new();
     private readonly ObjectHistory _objects = new();
+    // The functions another program had hooked before ours (CodeScan.PrologueMatches).
+    private readonly HashSet<uint> _preHooked = [];
     public readonly FrameStats Stats = new();
 
     // The current frame (game thread). Vanilla outside updateFFX, so calls from elsewhere pass through.
@@ -300,9 +302,15 @@ internal sealed unsafe class FrameHooks {
     public bool CheckGame() {
         bool ok = true;
         foreach ((uint va, string name, string bytes, int length) in Prologues) {
-            if (!Matches(va, name, bytes)) {
+            int n = bytes.Split(' ').Length;
+            if (!CodeScan.PrologueMatches(_game.Code(va, n), bytes, out bool preHooked)) {
+                Matches(va, name, bytes); // logs the byte that differs
                 ok = false;
                 continue;
+            }
+            if (preHooked) {
+                _preHooked.Add(va);
+                _log.Info($"FPS unlock: {name} (0x{va:x8}) is already hooked by another program (it starts with a jmp); this mod's hook goes after it.");
             }
             // The live code: skip the bytes the loader rewrote for this run's base (absolute operands, not branches).
             int at = CodeScan.PrologueBranch(_game.Code(va, length), va, PeRelocations.Covered(_game.Relocations, (uint)Game.Offset(va), length));
@@ -407,7 +415,7 @@ internal sealed unsafe class FrameHooks {
         nint original = _game.Address(va);
         (string name, byte first) = ("0x" + va.ToString("x8"), _game.CodeByte(va));
         foreach ((uint fn, string n, string bytes, _) in Prologues) {
-            if (fn == va) (name, first) = (n, Convert.ToByte(bytes[..2], 16));
+            if (fn == va) (name, first) = (n, _preHooked.Contains(va) ? CodeScan.JmpRel32 : Convert.ToByte(bytes[..2], 16));
         }
         string? problem = CodeScan.ChainProblem(at, original, _game.CodeByte(va), at == 0 ? (byte)0 : *(byte*)at, first);
         if (problem is null) return next;
@@ -1618,7 +1626,7 @@ internal sealed unsafe class FrameHooks {
         if (string.IsNullOrEmpty(path)) return null;
         try {
             var w = new System.IO.StreamWriter(path, append: false) { AutoFlush = false };
-            w.WriteLine("ms\tkind\talpha\tticks\tmap\tid\tx\ty\tz\tplaced");
+            w.WriteLine("ms\tkind\talpha\tticks\tmap\tid\tx\ty\tz\tm0\tm2\tplaced\tgame_x\tgame_y\tgame_z\tgame_ax\tgame_ay\tgame_az");
             return w;
         }
         catch {
@@ -1632,11 +1640,13 @@ internal sealed unsafe class FrameHooks {
         string head = $"{ms:0.000}\t{_frame.Kind}\t{_frame.Alpha:0.0000}\t{_frame.Plan.Ticks}\t{_game.Map}";
         bool any = false;
         foreach (int id in _objects.Ids()) {
-            if (!_game.ObjectMeshTranslation(id, out Vector3 t)) continue;
-            _trace!.WriteLine($"{head}\t{id}\t{t.X:0.0000}\t{t.Y:0.0000}\t{t.Z:0.0000}\t{(_objectsPlaced.Contains(id) ? 1 : 0)}");
+            if (!_game.ObjectMeshTranslation(id, out Vector3 t, out Vector2 r)) continue;
+            _objects.Truth(id, out _, out ObjectPose g);
+            _trace!.WriteLine($"{head}\t{id}\t{t.X:0.0000}\t{t.Y:0.0000}\t{t.Z:0.0000}\t{r.X:0.00000}\t{r.Y:0.00000}\t{(_objectsPlaced.Contains(id) ? 1 : 0)}"
+                + $"\t{g.Position.X:0.0000}\t{g.Position.Y:0.0000}\t{g.Position.Z:0.0000}\t{g.Angles.X:0.00000}\t{g.Angles.Y:0.00000}\t{g.Angles.Z:0.00000}");
             any = true;
         }
-        if (!any) _trace!.WriteLine($"{head}\t-1\t0\t0\t0\t0");
+        if (!any) _trace!.WriteLine($"{head}\t-1\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0");
         if (Stats.Total(Counter.Frames) % 120 == 0) _trace!.Flush();
     }
 
