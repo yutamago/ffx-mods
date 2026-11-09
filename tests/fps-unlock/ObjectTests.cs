@@ -91,6 +91,19 @@ public class ObjectHistoryTests {
     }
 
     [Fact]
+    public void An_object_that_stood_still_is_not_placed() {
+        ObjectHistory h = new();
+        Tick(h, 3);
+        Tick(h, 3);
+        List<int> moving = [];
+        h.Moving(moving);
+        Assert.Empty(moving);
+        Tick(h, 4);
+        h.Moving(moving);
+        Assert.Equal([7], moving);
+    }
+
+    [Fact]
     public void A_tick_the_object_was_not_set_in_breaks_the_pair() {
         ObjectHistory h = new();
         Tick(h, 0);

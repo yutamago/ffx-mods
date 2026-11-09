@@ -230,12 +230,13 @@ public sealed class ObjectHistory {
         foreach (int k in _stale) _samples.Remove(k);
     }
 
-    /// <summary>The ids <see cref="TryAt"/> may draw between ticks now (two consecutive samples up to this tick, no warp).</summary>
+    /// <summary>The ids <see cref="TryAt"/> may draw between ticks now (two consecutive, different samples up to this tick, no warp).</summary>
     public void Moving(List<int> into) {
         into.Clear();
         if (AllCut) return;
         foreach ((int k, Sample s) in _samples) {
-            if (s.CurSerial == Serial && s.PrevSerial == Serial - 1 && !s.Cut) into.Add(k);
+            // Two equal samples: the object stood still over the tick; the game's own pose is already the one to draw.
+            if (s.CurSerial == Serial && s.PrevSerial == Serial - 1 && !s.Cut && s.Prev != s.Cur) into.Add(k);
         }
     }
 
