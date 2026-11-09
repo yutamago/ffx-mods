@@ -57,10 +57,14 @@ $Name = $ModId -replace '^yuta\.', ''
 $ModsDir = Split-Path -Parent $ModDir
 
 # A bundle: a mod whose manifest depends on mods of the family besides the shared library.
+# ffx-remix's mods (yuta.ffxremix.*: they use the shared library and its F8 window, and depend
+# on their own yuta.ffxremix.core) are not bundles: ffx-remix's launcher installs them, and they
+# never count as the mods of a bundle either.
 function Bundled([string]$file) {
+    if ((Split-Path -Leaf (Split-Path -Parent $file)) -like 'yuta.ffxremix.*') { return @() }
     try { $deps = @((Get-Content -LiteralPath $file -Raw | ConvertFrom-Json).Dependencies) }
     catch { return @() }
-    return @($deps | Where-Object { $_ -and $_ -ne $Common })
+    return @($deps | Where-Object { $_ -and $_ -ne $Common -and $_ -notlike 'yuta.ffxremix.*' })
 }
 # The bundles in the mods folder.
 $Bundles = @(Get-ChildItem -LiteralPath $ModsDir -Directory -Filter 'yuta.*' -ErrorAction SilentlyContinue |
