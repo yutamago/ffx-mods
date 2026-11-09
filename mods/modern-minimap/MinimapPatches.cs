@@ -177,14 +177,20 @@ internal static unsafe class MinimapPatches {
         // The fog of war (four maps) is revealed around the player, as the game does.
         if (player is not null && fogged)
             fn(ref _reveal_fog, REVEAL_FOG)(guide, player.Pos.X, player.Pos.Z);
-        // The blink counter.
+        // The blink, as rcbgGuideUpdateEx: the counter's phase (signed % 30) as a triangle
+        // wave 0..15..0, opacity phase / 15 (the game's phase * 128 / 15 of 128); then the
+        // counter goes up by one.
+        int phase = *(int*)(guide + 0x74) % 30;
+        if (phase > 15) phase = 30 - phase;
+        float blink = Math.Clamp(phase / 15f, 0f, 1f);
         *(uint*)(guide + 0x74) += 1;
 
         MinimapView.update(new MinimapView.Frame(
             Shown:   Math.Min(fade, 128u) / 128f,
             Player:  player,
             Markers: markers,
-            Camera:  camera()), mesh, _log);
+            Camera:  camera(),
+            Blink:   blink), mesh, _log);
         return r;
     }
 

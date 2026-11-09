@@ -21,7 +21,7 @@ internal static unsafe class MinimapView {
     /// <summary>The camera's forward and right from its view matrix, and eye to look-at.</summary>
     public readonly record struct Camera(Vector3 Forward, Vector3 Right, Vector3 EyeToLookAt);
 
-    public sealed record Frame(float Shown, Marker? Player, List<Marker> Markers, Camera Camera);
+    public sealed record Frame(float Shown, Marker? Player, List<Marker> Markers, Camera Camera, float Blink);
 
     /// <summary>The mesh on the ground (x, z): its triangles and its outline (edges of one triangle).</summary>
     private sealed record Ground(nint Mesh, Vector2[] Triangles, Vector2[] Outline, int Seams);
@@ -325,11 +325,12 @@ internal static unsafe class MinimapView {
         draw.AddCircle(centre, radius + 1f, black(0.63f * alpha), 64, 1f);
         draw.AddCircle(centre, radius, col(RIM, 0.9f * alpha), 64, 2f);
 
-        // The markers: inside at their place, beyond on the rim. None blinks: the game's
-        // blink flag (0x1000) is left out on purpose.
+        // The markers: inside at their place, beyond on the rim. Those with the blink flag
+        // (0x1000) fade in and out as on the game's minimap (f.Blink).
         float icon = MathF.Max(radius * 0.075f, 4f);
         foreach (Marker k in f.Markers) {
-            marker(draw, k, to_px, centre, radius - icon, radius, icon, alpha);
+            float a = (k.Flags & MinimapPatches.BLINK) != 0 ? alpha * f.Blink : alpha;
+            if (a > 0f) marker(draw, k, to_px, centre, radius - icon, radius, icon, a);
         }
 
         // The player: an arrow of the character's facing in a ring.
