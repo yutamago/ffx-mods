@@ -6,19 +6,22 @@
 //! (`build/files.json`, `build/stamp.json`) in its folder. Without a mod the
 //! converter builds everything into one folder (`demaster.toml`, for
 //! development); `build --all` builds every installed mod (the installer of
-//! the PS2 bundle, `mods/ps2-bundle`).
+//! the PS2 bundle, `mods/bundles/ps2-bundle`).
 //!
-//! The C# side keeps the same lists (`mods/<name>/Mod.cs`); the tests below
-//! check that they agree, and that `mods/<name>/settings.default.toml` holds
-//! the defaults. The zips ship that file; the installer makes the player's
+//! A mod's settings and their defaults are its
+//! `mods/<group>/<name>/settings.default.toml` ([`Profile::settings`]); the
+//! C# mod has the same file embedded (`SettingInfo.defaults_of`). The tests
+//! below check it against [`Config`] and the mod's `Mod.cs`. The zips ship that file; the installer makes the player's
 //! `settings.toml` from it when there is none (an update never replaces the
 //! player's), and a key the player's file leaves out gets the mod's default
 //! ([`Config::parse_with_defaults`] over [`Profile::default_toml`]).
 
 use std::collections::BTreeMap;
 use std::path::Path;
+use std::sync::LazyLock;
 
 use crate::config::Config;
+use crate::jobs;
 
 /// Whether a mod's files come from the PS2 disc.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -52,12 +55,11 @@ pub struct Profile {
     /// The folder in ffx-mods (`mods/<group>/<name>`); the Fahrenheit id is `yuta.<name>`.
     pub name: &'static str,
     pub title: &'static str,
-    /// Every setting of its `settings.toml`.
-    pub settings: &'static [&'static str],
     /// Its converter jobs (names in `jobs::registry()`).
     pub jobs: &'static [&'static str],
     pub disc: DiscUse,
-    /// Its defaults, `settings.default.toml` in the mod folder (and the zip).
+    /// Its defaults, `settings.default.toml` in the mod folder (and the zip):
+    /// the one list of its settings ([`Profile::settings`]) and their defaults.
     pub default_toml: &'static str,
     /// What stays HD without the disc ([`DiscUse::Optional`]).
     pub without_disc: &'static str,
@@ -72,13 +74,40 @@ impl Profile {
         format!("yuta.{}", self.name)
     }
 
+    /// Every setting of its `settings.toml`: the keys of its
+    /// [`Profile::default_toml`] (without `[source]` and `[build]`), sorted.
+    pub fn settings(&self) -> &'static [&'static str] {
+        static ALL: LazyLock<Vec<&'static [&'static str]>> = LazyLock::new(|| {
+            PROFILES
+                .iter()
+                .map(|p| {
+                    let keys: Vec<&'static str> = Config::present_keys(p.default_toml)
+                        .expect("the shipped settings.default.toml parses")
+                        .into_iter()
+                        .filter(|k| !k.starts_with("source.") && !k.starts_with("build."))
+                        .map(|k| &*Box::leak(k.into_boxed_str()))
+                        .collect();
+                    &*Box::leak(keys.into_boxed_slice())
+                })
+                .collect()
+        });
+        let i = PROFILES.iter().position(|p| p.name == self.name).expect("a profile of PROFILES");
+        ALL[i]
+    }
+
     /// Its default settings (`key` -> value) as in [`Profile::default_toml`].
     pub fn defaults(&self) -> BTreeMap<String, String> {
         let config = Config::parse_with_defaults(self.default_toml, self.default_toml)
             .expect("the shipped settings.default.toml parses")
             .0;
         let all = config.settings();
-        self.settings.iter().map(|k| (k.to_string(), all[*k].clone())).collect()
+        self.settings().iter().map(|k| (k.to_string(), all[*k].clone())).collect()
+    }
+
+    /// Whether one of its own jobs reads `key`: a setting the converter
+    /// applies (alone or with the mod's code), so changing it needs a rebuild.
+    pub fn builds_from(&self, key: &str) -> bool {
+        jobs::registry().iter().any(|j| self.jobs.contains(&j.name()) && j.settings().contains(&key))
     }
 }
 
@@ -89,7 +118,6 @@ pub const PROFILES: &[Profile] = &[
     Profile {
         name: "ps2-music-engine",
         title: "PS2 music engine",
-        settings: &["audio.music_engine"],
         jobs: &["audio.live"],
         disc: DiscUse::Needed,
         default_toml: include_str!("../../mods/ps2/ps2-music-engine/settings.default.toml"),
@@ -99,7 +127,6 @@ pub const PROFILES: &[Profile] = &[
     Profile {
         name: "ps2-soundtrack",
         title: "PS2 soundtrack",
-        settings: &["audio.music", "audio.soundtrack"],
         jobs: &["audio.music"],
         disc: DiscUse::Needed,
         default_toml: include_str!("../../mods/ps2/ps2-soundtrack/settings.default.toml"),
@@ -109,7 +136,6 @@ pub const PROFILES: &[Profile] = &[
     Profile {
         name: "ps2-movies",
         title: "PS2 movies",
-        settings: &["movies"],
         jobs: &["movies"],
         disc: DiscUse::Needed,
         default_toml: include_str!("../../mods/ps2/ps2-movies/settings.default.toml"),
@@ -119,16 +145,6 @@ pub const PROFILES: &[Profile] = &[
     Profile {
         name: "ps2-characters",
         title: "PS2 characters",
-        settings: &[
-            "models.party",
-            "models.npc",
-            "models.monster",
-            "models.aeon",
-            "models.weapon",
-            "models.object",
-            "render.texture_filter",
-            "render.texture_quality",
-        ],
         jobs: &[
             "chr.party",
             "chr.monster",
@@ -151,7 +167,6 @@ pub const PROFILES: &[Profile] = &[
     Profile {
         name: "ps2-maps",
         title: "PS2 maps",
-        settings: &["maps.field", "maps.battle", "maps.backgrounds"],
         jobs: &["maps.field", "maps.battle", "maps.backgrounds"],
         disc: DiscUse::Needed,
         default_toml: include_str!("../../mods/ps2/ps2-maps/settings.default.toml"),
@@ -161,7 +176,6 @@ pub const PROFILES: &[Profile] = &[
     Profile {
         name: "ps2-effects",
         title: "PS2 effects",
-        settings: &["effects.textures"],
         jobs: &["fx.textures"],
         disc: DiscUse::Needed,
         default_toml: include_str!("../../mods/ps2/ps2-effects/settings.default.toml"),
@@ -171,7 +185,6 @@ pub const PROFILES: &[Profile] = &[
     Profile {
         name: "ps2-lighting",
         title: "PS2 lighting",
-        settings: &["render.lighting"],
         jobs: &["render.lighting", "render.lighting.events"],
         disc: DiscUse::Optional,
         default_toml: include_str!("../../mods/ps2/ps2-lighting/settings.default.toml"),
@@ -181,7 +194,6 @@ pub const PROFILES: &[Profile] = &[
     Profile {
         name: "no-hd-post-effects",
         title: "No HD post-effects",
-        settings: &["render.glow", "render.shadows"],
         jobs: &[],
         disc: DiscUse::None,
         default_toml: include_str!("../../mods/ps2/no-hd-post-effects/settings.default.toml"),
@@ -191,15 +203,6 @@ pub const PROFILES: &[Profile] = &[
     Profile {
         name: "ps2-interface",
         title: "PS2 interface",
-        settings: &[
-            "ui.menus",
-            "ui.portraits",
-            "ui.font",
-            "ui.title",
-            "ui.loading",
-            "ui.button_glyphs",
-            "ui.boot_logo",
-        ],
         jobs: &["ui.menus", "ui.title", "ui.loading", "ui.glyphs", "ui.font", "ui.boot_logo"],
         disc: DiscUse::Needed,
         default_toml: include_str!("../../mods/ps2/ps2-interface/settings.default.toml"),
@@ -209,7 +212,6 @@ pub const PROFILES: &[Profile] = &[
     Profile {
         name: "ps2-aspect-ratio",
         title: "PS2 aspect ratio",
-        settings: &["render.aspect"],
         jobs: &[],
         disc: DiscUse::None,
         default_toml: include_str!("../../mods/ps2/ps2-aspect-ratio/settings.default.toml"),
@@ -219,7 +221,6 @@ pub const PROFILES: &[Profile] = &[
     Profile {
         name: "ps2-game-feel",
         title: "PS2 game feel",
-        settings: &["timing.run_speed", "ui.battle_menu_delay", "ui.battle_subtitles"],
         jobs: &[],
         disc: DiscUse::None,
         default_toml: include_str!("../../mods/ps2/ps2-game-feel/settings.default.toml"),
@@ -229,7 +230,6 @@ pub const PROFILES: &[Profile] = &[
     Profile {
         name: "bug-fixes",
         title: "Bug fixes",
-        settings: &["fixes.npc_mouths", "fixes.farplane_video", "fixes.lulu_fury"],
         jobs: &[],
         disc: DiscUse::None,
         default_toml: include_str!("../../mods/ps2/bug-fixes/settings.default.toml"),
@@ -239,7 +239,6 @@ pub const PROFILES: &[Profile] = &[
     Profile {
         name: "modern-minimap",
         title: "Modern Minimap",
-        settings: &["minimap.style", "minimap.size", "minimap.corner"],
         jobs: &[],
         disc: DiscUse::None,
         default_toml: include_str!("../../mods/enhancements/modern-minimap/settings.default.toml"),
@@ -249,40 +248,6 @@ pub const PROFILES: &[Profile] = &[
     Profile {
         name: "fps-unlock",
         title: "FPS unlock",
-        settings: &[
-            "frames.enabled",
-            "frames.target",
-            "frames.fixed_fps",
-            "frames.vsync",
-            "frames.overlay",
-            "frames.between_ticks",
-            "frames.effects",
-            "frames.speed.time_scale",
-            "frames.speed.fast",
-            "frames.speed.slow",
-            "frames.speed.mute_when_fast",
-            "frames.speed.booster_limits",
-            "frames.speed.scene_time",
-            "frames.interpolate.camera",
-            "frames.interpolate.characters",
-            "frames.interpolate.bones",
-            "frames.interpolate.cloth",
-            "frames.interpolate.objects",
-            "frames.interpolate.repeats",
-            "frames.cuts.camera_distance",
-            "frames.cuts.camera_degrees",
-            "frames.cuts.game_sets",
-            "frames.cuts.character_distance",
-            "frames.cuts.character_degrees",
-            "frames.hold.characters",
-            "frames.hold.field_animation",
-            "frames.hold.fades",
-            "frames.hold.cloth",
-            "frames.budget.max_real_time",
-            "frames.budget.max_ticks",
-            "frames.budget.max_update_ms",
-            "frames.budget.whole_updates",
-        ],
         jobs: &[],
         disc: DiscUse::None,
         default_toml: include_str!("../../mods/enhancements/fps-unlock/settings.default.toml"),
@@ -290,6 +255,13 @@ pub const PROFILES: &[Profile] = &[
         reads: &[],
     },
 ];
+
+/// Whether `key` goes into the build stamp: every setting but those a mod
+/// applies alone in its code (no job of its mod reads them). A setting of no
+/// mod (`maps.geometry`) counts as the converter's.
+pub fn is_build_setting(key: &str) -> bool {
+    PROFILES.iter().find(|p| p.settings().contains(&key)).is_none_or(|p| p.builds_from(key))
+}
 
 /// A mod by its name (`ps2-characters`) or id (`yuta.ps2-characters`).
 pub fn find(name: &str) -> Option<&'static Profile> {
@@ -307,8 +279,6 @@ pub fn in_dir(dir: &Path) -> Option<&'static Profile> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{AppliedBy, SETTINGS};
-    use crate::jobs;
     use std::collections::BTreeSet;
 
     fn repo() -> std::path::PathBuf {
@@ -324,15 +294,20 @@ mod tests {
             .unwrap_or_else(|| panic!("no mods/<group>/{name}"))
     }
 
+    fn all_settings() -> BTreeMap<String, String> {
+        Config::default().settings()
+    }
+
     #[test]
     fn settings_and_jobs_exist_and_belong_to_one_mod() {
-        let known: BTreeSet<&str> = SETTINGS.iter().map(|(k, _)| *k).collect();
+        let known = all_settings();
         let registry: Vec<Box<dyn jobs::Job>> = jobs::registry();
         let mut settings = BTreeSet::new();
         let mut job_names = BTreeSet::new();
         for p in PROFILES {
-            for s in p.settings {
-                assert!(known.contains(s), "{}: no setting {s}", p.name);
+            assert!(!p.settings().is_empty(), "{}: no settings", p.name);
+            for s in p.settings() {
+                assert!(known.contains_key(*s), "{}: no setting {s}", p.name);
                 assert!(settings.insert(*s), "{s} is in two mods");
             }
             for j in p.jobs {
@@ -345,7 +320,7 @@ mod tests {
                 // other mods it declares (`reads`)
                 for s in job.settings() {
                     assert!(
-                        p.settings.contains(s) || p.reads.iter().any(|f| f.key == *s),
+                        p.settings().contains(s) || p.reads.iter().any(|f| f.key == *s),
                         "{}: job {j} reads {s}, another mod's setting",
                         p.name
                     );
@@ -360,8 +335,8 @@ mod tests {
             assert!(expected, "{}: disc use {:?} does not match its jobs", p.name, p.disc);
             for f in p.reads {
                 let owner = find(f.from).unwrap_or_else(|| panic!("{}: reads {} from no mod {}", p.name, f.key, f.from));
-                assert!(owner.settings.contains(&f.key), "{}: {} is not {}'s", p.name, f.key, f.from);
-                assert!(!p.settings.contains(&f.key), "{}: reads its own {}", p.name, f.key);
+                assert!(owner.settings().contains(&f.key), "{}: {} is not {}'s", p.name, f.key, f.from);
+                assert!(!p.settings().contains(&f.key), "{}: reads its own {}", p.name, f.key);
                 assert!(
                     registry.iter().any(|x| p.jobs.contains(&x.name()) && x.settings().contains(&f.key)),
                     "{}: no job reads {}",
@@ -372,23 +347,15 @@ mod tests {
         }
     }
 
-    /// Each mod's settings.default.toml holds exactly its settings with the
+    /// Each mod's settings.default.toml holds only known settings with the
     /// defaults of [`Config::default`]; `[source]` only for mods that build.
     #[test]
     fn default_files_hold_the_defaults() {
-        let base = Config::default().settings();
+        let base = all_settings();
         for p in PROFILES {
             let (_, unknown) = Config::parse(p.default_toml).unwrap();
             assert!(unknown.is_empty(), "{}: {unknown:?}", p.name);
             let keys = Config::present_keys(p.default_toml).unwrap();
-            let settings: Vec<&str> = keys
-                .iter()
-                .map(String::as_str)
-                .filter(|k| !k.starts_with("source.") && !k.starts_with("build."))
-                .collect();
-            let mut want: Vec<&str> = p.settings.to_vec();
-            want.sort_unstable();
-            assert_eq!(settings, want, "{}: settings.default.toml", p.name);
             assert_eq!(keys.iter().any(|k| k == "source.iso"), p.disc != DiscUse::None, "{}: [source]", p.name);
             for (k, v) in p.defaults() {
                 assert_eq!(v, base[&k], "{}: {k}", p.name);
@@ -422,16 +389,19 @@ mod tests {
         assert_eq!(config.settings()["ui.boot_logo"], p.defaults()["ui.boot_logo"]);
     }
 
-    /// The C# mod keeps its own copy of the list (`mods/<name>/Mod.cs`: the
-    /// settings with who applies them and their defaults, a code patch for
-    /// each setting the mod applies); `docs/config.md` describes each.
+    /// The C# mod (`mods/<group>/<name>/Mod.cs`) takes its settings and
+    /// defaults from the same settings.default.toml (embedded in its DLL) and
+    /// has a code patch for each setting it applies: every one no job of
+    /// the mod reads. `docs/config.md` describes each setting.
     #[test]
     fn mods_and_docs_know_every_setting() {
         let docs = std::fs::read_to_string(repo().join("docs/config.md")).unwrap();
+        let known = all_settings();
         for p in PROFILES {
             let dir = mod_dir(p.name);
             let cs = std::fs::read_to_string(dir.join("Mod.cs")).unwrap();
             assert!(cs.contains(&format!("new(\"{}\",", p.name)), "{}: ModInfo name", p.name);
+            assert!(cs.contains("SettingInfo.defaults_of(typeof("), "{}: ModInfo settings", p.name);
             assert!(
                 cs.contains(&format!("Builds: {}", p.disc != DiscUse::None)),
                 "{}: ModInfo Builds",
@@ -443,27 +413,19 @@ mod tests {
                 p.name,
                 p.id()
             );
-            let defaults = p.defaults();
-            let lines: Vec<&str> = cs.lines().filter(|l| l.contains("AppliedBy.")).collect();
-            assert_eq!(lines.len(), p.settings.len(), "{}: Mod.cs SETTINGS", p.name);
-            for key in p.settings {
-                let by = SETTINGS.iter().find(|(k, _)| k == key).unwrap().1;
-                let by_cs = match by {
-                    AppliedBy::Converter => "Converter",
-                    AppliedBy::Mod => "Mod",
-                    AppliedBy::Both => "Both",
-                };
-                let line = lines
-                    .iter()
-                    .find(|l| l.contains(&format!("new(\"{key}\",")))
-                    .unwrap_or_else(|| panic!("{key} missing from mods/{}/Mod.cs", p.name));
-                assert!(line.contains(&format!("AppliedBy.{by_cs},")), "{key}: {line}");
-                assert!(line.contains(&format!("\"{}\")", defaults[*key])), "{key}: {line}");
-                let patch = cs
-                    .lines()
-                    .filter(|l| !l.contains("AppliedBy."))
-                    .any(|l| l.contains(&format!("new(\"{key}\",")));
-                assert_eq!(patch, by != AppliedBy::Converter, "{key}: code patch in mods/{}/Mod.cs", p.name);
+            // the keys of its CodePatches: `new("<key>", ...)`
+            let patched: BTreeSet<&str> = known
+                .keys()
+                .map(String::as_str)
+                .filter(|k| cs.contains(&format!("new(\"{k}\",")))
+                .collect();
+            for k in &patched {
+                assert!(p.settings().contains(k), "{}: Mod.cs patches {k}, not its setting", p.name);
+            }
+            for key in p.settings() {
+                if !p.builds_from(key) {
+                    assert!(patched.contains(key), "{key}: no job reads it and mods/.../{}/Mod.cs has no code patch", p.name);
+                }
                 assert!(docs.contains(&format!("`{key}`")), "{key} missing from docs/config.md");
             }
         }
@@ -472,10 +434,20 @@ mod tests {
     /// Every setting has a mod (`maps.geometry` has nothing to build yet).
     #[test]
     fn every_setting_has_a_mod() {
-        for (k, _) in SETTINGS {
-            let owners = PROFILES.iter().filter(|p| p.settings.contains(k)).count();
-            assert_eq!(owners, usize::from(*k != "maps.geometry"), "{k}");
+        for k in all_settings().keys() {
+            let owners = PROFILES.iter().filter(|p| p.settings().contains(&k.as_str())).count();
+            assert_eq!(owners, usize::from(k != "maps.geometry"), "{k}");
         }
+    }
+
+    /// Only settings a mod applies alone stay out of the build stamp.
+    #[test]
+    fn build_settings() {
+        assert!(is_build_setting("models.party"));
+        assert!(is_build_setting("render.lighting"));
+        assert!(is_build_setting("maps.geometry"));
+        assert!(!is_build_setting("render.aspect"));
+        assert!(!is_build_setting("frames.enabled"));
     }
 
     #[test]

@@ -42,9 +42,10 @@ and `maps.backgrounds` jobs read `render.aspect` from PS2 aspect ratio's
 the value; when PS2 aspect ratio is installed, removed or switched later,
 the F8 window shows PS2 movies and PS2 maps as "rebuild needed".
 
-The converter's list is `demaster/src/mods.rs`; each mod's own is its
-`mods/<name>/Mod.cs` (a test keeps them, the shipped `settings.default.toml`
-and this page in step). A key in a mod's file that isn't one of its settings
+Each mod's settings and their defaults are its `settings.default.toml`
+(`mods/<group>/<name>/`): the converter reads it (`demaster/src/mods.rs`) and
+the mod has it embedded in its DLL; a test keeps it, `Config` and this page
+in step. A key in a mod's file that isn't one of its settings
 is ignored with a warning (the converter's output and the F8 window).
 
 **The rule for defaults of the PS2 mods: presentation from the PS2, logic from the PC.**

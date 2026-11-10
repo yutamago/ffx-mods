@@ -2,7 +2,7 @@
 
 How the converter finds and unpacks files on an FFX PS2 disc image. Checked
 on the German PAL disc (`SCES_504.92`). Extractor:
-[`tools/ps2x`](../../tools/dev/ps2x/src/main.rs).
+[`tools/dev/ps2x`](../../tools/dev/ps2x/src/main.rs).
 
 ## ISO 9660 holds only the boot files
 

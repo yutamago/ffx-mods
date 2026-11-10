@@ -451,7 +451,8 @@ the group is `ps2`, `enhancements` or `dev`):
    and `README.txt` are copied into the build. Add the project to
    `ffx-mods.slnx`, in its group's folder.
 2. **Module.** `Mod.cs`: an `FhModule` with `[FhLoad(FhGameId.FFX)]`, its
-   `SETTINGS` (`SettingInfo`: key, who applies it, default), its `PATCHES`
+   settings (`SettingInfo.defaults_of(typeof(<module>))`: those of its
+   `settings.default.toml`, embedded in the DLL), its `PATCHES`
    (`CodePatch`: the setting, its "off" value, a description and the apply
    function) and a `ModInfo`; `init` calls `ModHost.start(this, _logger,
    mod_context, INFO)`. That reads the mod's `settings.toml`, checks its
@@ -466,13 +467,15 @@ the group is `ps2`, `enhancements` or `dev`):
    whose settings change while the game runs draws them in its part of the
    F8 window (`ModInfo.Section`; `FamilyWindow.toggle` for a key of its own)
    and writes them back with `ModSettings.write` (as FPS unlock does).
-4. **Settings.** Each setting is in `demaster/src/config.rs` (`Config`,
-   `SETTINGS`), the mod's entry in `demaster/src/mods.rs`, its `Mod.cs`,
-   its `settings.default.toml` (with comments; `[source]` only if it has
-   PS2 files; the zip ships it, `install.cmd` makes the player's
-   `settings.toml` from it)
-   and `docs/config.md`. `cargo test -p demaster` checks they agree, and
-   that no setting or job belongs to two mods.
+4. **Settings.** The mod's `settings.default.toml` lists its settings with
+   their defaults and comments for players (`[source]` only if it has PS2
+   files; the zip ships it, `install.cmd` makes the player's
+   `settings.toml` from it); the converter (`mods.rs`, `include_str!`) and
+   the C# mod (embedded) both read their list from it. Each setting also
+   has its typed field in `demaster/src/config.rs` (`Config`), a line in
+   `docs/config.md`, and a `CodePatch` in `Mod.cs` if the mod's code
+   applies it. `cargo test -p demaster` checks they agree, and that no
+   setting or job belongs to two mods.
 5. **PS2 files.** A mod that builds files lists its jobs in its `mods.rs`
    entry (`jobs`, `disc`: needed, optional or none); the jobs are
    `jobs::Job`s in `jobs::registry()` (`docs/` and the existing jobs show

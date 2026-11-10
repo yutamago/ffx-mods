@@ -3,7 +3,7 @@
 # Tests of install.ps1, without Pester (Windows PowerShell 5.1, which runs the installer for
 # players, and PowerShell 7):
 #  - its functions: the settings merge, the switched-off list, the load order;
-#  - the merge against every mods/<name>/settings.default.toml;
+#  - the merge against every mods/<group>/<name>/settings.default.toml;
 #  - the installer itself in a made-up Fahrenheit folder (code-only mods, no demaster.exe):
 #    a fresh install, an update over it, -Disable / -Enable, a line deleted by hand;
 #  - with -BundleZip <yuta.ps2-bundle-*.zip> (CI), the bundle's installer as a player runs it,

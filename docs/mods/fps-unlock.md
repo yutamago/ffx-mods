@@ -1,6 +1,6 @@
 # FPS unlock: frame timing, and what the mod does
 
-FPS unlock (`yuta.fps-unlock`, `mods/fps-unlock`) removes the fixed 30 fps limit of the Steam HD
+FPS unlock (`yuta.fps-unlock`, `mods/enhancements/fps-unlock`) removes the fixed 30 fps limit of the Steam HD
 Remaster without speeding the game up. The game draws at the monitor's refresh rate, at a rate you
 choose, or uncapped, with vsync on or off; the world keeps its 30 ticks a second, and the camera,
 the characters (their bones, cloth and hair) and the map's moving objects are drawn between ticks. A time scale gives slow
@@ -428,7 +428,7 @@ scripts and code (all of them written for 30), so it is not a mod-sized change.
 
 ## What the mod does
 
-`mods/fps-unlock` (Fahrenheit mod `yuta.fps-unlock`; until 2026-11-08 `yuta.frames` in ffx-atel-sharp's `src/Ffx.Frames`) is model
+`mods/enhancements/fps-unlock` (Fahrenheit mod `yuta.fps-unlock`; until 2026-11-08 `yuta.frames` in ffx-atel-sharp's `src/Ffx.Frames`) is model
 (1) above: a fixed 30 Hz tick with an accumulator that can run 0 ticks a frame, any time scale,
 and the camera and the characters interpolated. It is static work: everything below comes from
 FFX.exe's code and ffx-rust's ports. Its first in-game run (2026-11-07) crashed on the first frame;

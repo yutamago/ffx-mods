@@ -12,8 +12,11 @@
         <WriteLinesToFile File="$(__FfxModsManifest)" Lines="$(__FfxModsText)" Overwrite="true" />
     </Target>
 
-    <!-- The mod's default settings (settings.default.toml) and players' README.txt go into the mod folder. -->
+    <!-- The mod's default settings (settings.default.toml) and players' README.txt go into the mod folder.
+         settings.default.toml is also embedded in the DLL: the mod's list of its settings and defaults
+         (SettingInfo.defaults_of), the same file the converter reads. -->
     <ItemGroup>
+        <EmbeddedResource Include="settings.default.toml" LogicalName="settings.default.toml" Condition="Exists('settings.default.toml')" />
         <None Include="settings.default.toml" CopyToPublishDirectory="PreserveNewest" Condition="Exists('settings.default.toml')" />
         <None Include="README.txt" CopyToPublishDirectory="PreserveNewest" Condition="Exists('README.txt')" />
     </ItemGroup>

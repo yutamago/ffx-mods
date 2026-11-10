@@ -467,95 +467,6 @@ pub struct Config {
     pub frames: Frames,
 }
 
-/// Who applies a setting.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum AppliedBy {
-    /// Files written by `demaster build`; changing it needs a rebuild.
-    Converter,
-    /// Code in the C# mod, read from `demaster.toml` when the game starts.
-    Mod,
-    /// Both: files written by `demaster build` (a rebuild when it changes)
-    /// and code in the mod that draws with them.
-    Both,
-}
-
-/// Every setting with who applies it. `docs/config.md` describes them; the
-/// test below checks this list against [`Config`].
-pub const SETTINGS: &[(&str, AppliedBy)] = {
-    use AppliedBy::*;
-    &[
-        ("models.party", Converter),
-        ("models.npc", Converter),
-        ("models.monster", Converter),
-        ("models.aeon", Converter),
-        ("models.weapon", Converter),
-        ("models.object", Converter),
-        ("maps.field", Converter),
-        ("maps.geometry", Converter),
-        ("maps.backgrounds", Converter),
-        ("maps.battle", Converter),
-        ("effects.textures", Converter),
-        ("render.glow", Mod),
-        ("render.lighting", Both),
-        ("render.shadows", Mod),
-        ("render.aspect", Mod),
-        ("render.texture_filter", Mod),
-        ("render.texture_quality", Mod),
-        ("ui.menus", Both),
-        ("ui.portraits", Converter),
-        ("ui.font", Converter),
-        ("ui.title", Both),
-        ("ui.loading", Both),
-        ("ui.battle_subtitles", Mod),
-        ("ui.battle_menu_delay", Mod),
-        ("ui.button_glyphs", Converter),
-        ("ui.boot_logo", Converter),
-        ("audio.soundtrack", Mod),
-        ("audio.music", Converter),
-        ("audio.music_engine", Both),
-        ("movies", Converter),
-        ("timing.run_speed", Mod),
-        ("fixes.npc_mouths", Mod),
-        ("fixes.farplane_video", Mod),
-        ("fixes.lulu_fury", Mod),
-        ("minimap.style", Mod),
-        ("minimap.size", Mod),
-        ("minimap.corner", Mod),
-        ("frames.enabled", Mod),
-        ("frames.target", Mod),
-        ("frames.fixed_fps", Mod),
-        ("frames.vsync", Mod),
-        ("frames.overlay", Mod),
-        ("frames.between_ticks", Mod),
-        ("frames.effects", Mod),
-        ("frames.speed.time_scale", Mod),
-        ("frames.speed.fast", Mod),
-        ("frames.speed.slow", Mod),
-        ("frames.speed.mute_when_fast", Mod),
-        ("frames.speed.booster_limits", Mod),
-        ("frames.speed.scene_time", Mod),
-        ("frames.interpolate.camera", Mod),
-        ("frames.interpolate.characters", Mod),
-        ("frames.interpolate.bones", Mod),
-        ("frames.interpolate.cloth", Mod),
-        ("frames.interpolate.objects", Mod),
-        ("frames.interpolate.repeats", Mod),
-        ("frames.cuts.camera_distance", Mod),
-        ("frames.cuts.camera_degrees", Mod),
-        ("frames.cuts.game_sets", Mod),
-        ("frames.cuts.character_distance", Mod),
-        ("frames.cuts.character_degrees", Mod),
-        ("frames.hold.characters", Mod),
-        ("frames.hold.field_animation", Mod),
-        ("frames.hold.fades", Mod),
-        ("frames.hold.cloth", Mod),
-        ("frames.budget.max_real_time", Mod),
-        ("frames.budget.max_ticks", Mod),
-        ("frames.budget.max_update_ms", Mod),
-        ("frames.budget.whole_updates", Mod),
-    ]
-};
-
 pub struct Loaded {
     pub config: Config,
     /// The file it came from; relative paths in it are relative to its folder.
@@ -752,20 +663,12 @@ mod tests {
         assert_eq!(c.settings(), Config::default().settings());
     }
 
-    #[test]
-    fn settings_list_matches_config() {
-        let keys: Vec<String> = Config::default().settings().into_keys().collect();
-        let mut listed: Vec<String> = SETTINGS.iter().map(|(k, _)| k.to_string()).collect();
-        listed.sort();
-        assert_eq!(keys, listed);
-    }
-
     /// docs/config.md describes every setting (the mods' own lists are
     /// checked in `mods.rs`).
     #[test]
     fn docs_know_every_setting() {
         let docs = std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("../docs/config.md")).unwrap();
-        for (key, _) in SETTINGS {
+        for key in Config::default().settings().keys() {
             assert!(docs.contains(&format!("`{key}`")), "{key} missing from docs/config.md");
         }
     }
@@ -807,8 +710,8 @@ mod tests {
                     || matches!(k.as_str(), "minimap.size" if v == "medium")
                     || matches!(k.as_str(), "minimap.corner" if v == "top_right")
             } else if k.starts_with("frames.") {
-                // not a PS2 part: FPS unlock's defaults are the mod's (mods/enhancements/fps-unlock/Mod.cs,
-                // settings.default.toml; checked against each other in mods.rs and the mod's tests)
+                // not a PS2 part: FPS unlock's defaults are the mod's (its settings.default.toml and
+                // FrameSettings; checked against each other in mods.rs and the mod's tests)
                 true
             } else if k == "audio.music_engine" {
                 // the PS2 driver playing in the game; "hd" is the soundtrack bank alone

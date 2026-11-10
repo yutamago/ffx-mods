@@ -2,17 +2,40 @@
 
 namespace Yuta.FfxMods;
 
-/// <summary>Who applies a setting: files written by demaster.exe, code in the mod, or both.</summary>
+/// <summary>
+/// Who applies a setting: files written by demaster.exe, code in the mod, or both. Not read by this
+/// library; kept for mods that list their settings by hand (ffx-remix's). The family's mods take
+/// theirs from settings.default.toml (<see cref="SettingInfo.defaults_of"/>), and the converter
+/// knows which settings its jobs read (demaster/src/mods.rs).
+/// </summary>
 public enum AppliedBy { Converter, Mod, Both }
 
 /// <summary>One setting of a mod's settings.toml, with its default.</summary>
-public sealed record SettingInfo(string Key, AppliedBy By, string Default);
+public sealed record SettingInfo(string Key, AppliedBy By, string Default) {
+    /// <summary>
+    /// The settings of a mod of the family: the keys and values of its settings.default.toml, which
+    /// mods/Directory.Build.targets embeds into its DLL. That file is the one list of the mod's
+    /// settings and their defaults; the converter reads the same file (demaster/src/mods.rs).
+    /// None for a mod without the file.
+    /// </summary>
+    public static SettingInfo[] defaults_of(Type module) {
+        using Stream? s = module.Assembly.GetManifestResourceStream(ModSettings.DEFAULTS);
+        if (s is null) return [];
+        using StreamReader reader = new(s);
+        return from_defaults(reader.ReadToEnd());
+    }
+
+    /// <summary>The settings in a settings.default.toml's text (not [source] and [build]: where the disc and game are).</summary>
+    public static SettingInfo[] from_defaults(string toml) =>
+        [.. MiniToml.parse(toml).Values
+            .Where(kv => !kv.Key.StartsWith("source.", StringComparison.Ordinal) && !kv.Key.StartsWith("build.", StringComparison.Ordinal))
+            .Select(kv => new SettingInfo(kv.Key, AppliedBy.Mod, kv.Value))];
+}
 
 /// <summary>
-/// A mod's settings.toml as the mod sees it. Each mod lists its settings with their defaults
-/// (mods/&lt;name&gt;/Mod.cs); the converter's list of the mod (demaster/src/mods.rs) is the
-/// reference and a converter test checks that the two agree, and that the mod's
-/// settings.default.toml holds the defaults. The zips ship only settings.default.toml; install.cmd
+/// A mod's settings.toml as the mod sees it. The mod's settings and their defaults are those of its
+/// settings.default.toml (<see cref="SettingInfo.defaults_of"/>; the converter reads the same file).
+/// The zips ship only settings.default.toml; install.cmd
 /// makes settings.toml from it when there is none, so unpacking a newer zip keeps the player's
 /// settings. A key the file leaves out (a setting newer than the file) has its default.
 /// </summary>

@@ -7,48 +7,13 @@ namespace Yuta.FfxMods.FpsUnlock;
 /// uncapped while the world keeps its 30 ticks a second, draws the camera and the characters
 /// between ticks, and scales game time (slow motion, fast-forward) without drawing more frames
 /// (docs/mods/fps-unlock.md). The settings and their defaults are those of settings.default.toml in this
-/// folder and of FrameSettings (a test checks both); the converter's list of this mod
-/// (demaster/src/mods.rs) must agree (a converter test checks). Every setting is read live: the
+/// folder (embedded in the DLL; the converter reads the same file) and of FrameSettings (a test
+/// checks both). Every setting is read live: the
 /// mod's part of the F8 window changes them while the game runs and writes
 /// them back into settings.toml.
 /// </summary>
 [FhLoad(FhGameId.FFX)]
 public sealed class FpsUnlockModule : FhModule {
-    public static readonly SettingInfo[] SETTINGS = [
-        new("frames.enabled",                  AppliedBy.Mod, "true"),
-        new("frames.target",                   AppliedBy.Mod, "monitor"),
-        new("frames.fixed_fps",                AppliedBy.Mod, "120.0"),
-        new("frames.vsync",                    AppliedBy.Mod, "game"),
-        new("frames.overlay",                  AppliedBy.Mod, "true"),
-        new("frames.between_ticks",            AppliedBy.Mod, "redraw"),
-        new("frames.effects",                  AppliedBy.Mod, "replay"),
-        new("frames.speed.time_scale",         AppliedBy.Mod, "1.0"),
-        new("frames.speed.fast",               AppliedBy.Mod, "10.0"),
-        new("frames.speed.slow",               AppliedBy.Mod, "0.25"),
-        new("frames.speed.mute_when_fast",     AppliedBy.Mod, "true"),
-        new("frames.speed.booster_limits",     AppliedBy.Mod, "true"),
-        new("frames.speed.scene_time",         AppliedBy.Mod, "true"),
-        new("frames.interpolate.camera",       AppliedBy.Mod, "true"),
-        new("frames.interpolate.characters",   AppliedBy.Mod, "true"),
-        new("frames.interpolate.bones",        AppliedBy.Mod, "true"),
-        new("frames.interpolate.cloth",        AppliedBy.Mod, "true"),
-        new("frames.interpolate.objects",      AppliedBy.Mod, "true"),
-        new("frames.interpolate.repeats",      AppliedBy.Mod, "true"),
-        new("frames.cuts.camera_distance",     AppliedBy.Mod, "100.0"),
-        new("frames.cuts.camera_degrees",      AppliedBy.Mod, "45.0"),
-        new("frames.cuts.game_sets",           AppliedBy.Mod, "true"),
-        new("frames.cuts.character_distance",  AppliedBy.Mod, "50.0"),
-        new("frames.cuts.character_degrees",   AppliedBy.Mod, "120.0"),
-        new("frames.hold.characters",          AppliedBy.Mod, "true"),
-        new("frames.hold.field_animation",     AppliedBy.Mod, "true"),
-        new("frames.hold.fades",               AppliedBy.Mod, "true"),
-        new("frames.hold.cloth",               AppliedBy.Mod, "true"),
-        new("frames.budget.max_real_time",     AppliedBy.Mod, "0.3"),
-        new("frames.budget.max_ticks",         AppliedBy.Mod, "100"),
-        new("frames.budget.max_update_ms",     AppliedBy.Mod, "40.0"),
-        new("frames.budget.whole_updates",     AppliedBy.Mod, "4"),
-    ];
-
     // The first installs every hook; the mod reads all settings live, so none is ever "off" here
     // (frames.enabled = false keeps the hooks in and passes everything through, so the F8 window
     // can turn the mod on again). The lines show each setting as the game started.
@@ -87,7 +52,7 @@ public sealed class FpsUnlockModule : FhModule {
         new("frames.budget.whole_updates",    "", "whole game updates a frame runs before exec frames", FpsUnlock.live),
     ];
 
-    public static readonly ModInfo INFO = new("fps-unlock", "FPS unlock", SETTINGS, PATCHES, Builds: false, Section: FpsUnlock.section);
+    public static readonly ModInfo INFO = new("fps-unlock", "FPS unlock", SettingInfo.defaults_of(typeof(FpsUnlockModule)), PATCHES, Builds: false, Section: FpsUnlock.section);
 
     private bool _ui_failed;
 

@@ -5,7 +5,7 @@ pick them up later. Status 2026-11-09: none started. A first agent run
 (2026-11-04..06, stopped by the usage limit) got only as far as two replay
 edits that were never run (below, "Where it stopped").
 
-Everything here goes into the **ps2-interface** mod (`mods/ps2-interface`,
+Everything here goes into the **ps2-interface** mod (`mods/ps2/ps2-interface`,
 settings `ui.*`; the converter's `ui.menus` job, `demaster/src/jobs/interface.rs`,
 `jobs/sphere_grid.rs`). Read first: `docs/mods/interface.md` (each item's section, named below),
 `docs/dev/compare.md` (how screens are compared with the PS2 and the numbers so
@@ -32,7 +32,7 @@ into 4:3, fixed by `render.aspect` (ps2-aspect-ratio,
 1. Find the PS2 draw (PCSX2 debugger, SLPM_675.13 / SCES_504.92 symbols in
    ffx-rust) and its FFX.exe twin (ffx-rust `symbols/ffx.sym`, the Ghidra
    dump `~/ffx-work/decomp`).
-2. Hook the twin in the mod (`mods/ps2-interface`, helpers from the old
+2. Hook the twin in the mod (`mods/ps2/ps2-interface`, helpers from the old
    `Ps2Menu.cs`) and draw what the PS2 drew, at PS2 places.
 3. Mirror the draw in `tools/calllist` and write a harness replay
    (`tools/replays/ui-*.txt`) that reaches the screen.
@@ -61,7 +61,7 @@ Start from those two edits.
 - **Where the test tools live:** the harness replays, `tools/shotrun`,
   `tools/calllist`, `tools/compare`, `tools/pcsx2ctl` stay in ffx-demaster,
   now the research and test-tool home of the PS2 mods (the bundle moved
-  here as `mods/ps2-bundle` on 2026-11-09); `wip/ui-last-items` is a
+  here as `mods/bundles/ps2-bundle` on 2026-11-09); `wip/ui-last-items` is a
   branch there.
 - **PS2 states:** item 5 needs a PS2 battle with a full Overdrive gauge
   (e.g. set the gauge byte through PINE in the `battle-kami` state, and the

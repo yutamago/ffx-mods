@@ -23,7 +23,7 @@ use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-use crate::config::{AppliedBy, Config, DEFAULT_TOML, Loaded, SETTINGS};
+use crate::config::{Config, DEFAULT_TOML, Loaded};
 use crate::jobs::{self, Ctx, Output};
 use crate::mods::{self, DiscUse, Profile};
 
@@ -185,10 +185,10 @@ fn sha256_hex(text: &str) -> String {
 /// (see [`Stamp::config_hash`]).
 fn converter_settings(config: &Config, profile: Option<&Profile>) -> (BTreeMap<String, String>, String) {
     let all = config.settings();
-    let s: BTreeMap<String, String> = SETTINGS
+    let s: BTreeMap<String, String> = all
         .iter()
-        .filter(|(k, by)| *by != AppliedBy::Mod && profile.is_none_or(|p| p.settings.contains(k)))
-        .map(|(k, _)| (k.to_string(), all[*k].clone()))
+        .filter(|(k, _)| mods::is_build_setting(k) && profile.is_none_or(|p| p.settings().contains(&k.as_str())))
+        .map(|(k, v)| (k.clone(), v.clone()))
         .collect();
     let text: String = s.iter().map(|(k, v)| format!("{k}={v}\n")).collect();
     (s, sha256_hex(&text))
@@ -369,7 +369,7 @@ pub fn list_mods() {
             DiscUse::None => "code only",
         };
         println!("{} ({}, {disc})", p.id(), p.title);
-        println!("    settings: {}", p.settings.join(", "));
+        println!("    settings: {}", p.settings().join(", "));
         if !p.jobs.is_empty() {
             println!("    jobs:     {}", p.jobs.join(", "));
         }
@@ -468,7 +468,7 @@ fn run_one(args: &Args, shared: Option<&Shared>) -> Result<bool> {
     let mut unknown = loaded.unknown.clone();
     if let Some(p) = profile {
         for k in Config::present_keys(&loaded.text)? {
-            if !k.starts_with("source.") && !k.starts_with("build.") && !p.settings.contains(&k.as_str()) && !unknown.contains(&k) {
+            if !k.starts_with("source.") && !k.starts_with("build.") && !p.settings().contains(&k.as_str()) && !unknown.contains(&k) {
                 unknown.push(k);
             }
         }

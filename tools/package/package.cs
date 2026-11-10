@@ -55,7 +55,7 @@ const string COMMON = "yuta.ffx-mods";
     ("fps-unlock",       false, false),
     ("debug-revival",    false, false),
 ];
-// The bundles: mods (mods/<name>) whose manifest lists the mods they bundle (their csproj's
+// The bundles: mods (mods/bundles/<name>) whose manifest lists the mods they bundle (their csproj's
 // FfxModsDependencies).
 string[] BUNDLES = ["ps2-bundle"];
 

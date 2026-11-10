@@ -6,17 +6,10 @@ namespace Yuta.FfxMods.ModernMinimap;
 /// Modern Minimap (mod yuta.modern-minimap): the field minimap round, always centred on the
 /// player and turned with the camera, in the game's colours on a small CRT screen
 /// (docs/mods/modern-minimap.md). The settings and their defaults are those of settings.default.toml in this
-/// folder; the converter's list of this mod (demaster/src/mods.rs) must agree (a converter
-/// test checks).
+/// folder (embedded in the DLL), the one list of them (the converter reads the same file).
 /// </summary>
 [FhLoad(FhGameId.FFX)]
 public sealed class ModernMinimapModule : FhModule {
-    public static readonly SettingInfo[] SETTINGS = [
-        new("minimap.style",  AppliedBy.Mod, "crt"),
-        new("minimap.size",   AppliedBy.Mod, "medium"),
-        new("minimap.corner", AppliedBy.Mod, "top_right"),
-    ];
-
     // Size and corner have no "off": they only place the Modern Minimap.
     public static readonly CodePatch[] PATCHES = [
         new("minimap.size",   "", "minimap size",  MinimapPatches.size),
@@ -24,7 +17,7 @@ public sealed class ModernMinimapModule : FhModule {
         new("minimap.style",  "game", "the Modern Minimap in place of the game's", MinimapPatches.style),
     ];
 
-    public static readonly ModInfo INFO = new("modern-minimap", "Modern Minimap", SETTINGS, PATCHES, Builds: false);
+    public static readonly ModInfo INFO = new("modern-minimap", "Modern Minimap", SettingInfo.defaults_of(typeof(ModernMinimapModule)), PATCHES, Builds: false);
 
     private bool _draw_failed, _drawn;
 

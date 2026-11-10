@@ -31,7 +31,7 @@ the PS2 look.
 
 On the disc the effect files have no `host0:/ffx/master/` path:
 `cdrom.fnd` names them `host0:magic/mag_NNNN.bin`. `disc.rs` names them
-`_host0/magic/mag_NNNN.bin`, as the extractor (`tools/ps2x`) does.
+`_host0/magic/mag_NNNN.bin`, as the extractor (`tools/dev/ps2x`) does.
 PS2-only: `mag_0000`, `0044`, `0052`, `0064`, `0309`, `0323`, `0507`.
 HD-only folders: `magic_0687`, `map/dream`, `map/hiku/hiku28..30`,
 `map/stbv/stbv04`.

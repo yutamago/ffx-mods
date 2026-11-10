@@ -26,19 +26,17 @@ internal static class Toml {
 }
 
 /// <summary>
-/// The settings live in Mod.cs (the list with defaults, which the converter's test checks against demaster/src/mods.rs
-/// and docs/config.md), settings.toml and <see cref="FrameSettings"/>: these must agree.
+/// The settings live in settings.default.toml (the mod's list with defaults, embedded in its DLL; the converter reads it
+/// too and checks it against docs/config.md), settings.toml and <see cref="FrameSettings"/>: these must agree.
 /// </summary>
 public class SettingsFileTests {
     private static string ModFile(string name) => File.ReadAllText(Path.Combine(Toml.Repo(), "mods", "enhancements", "fps-unlock", name));
 
     [Fact]
-    public void Mod_cs_lists_every_setting_with_its_default_in_order() {
-        var listed = Regex.Matches(ModFile("Mod.cs"), @"new\(""([a-z_.]+)"",\s*AppliedBy\.Mod,\s*""([^""]*)""\)")
-            .Select(m => new KeyValuePair<string, string>(m.Groups[1].Value, m.Groups[2].Value))
-            .ToList();
-        Assert.Equal(new FrameSettings().ToValues(), listed);
-        Assert.Equal(FrameSettings.Keys, listed.Select(kv => kv.Key));
+    public void The_mod_lists_every_setting_with_its_default() {
+        Assert.Contains("SettingInfo.defaults_of(typeof(FpsUnlockModule))", ModFile("Mod.cs"));
+        var listed = SettingInfo.from_defaults(ModFile(ModSettings.DEFAULTS)).ToDictionary(s => s.Key, s => s.Default);
+        Assert.Equal(new FrameSettings().ToValues().ToDictionary(kv => kv.Key, kv => kv.Value), listed);
     }
 
     [Fact]

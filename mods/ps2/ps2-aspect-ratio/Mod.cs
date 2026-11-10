@@ -4,20 +4,16 @@ namespace Yuta.FfxMods.AspectRatio;
 
 /// <summary>
 /// PS2 aspect ratio (mod yuta.ps2-aspect-ratio): The PS2 picture: 4:3 with black bars and the PS2 projection.
-/// The settings and their defaults are those of settings.default.toml in this folder; the converter's
-/// list of this mod (demaster/src/mods.rs) must agree (a converter test checks).
+/// The settings and their defaults are those of settings.default.toml in this folder (embedded in the DLL),
+/// the one list of them (the converter reads the same file).
 /// </summary>
 [FhLoad(FhGameId.FFX)]
 public sealed class AspectRatioModule : FhModule {
-    public static readonly SettingInfo[] SETTINGS = [
-        new("render.aspect", AppliedBy.Mod,       "ps2"),
-    ];
-
     public static readonly CodePatch[] PATCHES = [
         new("render.aspect", "hd", "4:3 with the PS2 projection", AspectPatches.aspect),
     ];
 
-    public static readonly ModInfo INFO = new("ps2-aspect-ratio", "PS2 aspect ratio", SETTINGS, PATCHES, Builds: false);
+    public static readonly ModInfo INFO = new("ps2-aspect-ratio", "PS2 aspect ratio", SettingInfo.defaults_of(typeof(AspectRatioModule)), PATCHES, Builds: false);
 
     private bool _failed;
 

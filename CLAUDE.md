@@ -81,10 +81,14 @@ The mods and what is in each: README.md and `demaster/src/mods.rs`.
   (FPS unlock): it draws them in its part of the F8 window
   (`ModInfo.Section`, opened by its own key through `FamilyWindow.toggle`)
   and writes changes back with `ModSettings.write` (the changed lines only).
-- A setting lives in 4 places a test keeps in sync: `demaster/src/config.rs`
-  (`SETTINGS`), `demaster/src/mods.rs` (which mod), `mods/<name>/Mod.cs`
-  (with its default, and a `CodePatch` if the mod applies it),
-  `mods/<name>/settings.default.toml`, and `docs/config.md`. A test of the
+- A mod's `settings.default.toml` is the one list of its settings and
+  their defaults: the converter reads it (`Profile::settings`, through
+  `include_str!` in `mods.rs`) and the C# mod has it embedded
+  (`SettingInfo.defaults_of`). A new setting also needs its typed field and
+  default in `demaster/src/config.rs` (`Config`), a line in
+  `docs/config.md`, and a `CodePatch` in `Mod.cs` if the mod's code applies
+  it (one is required when no job of the mod reads it). Whether a rebuild
+  is needed follows from the jobs that read it. A test of the
   converter checks that an older `settings.toml` (lacking a newer key) gets
   that key's default; `install.tests.ps1` that the installer adds it.
 - Every setting belongs to one mod (a test; `maps.geometry` has none yet).

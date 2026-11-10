@@ -45,7 +45,7 @@ public enum DrawOnlyMode {
 ///     one consistent set.
 /// </summary>
 /// <remarks>
-///     Kept in the mod's settings.toml (<see cref="Keys"/>: the keys of <c>Mod.cs</c>'s SETTINGS, in the same order).
+///     Kept in the mod's settings.toml (<see cref="Keys"/>: the keys of its settings.default.toml).
 ///     Missing keys keep their defaults; values out of range are clamped (<see cref="Clamped"/>).
 /// </remarks>
 public sealed record FrameSettings {
@@ -243,7 +243,7 @@ public sealed record FrameSettings {
         Integer("frames.budget.whole_updates", s => s.MaxUpdatesPerFrame, (s, v) => s with { MaxUpdatesPerFrame = v }),
     ];
 
-    /// <summary>The settings.toml keys, in the order of <c>Mod.cs</c>'s SETTINGS.</summary>
+    /// <summary>The settings.toml keys (those of settings.default.toml).</summary>
     public static IEnumerable<string> Keys {
         get { foreach (Entry e in Entries) yield return e.Key; }
     }

@@ -388,8 +388,8 @@ visible.
   plate, also used by the yes/no questions and the battle-end notice) as
   `TOMkpWindowPlain(x, y, w, h)`. The other plate types stay HD.
 
-So `ui.menus` is applied by both (`AppliedBy::Both` in `config.rs` and
-`mods/ps2/ps2-interface/Mod.cs`): changing it needs `install.cmd` (a `demaster build`) and a restart.
+So `ui.menus` is applied by both (a job reads it, and
+`mods/ps2/ps2-interface/Mod.cs` has its code patch): changing it needs `install.cmd` (a `demaster build`) and a restart.
 
 **Checked.** In the ffx-rust harness, which can't run the mod's hooks: a
 call to `TOSetWindowKind` (`0x00906e60`) sets the window's kind to 3, so
