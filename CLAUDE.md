@@ -4,7 +4,10 @@ All of the user's Fahrenheit mods for the FFX HD Remaster (Steam), each
 working alone and in any combination, plus the converter (`demaster`) that
 builds the PS2 mods' files from the player's own disc. Most are PS2 mods
 (they restore parts of the PS2 version: presentation from the PS2, logic
-from the PC); others are the user's own changes (`modern-minimap`, `fps-unlock`). Every
+from the PC); others are the user's own changes (`modern-minimap`, `fps-unlock`,
+`debug-revival`: the developers' debug tools, merged from
+github.com/yutamago/ffx-debug-revival-mod with its history; no settings, so
+not in `mods.rs`; docs in `docs/debug-revival/`, tools in `tools/debug-revival/`). Every
 change is a setting. The PS2 mods were split out of ffx-demaster (github.com/yutamago/ffx-demaster,
 history kept up to its 314bbfc). Their bundle (formerly FFX Demaster) is the
 mod `mods/ps2-bundle` (`yuta.ps2-bundle`): its manifest's dependencies (its

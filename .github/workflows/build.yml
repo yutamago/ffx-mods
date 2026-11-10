@@ -57,6 +57,13 @@ jobs:
     - name: Test
       run: dotnet test -c Release --no-build ffx-mods.slnx
 
+    # Debug Revival's developer tools (tools/debug-revival): built only, they need the game's files to run.
+    - name: Build Debug Revival's tools
+      run: |
+        dotnet build -c Release tools/debug-revival/DisasmCheck
+        dotnet build -c Release tools/debug-revival/GsCheck
+        for script in gen-natives gen-map-table; do dotnet build tools/debug-revival/$script.cs; done
+
     - uses: actions/upload-artifact@v7
       with:
         name: mods
@@ -131,7 +138,8 @@ jobs:
         $builds = @{ 'ps2-music-engine' = $true; 'ps2-soundtrack' = $true; 'ps2-movies' = $true; 'ps2-characters' = $true;
                      'ps2-maps' = $true; 'ps2-effects' = $true; 'ps2-lighting' = $true; 'no-hd-post-effects' = $false;
                      'ps2-interface' = $true; 'ps2-aspect-ratio' = $false; 'ps2-game-feel' = $false; 'bug-fixes' = $false;
-                     'modern-minimap' = $false; 'fps-unlock' = $false }
+                     'modern-minimap' = $false; 'fps-unlock' = $false; 'debug-revival' = $false }
+        $noSettings = @('debug-revival')
         $bundles = @('ps2-bundle')
         $zips = @(Get-ChildItem dist -Filter '*.zip')
         if ($zips.Count -ne $builds.Count + $bundles.Count) { throw "expected $($builds.Count + $bundles.Count) zips, found $($zips.Count)" }
@@ -144,7 +152,8 @@ jobs:
           $z.Dispose()
           "$($zip.Name):"; $names | ForEach-Object { "  $_" }
           $need = @("mods/yuta.ffx-mods/yuta.ffx-mods.dll", "mods/yuta.ffx-mods/yuta.ffx-mods.manifest.json")
-          foreach ($f in "$id.dll", "$id.manifest.json", 'settings.default.toml', 'README.txt', 'LICENSES.txt', 'install.cmd', 'install.ps1') { $need += "mods/$id/$f" }
+          foreach ($f in "$id.dll", "$id.manifest.json", 'README.txt', 'LICENSES.txt', 'install.cmd', 'install.ps1') { $need += "mods/$id/$f" }
+          if ($noSettings -notcontains $name) { $need += "mods/$id/settings.default.toml" }
           if ($builds[$name]) { $need += "mods/$id/demaster.exe" }
           if ($name -eq 'ps2-music-engine') { $need += "mods/$id/demaster_live.dll" }
           foreach ($f in $need) { if ($names -notcontains $f) { throw "$($zip.Name) has no $f" } }

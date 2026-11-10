@@ -1,0 +1,13 @@
+<Project Sdk="Fahrenheit.Sdk/1.0.0-alpha12">
+    <!-- Version, the shared library and the manifest's dependency: ../Directory.Build.props -->
+    <PropertyGroup>
+        <AssemblyName>yuta.debug-revival</AssemblyName>
+        <RootNamespace>Yuta.FfxMods.DebugRevival</RootNamespace>
+        <AssemblyTitle>Debug Revival</AssemblyTitle>
+        <Description>Turns the developers' debug tools left in FFX.exe back on: an event-script debugger, the PC port's tweak panels, the battle debug switches and cheats, the free camera, map jumps and more. F9 opens it.</Description>
+    </PropertyGroup>
+    <ItemGroup>
+        <EmbeddedResource Include="Script/natives.tsv" LogicalName="natives.tsv" />
+        <EmbeddedResource Include="Features/maps.tsv" LogicalName="maps.tsv" />
+    </ItemGroup>
+</Project>

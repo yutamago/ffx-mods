@@ -432,7 +432,8 @@ if ($All) {
 if ($codeOnly) {
     Write-Host ''
     if ($All) { Write-Host 'None of these mods has PS2 files to build: they are installed.' -ForegroundColor Green }
-    else { Write-Host "$ModId has no PS2 files to build: it is installed. Its settings: $settings" -ForegroundColor Green }
+    elseif (Test-Path -LiteralPath (Join-Path $ModDir 'settings.default.toml')) { Write-Host "$ModId has no PS2 files to build: it is installed. Its settings: $settings" -ForegroundColor Green }
+    else { Write-Host "$ModId has no PS2 files to build: it is installed." -ForegroundColor Green }
     Write-Host 'Start the game through Fahrenheit; F8 in the game shows the mods and their state.'
     Finish 0
 }
