@@ -1,0 +1,236 @@
+# Every setting of the FFX mods in one file, for `demaster build` without a
+# mod (development: every job into one folder). The mods have their own
+# settings.toml each, with only their settings.
+#
+# After changing anything here: run `demaster.exe build` again, then restart
+# the game. (Fahrenheit picks up the mod's files only when the game starts.)
+#
+# Presentation settings are "ps2" (the PS2 original, the default) or "hd" (the
+# HD Remaster). Fixes are true (fixed, the default) or false (as on PC).
+# Game logic always stays the PC's. Not every setting does something yet;
+# `demaster.exe build` lists the ones that don't. docs/config.md describes
+# each one.
+#
+# Windows paths: use single quotes, 'C:\Games\FFX.iso' (in double quotes a
+# backslash starts an escape), or forward slashes.
+
+# Movies (FMVs) in their PS2 4:3 version with the PS2 audio.
+movies = "ps2"
+
+[source]
+# Your own PS2 disc image of Final Fantasy X (any region). Required.
+iso = ''
+# The game folder, the one with FFX.exe and data\FFX_Data.vbf. Leave empty to
+# look in the usual Steam folders.
+game = ''
+# ffmpeg.exe, which converts the movies (https://ffmpeg.org, not included).
+# Leave empty to use ffmpeg.exe next to demaster.exe or in tools\, else the
+# one on your PATH; if there is none, the first build downloads an LGPL build
+# of FFmpeg (168 MB) into tools\ and checks it.
+ffmpeg = ''
+
+[build]
+# The mod folder the PS2 files are written to. Leave empty for the folder
+# demaster.exe is in (mods\yuta.demaster).
+mod_dir = ''
+
+[models]
+# Tidus, Yuna and the rest of the party: the PS2 meshes and textures.
+party = "ps2"
+# NPCs.
+npc = "ps2"
+# Monsters and bosses.
+monster = "ps2"
+# Aeons.
+aeon = "ps2"
+# Weapons.
+weapon = "ps2"
+# Objects (chests, save spheres, vehicles and other props).
+object = "ps2"
+
+[maps]
+# Field map textures.
+field = "ps2"
+# Field map geometry where the HD version changed it (not planned yet).
+geometry = "ps2"
+# The painted 2D backgrounds of fixed-camera rooms (4:3).
+backgrounds = "ps2"
+# Battle map textures.
+battle = "ps2"
+
+[effects]
+# Spell, summon and effect textures.
+textures = "ps2"
+
+[render]
+# "ps2": no glow/blow-out. "hd": the HD Remaster's glow.
+glow = "ps2"
+# "ps2": characters lit the PS2 way (its light colours, directions and level,
+# no soft falloff or fill light; patched character shaders). "hd": the HD lighting.
+lighting = "ps2"
+# "ps2": a soft ground shadow under each character, no shadow maps. "hd": shadow maps.
+shadows = "ps2"
+# "ps2": 4:3 with black bars. "hd": 16:9.
+aspect = "ps2"
+# "game": the game's own texture filter. "nearest": unfiltered pixels.
+texture_filter = "game"
+# "ps2": the PS2 textures load at their full size whatever the game's texture
+# quality. "hd": the game's texture quality shrinks them too.
+texture_quality = "ps2"
+
+[ui]
+# Menus, cursor and windows drawn the PS2 way (the PC-only screens such as
+# the Esc menu and save/load stay HD).
+menus = "ps2"
+# Character portraits and icons.
+portraits = "ps2"
+# The PS2 font.
+font = "ps2"
+# The PS2 title screen: the plain logo instead of "HD Remaster", the picture
+# and its menu at the PS2 place (converter and mod).
+title = "ps2"
+# "ps2": no loading screen and no splash videos.
+loading = "ps2"
+# Subtitles for battle dialogue, as in the PS2 International version.
+battle_subtitles = "ps2"
+# "ps2": the battle menu reacts at once (the PC adds 0.2-0.45 s delays).
+battle_menu_delay = "ps2"
+# PS2 button glyphs instead of the Xbox-style ones.
+button_glyphs = "ps2"
+# "ps2": the PS2's "SQUARESOFT presents" screen at boot, before the project
+# logo (6.5 s; Start shortens it). Off by default.
+boot_logo = "hd"
+
+[audio]
+# "ps2": new games start with the original soundtrack. "hd": the arranged one.
+soundtrack = "ps2"
+# "ps2": the original soundtrack's bank rendered by a PS2 sound driver from the
+# disc's sequences and instruments. "hd": the PC's recordings of it.
+music = "ps2"
+# "live": that PS2 driver playing inside the game, driven by the game's music
+# commands (fades, pauses, tempo as the scripts ask); what it can't play comes
+# from the bank above. "hd": the bank alone.
+music_engine = "live"
+
+[timing]
+# The game's logic runs at the NTSC PS2's (and the PC's) 29.97 frames a
+# second; the PAL 50 Hz speed is not reproduced (docs/mods/timing.md).
+# "ps2" (default): Tidus runs at the PS2's speed (34 a frame x 0.05).
+# "hd": the PC's 38, 12 % faster (a little more ground between encounters).
+run_speed = "ps2"
+
+[fixes]
+# NPC mouths that stay open after they talk (the PC sets the mouth texture inverted).
+npc_mouths = true
+# The Farplane background video that never plays on PC.
+farplane_video = true
+# Lulu's Fury spins that often aren't registered.
+lulu_fury = true
+
+[minimap]
+# The field minimap. "crt": round, always centred on you and turned with the
+# camera (up is where the camera looks), in the game's colours on a small
+# CRT screen; markers beyond its edge sit on the rim and fade in as you come
+# nearer. "plain": the same without the CRT screen. "game": the game's own.
+style = "crt"
+# How big the minimap is: "small", "medium" or "large".
+size = "medium"
+# Where it sits on the picture: "top_right", "top_left", "bottom_right" or
+# "bottom_left".
+corner = "top_right"
+
+# FPS unlock (mod yuta.fps-unlock; docs/mods/fps-unlock.md): the frame rate, drawing between
+# ticks and the time scale. All read live by the mod; its F8 window changes them in the game.
+[frames]
+# The whole mod. false gives the game back its own timing, frame limiter and vsync
+# (the mod stays loaded, so the window can turn it on again).
+enabled = true
+# How fast the game draws: "game" (its own 30 fps), "monitor" (the refresh rate of
+# the monitor the window is on), "fixed" (fixed_fps) or "unlimited" (no limiter).
+target = "monitor"
+# The frame rate of target "fixed", 10 to 1000.
+fixed_fps = 120.0
+# "game" (as the game's own setting has it), "on" or "off" for every present.
+# Alt+F9 switches between on and off.
+vsync = "game"
+# The fps counter in the top-right corner.
+overlay = true
+# What a drawn frame without a tick of the world does: "redraw" (the game draws
+# again with the world held still, so the camera and the characters can move
+# between ticks) or "repeat" (the last frame again, as the Esc menu does).
+between_ticks = "redraw"
+# The effects on frames between ticks: "replay" (what they drew at the last tick
+# is drawn again: the game's speed, drawn every frame), "run" (they run every
+# drawn frame: too fast) or "hold" (missing between ticks: they flicker).
+effects = "replay"
+
+[frames.speed]
+# Game time per real second, 0.05 to 100 (1.0 is the game's speed). A scale above
+# 1.0 is saved only after the game has run at it for 5 s, and a saved one starts at
+# 1.0 and ramps up over the first seconds.
+time_scale = 1.0
+# The scale Ctrl+F9 switches to and back to 1.0.
+fast = 10.0
+# The scale Shift+F9 switches to and back to 1.0.
+slow = 0.25
+# Sound off while faster than 1.0, as the game's own booster does.
+mute_when_fast = true
+# Also 1.0 where the game's booster won't speed up (its maps and spells, the
+# sphere grid, a load).
+booster_limits = true
+# The scene's own animations follow the time scale and the pause: the water, the
+# scrolling clouds and other scrolling or animated surfaces, the radial blur, light
+# flashes. false: they run in real time, as in the game.
+scene_time = true
+
+[frames.interpolate]
+# Draw the camera between its last two ticks (the picture is one tick, 33 ms, behind).
+camera = true
+# Draw each character's place and facing between its last two ticks.
+characters = true
+# ... and its bones (its animation).
+bones = true
+# ... and its cloth and hair (needs hold.cloth).
+cloth = true
+# Draw the map's moving objects (field animated parts, lifts, gates, boats and
+# other objects the scripts move) between their last two ticks.
+objects = true
+# Also move the camera on frames of between_ticks = "repeat".
+repeats = true
+
+[frames.cuts]
+# A camera that moved further than this in one tick (world units) cut to a new
+# shot: drawn as the tick has it, with the characters.
+camera_distance = 100.0
+# A camera that turned more than this in one tick (degrees) cut.
+camera_degrees = 45.0
+# A camera the game sets at once (scripts, magic) is a cut when its step jumps.
+game_sets = true
+# A character or map object that moved further than this in one tick (world
+# units) warped: drawn as it is.
+character_distance = 50.0
+# A character or map object that turned more than this in one tick (degrees) warped.
+character_degrees = 120.0
+
+[frames.hold]
+# What redrawn frames hold still, which would otherwise run once per drawn frame:
+# the characters' bones and motion events (Ch_CalcMiddle),
+characters = true
+# the field's animation (yiAnimMain),
+field_animation = true
+# the fade counters (Sg_DrawFilter),
+fades = true
+# the cloth and hair (Sg_ClothStep).
+cloth = true
+
+[frames.budget]
+# The most real time one frame counts, in seconds (the game's own is 0.3).
+max_real_time = 0.3
+# The most ticks one frame runs, 1 to 892.
+max_ticks = 100
+# The most time one frame's game update may take, in ms (5 to 300): past it the
+# frame runs fewer ticks and the game runs slower than time_scale asks.
+max_update_ms = 40.0
+# How many whole game updates one frame runs before it uses the game's exec
+# frames for more ticks, 1 to 10.
+whole_updates = 4

@@ -4,7 +4,7 @@
 #   mod        the shared library and the C# mods, and the C# tests (Linux)
 #   linux      converter and live engine tests (Linux)
 #   windows    demaster.exe (MSVC, static CRT) and demaster_live.dll (32-bit), the
-#              release zips (tools/package.cs) with a check of each (what it must
+#              release zips (tools/package/package.cs) with a check of each (what it must
 #              hold, one demaster.exe at most, no game data)
 # release.yml calls this workflow with the tag, so a release is built the same way.
 #
@@ -57,12 +57,12 @@ jobs:
     - name: Test
       run: dotnet test -c Release --no-build ffx-mods.slnx
 
-    # Debug Revival's developer tools (tools/debug-revival): built only, they need the game's files to run.
+    # Debug Revival's developer tools (tools/dev/debug-revival): built only, they need the game's files to run.
     - name: Build Debug Revival's tools
       run: |
-        dotnet build -c Release tools/debug-revival/DisasmCheck
-        dotnet build -c Release tools/debug-revival/GsCheck
-        for script in gen-natives gen-map-table; do dotnet build tools/debug-revival/$script.cs; done
+        dotnet build -c Release tools/dev/debug-revival/DisasmCheck
+        dotnet build -c Release tools/dev/debug-revival/GsCheck
+        for script in gen-natives gen-map-table; do dotnet build tools/dev/debug-revival/$script.cs; done
 
     - uses: actions/upload-artifact@v7
       with:
@@ -126,7 +126,7 @@ jobs:
 
     - name: Package
       run: |
-        dotnet run tools/package.cs -- dist "${TAG:-ci}"
+        dotnet run tools/package/package.cs -- dist "${TAG:-ci}"
 
     # Every zip: the shared library, the mod with its default settings (settings.default.toml,
     # never settings.toml: that is the player's), README, licences and install script;

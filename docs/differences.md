@@ -5,7 +5,7 @@ Steam HD Remaster (`FFX.exe` sha256 `0537b2a1…686d`). Sources and evidence:
 [`research/differences.md`](research/differences.md) (catalogue with URLs),
 [`research/hd-vs-ps2-assets.md`](research/hd-vs-ps2-assets.md) (measured mesh
 and UV comparison), [`research/ps2-textures.md`](research/ps2-textures.md),
-[`disc.md`](disc.md).
+[`disc.md`](dev/disc.md).
 
 The rule for defaults: **presentation from the PS2, logic from the PC.**
 Every row with a setting can be switched back to the HD version.

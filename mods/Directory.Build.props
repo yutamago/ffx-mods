@@ -1,11 +1,12 @@
 <!-- What every mod of the family has in common: the version, the shared library
-     (common/, mod yuta.ffx-mods, referenced but not copied: Fahrenheit loads it once
+     (mods/shared/, mod yuta.ffx-mods, referenced but not copied: Fahrenheit loads it once
      from its own folder and shares it), its global usings, and the dependency in the
      manifest (Directory.Build.targets). A mod's csproj sets AssemblyName yuta.<folder>,
-     AssemblyTitle and Description. -->
+     AssemblyTitle and Description. The shared library itself (mods/shared) takes only the
+     root Directory.Build.props: it is the dependency, not a mod that has it. -->
 <Project>
     <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
-    <PropertyGroup>
+    <PropertyGroup Condition=" '$(MSBuildProjectName)' != 'yuta.ffx-mods' ">
         <Version>0.1.0</Version>
         <Authors>Yutamago</Authors>
         <Product>FFX mods</Product>
@@ -14,12 +15,12 @@
         <!-- Comma-separated mod ids, written into the manifest's Dependencies. -->
         <FfxModsDependencies>yuta.ffx-mods</FfxModsDependencies>
     </PropertyGroup>
-    <ItemGroup>
-        <ProjectReference Include="$(MSBuildThisFileDirectory)../common/yuta.ffx-mods.csproj">
+    <ItemGroup Condition=" '$(MSBuildProjectName)' != 'yuta.ffx-mods' ">
+        <ProjectReference Include="$(MSBuildThisFileDirectory)shared/yuta.ffx-mods.csproj">
             <Private>false</Private>
             <ExcludeAssets>runtime;native</ExcludeAssets>
         </ProjectReference>
-        <Compile Include="$(MSBuildThisFileDirectory)../common/usings.cs" Link="usings.cs" />
+        <Compile Include="$(MSBuildThisFileDirectory)shared/usings.cs" Link="usings.cs" />
         <Using Include="Yuta.FfxMods" />
     </ItemGroup>
 </Project>

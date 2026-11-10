@@ -199,8 +199,8 @@ $fh = Join-Path $tmp 'fh'
 $mods = Join-Path $fh 'mods'
 [void](New-Item -ItemType Directory -Force (Join-Path $mods 'yuta.ffx-mods'))
 Set-Content -LiteralPath (Join-Path $mods 'yuta.ffx-mods/yuta.ffx-mods.dll') -Value ''
-$bugDefaults = [IO.File]::ReadAllText((Join-Path $repo 'mods/bug-fixes/settings.default.toml'))
-$feelDefaults = [IO.File]::ReadAllText((Join-Path $repo 'mods/ps2-game-feel/settings.default.toml'))
+$bugDefaults = [IO.File]::ReadAllText((Join-Path $repo 'mods/ps2/bug-fixes/settings.default.toml'))
+$feelDefaults = [IO.File]::ReadAllText((Join-Path $repo 'mods/ps2/ps2-game-feel/settings.default.toml'))
 $bug = Add-Mod $mods 'bug-fixes' $bugDefaults
 $feel = Add-Mod $mods 'ps2-game-feel' $feelDefaults
 Set-Content -LiteralPath (Join-Path $mods 'loadorder') -Value 'someone.else'

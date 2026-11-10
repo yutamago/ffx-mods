@@ -1,0 +1,9 @@
+<Project Sdk="Fahrenheit.Sdk/1.0.0-alpha12">
+    <!-- Version, the shared library and the manifest's dependency: ../../Directory.Build.props -->
+    <PropertyGroup>
+        <AssemblyName>yuta.ps2-characters</AssemblyName>
+        <RootNamespace>Yuta.FfxMods.Characters</RootNamespace>
+        <AssemblyTitle>PS2 characters</AssemblyTitle>
+        <Description>PS2 models and textures for the party, NPCs, monsters, aeons, weapons and objects, built from your PS2 disc (install.cmd).</Description>
+    </PropertyGroup>
+</Project>

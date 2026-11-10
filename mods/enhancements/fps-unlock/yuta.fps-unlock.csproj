@@ -1,0 +1,9 @@
+<Project Sdk="Fahrenheit.Sdk/1.0.0-alpha12">
+    <!-- Version, the shared library and the manifest's dependency: ../../Directory.Build.props -->
+    <PropertyGroup>
+        <AssemblyName>yuta.fps-unlock</AssemblyName>
+        <RootNamespace>Yuta.FfxMods.FpsUnlock</RootNamespace>
+        <AssemblyTitle>FPS unlock</AssemblyTitle>
+        <Description>Draws at the monitor's refresh rate or uncapped while the game keeps its 30 ticks a second, draws the camera and the characters between ticks, and scales game time. F9 opens its settings.</Description>
+    </PropertyGroup>
+</Project>

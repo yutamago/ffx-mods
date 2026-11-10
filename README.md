@@ -192,7 +192,7 @@ them) stay HD.
 
 - PS2 disc: needed. Needs ffmpeg to encode (not included): if none is
   found, `install.cmd` downloads an LGPL build of FFmpeg (168 MB) into the
-  mod's `tools\` and checks its SHA-256 ([`docs/movies.md`](docs/movies.md)).
+  mod's `tools\` and checks its SHA-256 ([`docs/mods/movies.md`](docs/mods/movies.md)).
 - Size: ~1.6 GB. The first build takes 30 to 35 minutes.
 
 ### PS2 characters
@@ -217,8 +217,8 @@ The PS2 textures of the field maps (`maps.field`) and the battle maps
 loaded them, and the PS2's painted backgrounds of the fixed-camera rooms
 (`maps.backgrounds`). The rooms the HD re-framed for 16:9 get their (4:3)
 PS2 paintings only with PS2 aspect ratio's 4:3 picture; like PS2 movies,
-the mod is rebuilt when that changes ([`docs/maps.md`](docs/maps.md),
-[`docs/screen.md`](docs/screen.md)).
+the mod is rebuilt when that changes ([`docs/mods/maps.md`](docs/mods/maps.md),
+[`docs/mods/screen.md`](docs/mods/screen.md)).
 
 - PS2 disc: needed. Size: ~2.3 GB. The build takes about 15 minutes.
 
@@ -226,7 +226,7 @@ the mod is rebuilt when that changes ([`docs/maps.md`](docs/maps.md),
 
 The PS2 textures of the effects: spells, summons, overdrives and the
 particles of the maps and monsters (`effects.textures`,
-[`docs/effects.md`](docs/effects.md)).
+[`docs/mods/effects.md`](docs/mods/effects.md)).
 
 - PS2 disc: needed. Size: ~1.3 GB. The build takes a few minutes.
 
@@ -247,7 +247,7 @@ they stay HD, and `install.cmd` (with "no disc" or `-NoDisc`) says so.
 Two things the HD draws that the PS2 didn't: its glow, the blurred bright
 parts added over the whole picture (`render.glow`), and its shadow maps
 (`render.shadows`): without them every character has one soft ground
-shadow under it, as on the PS2 ([`docs/render.md`](docs/render.md)).
+shadow under it, as on the PS2 ([`docs/mods/render.md`](docs/mods/render.md)).
 
 - PS2 disc: not needed. Code only.
 
@@ -313,7 +313,7 @@ markers keep their shapes and colours; those beyond the edge sit on the rim
 and fade in as you come nearer, and where you are headed stays on the rim.
 It shows and hides when the game's minimap would, and the fog of war still
 clears as you walk. Size and corner are settings (`minimap.size`,
-`minimap.corner`). [`docs/minimap.md`](docs/minimap.md) explains it.
+`minimap.corner`). [`docs/mods/modern-minimap.md`](docs/mods/modern-minimap.md) explains it.
 
 - PS2 disc: not needed. Code only.
 
@@ -337,7 +337,7 @@ stay at their own speed.
 - Effects, the 2D layers and blob shadows still move at 30 Hz (the effects
   at the game's speed, drawn on every frame); fast-forward costs CPU (every
   tick is simulated) and the counter says when it falls short.
-  [`docs/fps-unlock.md`](docs/fps-unlock.md) explains how it works and its
+  [`docs/mods/fps-unlock.md`](docs/mods/fps-unlock.md) explains how it works and its
   limits.
 - PS2 disc: not needed. Code only.
 
@@ -367,47 +367,56 @@ developers' debug mode while it runs.
 - No settings. Formerly its own mod `yuta.debugrevival`
   (github.com/yutamago/ffx-debug-revival-mod): delete
   `mods\yuta.debugrevival\` and its line in `mods\loadorder` when you
-  install this one. [`docs/debug-revival/`](docs/debug-revival/README.md)
+  install this one. [`docs/mods/debug-revival/`](docs/mods/debug-revival/README.md)
   explains every tab and the research behind it.
 - PS2 disc: not needed.
 
 ## Documents
 
+[`docs/README.md`](docs/README.md) lists every doc by mod. The main ones:
+
 - [`docs/config.md`](docs/config.md): every setting, and which mod has it.
 - [`docs/differences.md`](docs/differences.md): every difference between
   the two versions and how it is restored.
-- [`docs/patches.md`](docs/patches.md), [`docs/render.md`](docs/render.md),
-  [`docs/screen.md`](docs/screen.md), [`docs/ui.md`](docs/ui.md),
-  [`docs/models.md`](docs/models.md), [`docs/music.md`](docs/music.md):
+- [`docs/mods/patches.md`](docs/mods/patches.md), [`docs/mods/render.md`](docs/mods/render.md),
+  [`docs/mods/screen.md`](docs/mods/screen.md), [`docs/mods/interface.md`](docs/mods/interface.md),
+  [`docs/mods/characters.md`](docs/mods/characters.md), [`docs/mods/music.md`](docs/mods/music.md):
   how each change works and how it was checked.
-- [`docs/minimap.md`](docs/minimap.md): the Modern Minimap.
-- [`docs/fps-unlock.md`](docs/fps-unlock.md): FPS unlock, and how FFX.exe
+- [`docs/mods/modern-minimap.md`](docs/mods/modern-minimap.md): the Modern Minimap.
+- [`docs/mods/fps-unlock.md`](docs/mods/fps-unlock.md): FPS unlock, and how FFX.exe
   times its frames (what a tick is, the limiter, fast-forward).
-- [`docs/debug-revival/`](docs/debug-revival/README.md): Debug Revival, its
+- [`docs/mods/debug-revival/`](docs/mods/debug-revival/README.md): Debug Revival, its
   tools, and the research behind every address it uses.
-- [`docs/disc.md`](docs/disc.md): how the PS2 disc stores its files.
-- [`docs/ci.md`](docs/ci.md): CI and releases.
+- [`docs/dev/disc.md`](docs/dev/disc.md): how the PS2 disc stores its files.
+- [`docs/dev/ci.md`](docs/dev/ci.md): CI and releases.
 
 ## Build
 
 | Path | What |
 |---|---|
-| `converter/` | `demaster`, the converter (Rust; library and program). Uses the ffx-rust crates (`github.com/yutamago/ffx-rust`, public, pinned in `Cargo.toml`). |
-| `live/` | `demaster_live.dll`, the live music engine (Rust, 32-bit like FFX.exe) |
-| `common/` | `yuta.ffx-mods`, the shared C# library (a Fahrenheit mod): settings, build status, code patch helpers, the F8 window |
-| `mods/<name>/` | the mods (C#, .NET 10, `Fahrenheit.Sdk/1.0.0-alpha12`), each with its `settings.default.toml` (the defaults; the player's `settings.toml` is made from it) and players' `README.txt` |
+| `mods/<group>/<name>/` | the mods (C#, .NET 10, `Fahrenheit.Sdk/1.0.0-alpha12`), each with its `settings.default.toml` (the defaults; the player's `settings.toml` is made from it) and players' `README.txt`. The folder's name is the mod's (`yuta.<name>`); the group only sorts them: |
+| `mods/ps2/` | the twelve mods of the PS2 bundle |
+| `mods/enhancements/` | FPS unlock and Modern Minimap, our own changes |
+| `mods/dev/` | Debug Revival, the developers' debug tools |
+| `mods/bundles/` | the PS2 bundle (`yuta.ps2-bundle`) |
+| `mods/shared/` | `yuta.ffx-mods`, the shared C# library (a Fahrenheit mod): settings, build status, code patch helpers, the F8 window |
+| `demaster/` | `demaster`, the converter (Rust; library and program): `src/jobs/` one file per job, `src/formats/` the file formats, `src/characters/` what the character jobs share, `src/audio/` the PS2 sound driver. Uses the ffx-rust crates (`github.com/yutamago/ffx-rust`, public, pinned in `Cargo.toml`). |
+| `demaster-live/` | `demaster_live.dll`, the live music engine (Rust, 32-bit like FFX.exe) |
 | `tests/` | C# tests (`tests/fps-unlock`: FPS unlock's portable part, built from its sources) |
+| `tools/build/` | `build-windows.sh` (`demaster.exe`), `build-live.sh` (`demaster_live.dll`), `live-test.sh` |
+| `tools/package/` | `package.cs`: one zip per mod, and the PS2 bundle's |
 | `tools/install/` | `install.ps1` and `install.cmd`, in every mod's zip |
-| `tools/package.cs` | one zip per mod, and the PS2 bundle's |
+| `tools/dev/` | developer tools: `ps2x` (PS2 disc extractor), Debug Revival's checks and generators |
+| `docs/` | the research and design docs; [`docs/README.md`](docs/README.md) lists them by mod |
 
 ```bash
 cargo build --release -p demaster                     # Linux: target/release/demaster
 cargo test -p demaster -p demaster-live               # converter tests, incl. that every mod's settings agree
-tools/build-windows.sh                                # demaster.exe (cargo-xwin, static CRT)
-tools/build-live.sh                                   # demaster_live.dll (32-bit)
+tools/build/build-windows.sh                          # demaster.exe (cargo-xwin, static CRT)
+tools/build/build-live.sh                             # demaster_live.dll (32-bit)
 dotnet build -c Release ffx-mods.slnx                 # artifacts/deploy/rel/mods/yuta.*/
 dotnet test -c Release --no-build ffx-mods.slnx       # C# tests (FFX_GAME_DIR=<game folder> for those on FFX.exe)
-dotnet run tools/package.cs -- dist 0.1.0             # dist/yuta.<mod>-0.1.0.zip, dist/yuta.ps2-bundle-0.1.0.zip
+dotnet run tools/package/package.cs -- dist 0.1.0     # dist/yuta.<mod>-0.1.0.zip, dist/yuta.ps2-bundle-0.1.0.zip
 ```
 
 The converter builds one mod at a time: `demaster build --mod <name>
@@ -418,28 +427,29 @@ builds every job into one folder from `demaster.toml` (development).
 
 The disc can be a drive letter (`E:`): on Windows the converter reads the
 drive's raw volume (`\\.\E:`) in whole 2048-byte sectors at sector offsets
-into aligned memory (`converter/src/disc.rs`, `SectorReader`); images are
+into aligned memory (`demaster/src/disc.rs`, `SectorReader`); images are
 read the same way.
 
 CI (`.github/workflows/build.yml`) builds the mods and runs their tests,
 runs the converter tests on Linux, builds `demaster.exe` and `demaster_live.dll` on Windows,
 packages every mod's zip and the PS2 bundle's and checks that they hold no game data, on every
 push and pull request; a tag `v*` publishes a release with the zips
-(`release.yml`); no secrets are needed ([`docs/ci.md`](docs/ci.md)).
+(`release.yml`); no secrets are needed ([`docs/dev/ci.md`](docs/dev/ci.md)).
 
 ## Contributing: adding a mod
 
-A new mod is a folder `mods/<name>/` (its Fahrenheit id is `yuta.<name>`):
+A new mod is a folder `mods/<group>/<name>/` (its Fahrenheit id is `yuta.<name>`;
+the group is `ps2`, `enhancements` or `dev`):
 
 1. **Project.** `yuta.<name>.csproj` with `Sdk="Fahrenheit.Sdk/1.0.0-alpha12"`,
    `AssemblyName` `yuta.<name>`, `RootNamespace`, `AssemblyTitle` and
    `Description` (no `;` in it: it goes into the manifest).
    `mods/Directory.Build.props` adds the rest: the version, a reference to
-   the shared library `common/` (not copied: Fahrenheit loads it once from
+   the shared library `mods/shared/` (not copied: Fahrenheit loads it once from
    `mods/yuta.ffx-mods` and shares it), its global usings, and
    `yuta.ffx-mods` as the manifest's dependency; `settings.default.toml`
    and `README.txt` are copied into the build. Add the project to
-   `ffx-mods.slnx`.
+   `ffx-mods.slnx`, in its group's folder.
 2. **Module.** `Mod.cs`: an `FhModule` with `[FhLoad(FhGameId.FFX)]`, its
    `SETTINGS` (`SettingInfo`: key, who applies it, default), its `PATCHES`
    (`CodePatch`: the setting, its "off" value, a description and the apply
@@ -448,16 +458,16 @@ A new mod is a folder `mods/<name>/` (its Fahrenheit id is `yuta.<name>`):
    build stamp, applies the patches and puts the mod into the one F8
    window. An apply function gets the `ModHost` (its log, its folder; it
    converts to the `FhModule` for `Native.fn<T>(va).hook(m, ...)`).
-   Copy `mods/ps2-game-feel/` for a code-only mod.
-3. **Shared code** goes into `common/` (`Native` for FFX.exe addresses and
+   Copy `mods/ps2/ps2-game-feel/` for a code-only mod.
+3. **Shared code** goes into `mods/shared/` (`Native` for FFX.exe addresses and
    byte patches, `Fn` for function shapes, `ModFiles` for the PS2 files of
    every installed mod), never copied into a mod. A hook on a function
    another mod may hook too must call the next one (`chain_from`). A mod
    whose settings change while the game runs draws them in its part of the
    F8 window (`ModInfo.Section`; `FamilyWindow.toggle` for a key of its own)
    and writes them back with `ModSettings.write` (as FPS unlock does).
-4. **Settings.** Each setting is in `converter/src/config.rs` (`Config`,
-   `SETTINGS`), the mod's entry in `converter/src/mods.rs`, its `Mod.cs`,
+4. **Settings.** Each setting is in `demaster/src/config.rs` (`Config`,
+   `SETTINGS`), the mod's entry in `demaster/src/mods.rs`, its `Mod.cs`,
    its `settings.default.toml` (with comments; `[source]` only if it has
    PS2 files; the zip ships it, `install.cmd` makes the player's
    `settings.toml` from it)
@@ -473,10 +483,10 @@ A new mod is a folder `mods/<name>/` (its Fahrenheit id is `yuta.<name>`):
    `tools/install/install.ps1` (shipped as the mod's `install.cmd`) runs
    it: it finds the mod by its manifest, asks for the disc only when the
    mod has disc jobs (`demaster mods`), and adds the mod to `mods\loadorder`.
-6. **Package and CI.** Add the mod to `MODS` in `tools/package.cs` (whether
+6. **Package and CI.** Add the mod to `MODS` in `tools/package/package.cs` (whether
    it ships `demaster.exe`) and to the zip check in
    `.github/workflows/build.yml`; a PS2 mod also goes into the PS2 bundle
-   (its id in `FfxModsDependencies` of `mods/ps2-bundle/yuta.ps2-bundle.csproj`,
+   (its id in `FfxModsDependencies` of `mods/bundles/ps2-bundle/yuta.ps2-bundle.csproj`,
    in the converter's order, and in the bundle's `README.txt`); describe it in this README (what it
    changes for the player, disc, size, dependencies) and in its
    `README.txt`. Tests of a mod's portable code go in `tests/<name>/`

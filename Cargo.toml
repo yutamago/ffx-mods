@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["converter", "live", "tools/ps2x"]
+members = ["demaster", "demaster-live", "tools/dev/ps2x"]
 exclude = ["tools/shotrun", "tools/calllist"]
 
 [workspace.package]

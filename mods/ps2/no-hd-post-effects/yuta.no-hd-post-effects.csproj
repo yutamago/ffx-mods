@@ -1,0 +1,9 @@
+<Project Sdk="Fahrenheit.Sdk/1.0.0-alpha12">
+    <!-- Version, the shared library and the manifest's dependency: ../../Directory.Build.props -->
+    <PropertyGroup>
+        <AssemblyName>yuta.no-hd-post-effects</AssemblyName>
+        <RootNamespace>Yuta.FfxMods.PostEffects</RootNamespace>
+        <AssemblyTitle>No HD post-effects</AssemblyTitle>
+        <Description>No HD glow and no shadow maps: the picture without the HD bloom and with the PS2 ground shadows.</Description>
+    </PropertyGroup>
+</Project>

@@ -19,27 +19,27 @@
         <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.0.1" />
     </ItemGroup>
     <ItemGroup>
-        <Compile Include="../../mods/fps-unlock/TickAccumulator.cs" Link="mod/TickAccumulator.cs" />
-        <Compile Include="../../mods/fps-unlock/TickPlan.cs" Link="mod/TickPlan.cs" />
-        <Compile Include="../../mods/fps-unlock/TickBudget.cs" Link="mod/TickBudget.cs" />
-        <Compile Include="../../mods/fps-unlock/ScaleGuard.cs" Link="mod/ScaleGuard.cs" />
-        <Compile Include="../../mods/fps-unlock/DrawCounters.cs" Link="mod/DrawCounters.cs" />
-        <Compile Include="../../mods/fps-unlock/FrameSettings.cs" Link="mod/FrameSettings.cs" />
-        <Compile Include="../../mods/fps-unlock/FramePacing.cs" Link="mod/FramePacing.cs" />
-        <Compile Include="../../mods/fps-unlock/FrameDirector.cs" Link="mod/FrameDirector.cs" />
-        <Compile Include="../../mods/fps-unlock/SceneClock.cs" Link="mod/SceneClock.cs" />
-        <Compile Include="../../mods/fps-unlock/CameraInterpolator.cs" Link="mod/CameraInterpolator.cs" />
-        <Compile Include="../../mods/fps-unlock/FrameStats.cs" Link="mod/FrameStats.cs" />
-        <Compile Include="../../mods/fps-unlock/TimeScaleSteps.cs" Link="mod/TimeScaleSteps.cs" />
-        <Compile Include="../../mods/fps-unlock/CodeScan.cs" Link="mod/CodeScan.cs" />
-        <Compile Include="../../mods/fps-unlock/PeRelocations.cs" Link="mod/PeRelocations.cs" />
-        <Compile Include="../../mods/fps-unlock/HookSites.cs" Link="mod/HookSites.cs" />
-        <Compile Include="../../mods/fps-unlock/EffectReplay.cs" Link="mod/EffectReplay.cs" />
-        <Compile Include="../../mods/fps-unlock/CharacterInterpolator.cs" Link="mod/CharacterInterpolator.cs" />
-        <Compile Include="../../mods/fps-unlock/ClothInterpolator.cs" Link="mod/ClothInterpolator.cs" />
-        <Compile Include="../../mods/fps-unlock/WorldMatrixLog.cs" Link="mod/WorldMatrixLog.cs" />
-        <Compile Include="../../mods/fps-unlock/ObjectInterpolator.cs" Link="mod/ObjectInterpolator.cs" />
-        <Compile Include="../../common/MiniToml.cs" Link="common/MiniToml.cs" />
-        <Compile Include="../../common/ModSettings.cs" Link="common/ModSettings.cs" />
+        <Compile Include="../../mods/enhancements/fps-unlock/TickAccumulator.cs" Link="mod/TickAccumulator.cs" />
+        <Compile Include="../../mods/enhancements/fps-unlock/TickPlan.cs" Link="mod/TickPlan.cs" />
+        <Compile Include="../../mods/enhancements/fps-unlock/TickBudget.cs" Link="mod/TickBudget.cs" />
+        <Compile Include="../../mods/enhancements/fps-unlock/ScaleGuard.cs" Link="mod/ScaleGuard.cs" />
+        <Compile Include="../../mods/enhancements/fps-unlock/DrawCounters.cs" Link="mod/DrawCounters.cs" />
+        <Compile Include="../../mods/enhancements/fps-unlock/FrameSettings.cs" Link="mod/FrameSettings.cs" />
+        <Compile Include="../../mods/enhancements/fps-unlock/FramePacing.cs" Link="mod/FramePacing.cs" />
+        <Compile Include="../../mods/enhancements/fps-unlock/FrameDirector.cs" Link="mod/FrameDirector.cs" />
+        <Compile Include="../../mods/enhancements/fps-unlock/SceneClock.cs" Link="mod/SceneClock.cs" />
+        <Compile Include="../../mods/enhancements/fps-unlock/CameraInterpolator.cs" Link="mod/CameraInterpolator.cs" />
+        <Compile Include="../../mods/enhancements/fps-unlock/FrameStats.cs" Link="mod/FrameStats.cs" />
+        <Compile Include="../../mods/enhancements/fps-unlock/TimeScaleSteps.cs" Link="mod/TimeScaleSteps.cs" />
+        <Compile Include="../../mods/enhancements/fps-unlock/CodeScan.cs" Link="mod/CodeScan.cs" />
+        <Compile Include="../../mods/enhancements/fps-unlock/PeRelocations.cs" Link="mod/PeRelocations.cs" />
+        <Compile Include="../../mods/enhancements/fps-unlock/HookSites.cs" Link="mod/HookSites.cs" />
+        <Compile Include="../../mods/enhancements/fps-unlock/EffectReplay.cs" Link="mod/EffectReplay.cs" />
+        <Compile Include="../../mods/enhancements/fps-unlock/CharacterInterpolator.cs" Link="mod/CharacterInterpolator.cs" />
+        <Compile Include="../../mods/enhancements/fps-unlock/ClothInterpolator.cs" Link="mod/ClothInterpolator.cs" />
+        <Compile Include="../../mods/enhancements/fps-unlock/WorldMatrixLog.cs" Link="mod/WorldMatrixLog.cs" />
+        <Compile Include="../../mods/enhancements/fps-unlock/ObjectInterpolator.cs" Link="mod/ObjectInterpolator.cs" />
+        <Compile Include="../../mods/shared/MiniToml.cs" Link="mods/shared/MiniToml.cs" />
+        <Compile Include="../../mods/shared/ModSettings.cs" Link="mods/shared/ModSettings.cs" />
     </ItemGroup>
 </Project>

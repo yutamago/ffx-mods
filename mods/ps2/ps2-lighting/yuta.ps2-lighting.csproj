@@ -1,0 +1,9 @@
+<Project Sdk="Fahrenheit.Sdk/1.0.0-alpha12">
+    <!-- Version, the shared library and the manifest's dependency: ../../Directory.Build.props -->
+    <PropertyGroup>
+        <AssemblyName>yuta.ps2-lighting</AssemblyName>
+        <RootNamespace>Yuta.FfxMods.Lighting</RootNamespace>
+        <AssemblyTitle>PS2 lighting</AssemblyTitle>
+        <Description>Characters lit the PS2 way: its light levels, falloff and point lights. The event lights need your PS2 disc (install.cmd).</Description>
+    </PropertyGroup>
+</Project>

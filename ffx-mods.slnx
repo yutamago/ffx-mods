@@ -1,20 +1,30 @@
 <Solution>
-  <Project Path="common/yuta.ffx-mods.csproj" />
-  <Project Path="mods/bug-fixes/yuta.bug-fixes.csproj" />
-  <Project Path="mods/debug-revival/yuta.debug-revival.csproj" />
-  <Project Path="mods/fps-unlock/yuta.fps-unlock.csproj" />
-  <Project Path="mods/modern-minimap/yuta.modern-minimap.csproj" />
-  <Project Path="mods/no-hd-post-effects/yuta.no-hd-post-effects.csproj" />
-  <Project Path="mods/ps2-aspect-ratio/yuta.ps2-aspect-ratio.csproj" />
-  <Project Path="mods/ps2-bundle/yuta.ps2-bundle.csproj" />
-  <Project Path="mods/ps2-characters/yuta.ps2-characters.csproj" />
-  <Project Path="mods/ps2-effects/yuta.ps2-effects.csproj" />
-  <Project Path="mods/ps2-game-feel/yuta.ps2-game-feel.csproj" />
-  <Project Path="mods/ps2-interface/yuta.ps2-interface.csproj" />
-  <Project Path="mods/ps2-lighting/yuta.ps2-lighting.csproj" />
-  <Project Path="mods/ps2-maps/yuta.ps2-maps.csproj" />
-  <Project Path="mods/ps2-movies/yuta.ps2-movies.csproj" />
-  <Project Path="mods/ps2-music-engine/yuta.ps2-music-engine.csproj" />
-  <Project Path="mods/ps2-soundtrack/yuta.ps2-soundtrack.csproj" />
-  <Project Path="tests/fps-unlock/fps-unlock.tests.csproj" />
+  <Project Path="mods/shared/yuta.ffx-mods.csproj" />
+  <Folder Name="/ps2/">
+    <Project Path="mods/ps2/bug-fixes/yuta.bug-fixes.csproj" />
+    <Project Path="mods/ps2/no-hd-post-effects/yuta.no-hd-post-effects.csproj" />
+    <Project Path="mods/ps2/ps2-aspect-ratio/yuta.ps2-aspect-ratio.csproj" />
+    <Project Path="mods/ps2/ps2-characters/yuta.ps2-characters.csproj" />
+    <Project Path="mods/ps2/ps2-effects/yuta.ps2-effects.csproj" />
+    <Project Path="mods/ps2/ps2-game-feel/yuta.ps2-game-feel.csproj" />
+    <Project Path="mods/ps2/ps2-interface/yuta.ps2-interface.csproj" />
+    <Project Path="mods/ps2/ps2-lighting/yuta.ps2-lighting.csproj" />
+    <Project Path="mods/ps2/ps2-maps/yuta.ps2-maps.csproj" />
+    <Project Path="mods/ps2/ps2-movies/yuta.ps2-movies.csproj" />
+    <Project Path="mods/ps2/ps2-music-engine/yuta.ps2-music-engine.csproj" />
+    <Project Path="mods/ps2/ps2-soundtrack/yuta.ps2-soundtrack.csproj" />
+  </Folder>
+  <Folder Name="/enhancements/">
+    <Project Path="mods/enhancements/fps-unlock/yuta.fps-unlock.csproj" />
+    <Project Path="mods/enhancements/modern-minimap/yuta.modern-minimap.csproj" />
+  </Folder>
+  <Folder Name="/dev/">
+    <Project Path="mods/dev/debug-revival/yuta.debug-revival.csproj" />
+  </Folder>
+  <Folder Name="/bundles/">
+    <Project Path="mods/bundles/ps2-bundle/yuta.ps2-bundle.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/fps-unlock/fps-unlock.tests.csproj" />
+  </Folder>
 </Solution>

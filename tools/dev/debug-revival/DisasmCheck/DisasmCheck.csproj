@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <!-- Compares the mod's disassembler with ffx-decomp's `ffx script disasm` on every shipped script. -->
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <TargetFramework>net10.0</TargetFramework>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <RootNamespace>Yuta.FfxMods.DebugRevival.Tools</RootNamespace>
+    </PropertyGroup>
+    <ItemGroup>
+        <Compile Include="../../../../mods/dev/debug-revival/Script/Opcodes.cs" />
+        <Compile Include="../../../../mods/dev/debug-revival/Script/Disassembler.cs" />
+        <Compile Include="../../../../mods/dev/debug-revival/Script/NativeNames.cs" />
+        <None Include="../../../../mods/dev/debug-revival/Script/natives.tsv" CopyToOutputDirectory="PreserveNewest" />
+    </ItemGroup>
+</Project>

@@ -140,7 +140,7 @@ Settings API, for completeness:
 - **ffx-debug-revival layout.**
   - Project: `src/yuta.debugrevival.csproj` (SDK project, embedded resources).
   - `Directory.Build.props:26-27` puts output in `artifacts/deploy/{rel,dbg}/mods/<id>/`. That folder holds the dll, deps.json, manifest.json, pdb and runtimeconfig.json.
-  - `tools/package.cs:24-31` zips it as `mods/yuta.debugrevival/**` plus `README.md`, `LICENSE` and `THIRD-PARTY-NOTICES`, so the zip unpacks into the Fahrenheit folder.
+  - `tools/package/package.cs:24-31` zips it as `mods/yuta.debugrevival/**` plus `README.md`, `LICENSE` and `THIRD-PARTY-NOTICES`, so the zip unpacks into the Fahrenheit folder.
   - `.github/workflows/release.yml` builds on a `v*` tag, packages `yuta.debugrevival-<tag>.zip`, and marks tags containing `-` as prereleases.
   - Install steps: unpack, then add the id to `mods/loadorder` (`README.md` Install).
 - **Copyright.** Fahrenheit's own Phyre loader exists so mods need not ship copyrighted assets (`src/runtime/peloader.cs:12-15`). Converted PS2 assets therefore have to be produced on the user's machine and written into `mods/<id>/efl/x/...` *before* the game starts, because the index is built at startup.

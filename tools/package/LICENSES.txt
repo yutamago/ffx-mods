@@ -9,8 +9,8 @@ Source: https://github.com/yutamago/ffx-mods
 - The mods (yuta.*.dll), the shared library (yuta.ffx-mods.dll) and the
   install script: MIT (the SPDX-License-Identifier in each source file).
 - The converter (demaster.exe) and the live music engine
-  (demaster_live.dll): MIT OR Apache-2.0 (converter/Cargo.toml,
-  live/Cargo.toml).
+  (demaster_live.dll): MIT OR Apache-2.0 (demaster/Cargo.toml,
+  demaster-live/Cargo.toml).
 
 Not included
 ------------

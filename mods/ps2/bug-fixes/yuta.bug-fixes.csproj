@@ -1,0 +1,9 @@
+<Project Sdk="Fahrenheit.Sdk/1.0.0-alpha12">
+    <!-- Version, the shared library and the manifest's dependency: ../../Directory.Build.props -->
+    <PropertyGroup>
+        <AssemblyName>yuta.bug-fixes</AssemblyName>
+        <RootNamespace>Yuta.FfxMods.BugFixes</RootNamespace>
+        <AssemblyTitle>Bug fixes</AssemblyTitle>
+        <Description>Fixes of the PC version: NPC mouths that stay open, the Farplane video that never plays, Lulu's Fury spins that are not counted.</Description>
+    </PropertyGroup>
+</Project>

@@ -1,0 +1,9 @@
+<Project Sdk="Fahrenheit.Sdk/1.0.0-alpha12">
+    <!-- Version, the shared library and the manifest's dependency: ../../Directory.Build.props -->
+    <PropertyGroup>
+        <AssemblyName>yuta.ps2-music-engine</AssemblyName>
+        <RootNamespace>Yuta.FfxMods.MusicEngine</RootNamespace>
+        <AssemblyTitle>PS2 music engine</AssemblyTitle>
+        <Description>The PS2 sound driver plays the original soundtrack inside the game from your PS2 disc. Needs the PS2 disc (install.cmd).</Description>
+    </PropertyGroup>
+</Project>

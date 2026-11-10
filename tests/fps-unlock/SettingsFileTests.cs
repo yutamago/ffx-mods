@@ -26,11 +26,11 @@ internal static class Toml {
 }
 
 /// <summary>
-/// The settings live in Mod.cs (the list with defaults, which the converter's test checks against converter/src/mods.rs
+/// The settings live in Mod.cs (the list with defaults, which the converter's test checks against demaster/src/mods.rs
 /// and docs/config.md), settings.toml and <see cref="FrameSettings"/>: these must agree.
 /// </summary>
 public class SettingsFileTests {
-    private static string ModFile(string name) => File.ReadAllText(Path.Combine(Toml.Repo(), "mods", "fps-unlock", name));
+    private static string ModFile(string name) => File.ReadAllText(Path.Combine(Toml.Repo(), "mods", "enhancements", "fps-unlock", name));
 
     [Fact]
     public void Mod_cs_lists_every_setting_with_its_default_in_order() {
@@ -87,7 +87,7 @@ public class SettingsWriteTests {
         string dir = Path.Combine(Path.GetTempPath(), $"ffxmods-settings-{Environment.ProcessId}-{Guid.NewGuid():N}");
         Directory.CreateDirectory(dir);
         try {
-            string shipped = File.ReadAllText(Path.Combine(Toml.Repo(), "mods", "fps-unlock", ModSettings.DEFAULTS));
+            string shipped = File.ReadAllText(Path.Combine(Toml.Repo(), "mods", "enhancements", "fps-unlock", ModSettings.DEFAULTS));
             File.WriteAllText(Path.Combine(dir, ModSettings.DEFAULTS), shipped);
             string path = Path.Combine(dir, ModSettings.FILE);
             SettingInfo[] all = [.. new FrameSettings().ToValues().Select(kv => new SettingInfo(kv.Key, AppliedBy.Mod, kv.Value))];
