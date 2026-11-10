@@ -9,8 +9,8 @@ use anyhow::Result;
 
 use crate::config::{Config, MusicEngine};
 use crate::jobs::{Ctx, Job, Output};
-use crate::musicjob::Sources;
-use crate::sqseq::Bgm;
+use crate::jobs::music::Sources;
+use crate::audio::sqseq::Bgm;
 
 struct LiveJob;
 

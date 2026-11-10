@@ -12,10 +12,10 @@ use rayon::prelude::*;
 
 use crate::config::Config;
 use crate::disc::Disc;
-use crate::gsmem::{self, Gs};
+use crate::formats::gsmem::{self, Gs};
 use crate::jobs::{Ctx, Job, Output};
-use crate::phyretex::{self, Rgba};
-use crate::ps2map::{self, SwapFrame, Tex0, Txa};
+use crate::formats::phyretex::{self, Rgba};
+use crate::formats::ps2map::{self, SwapFrame, Tex0, Txa};
 
 const HD_ROOT: &str = "ffx_data/gamedata/ps3data";
 

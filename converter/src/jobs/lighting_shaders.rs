@@ -32,7 +32,7 @@ use anyhow::Result;
 use rayon::prelude::*;
 
 use crate::config::Config;
-use crate::dxbc;
+use crate::formats::dxbc;
 use crate::jobs::{Ctx, Job, Output};
 
 pub const SHADERS: &str = "ffx_data/gamedata/ps3data/shaders/d3d11/";

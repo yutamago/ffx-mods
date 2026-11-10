@@ -1,40 +1,26 @@
 //! The converter as a library: the `demaster` binary (`main.rs`), the live
-//! music engine (`live/`) and FFX Music Studio use these
+//! music engine (`demaster-live/`) and FFX Music Studio use these
 //! modules. The studio needs the disc reader (`disc`), the settings
 //! (`config`, `build::find_vbf`) and the music engine (`sqseq`, `spu2`,
-//! `musicjob`); keep their public API.
+//! `musicjob`); keep their public API (the re-exports below keep the paths
+//! they had before the modules moved into folders).
+//!
+//! - `build`, `config`, `disc`, `mods`: the build, the settings, the PS2
+//!   disc reader and the mods the converter builds for.
+//! - `jobs`: one file per job (`jobs::registry()`), named after what it builds.
+//! - `formats`: readers and writers of the PS2 and PC file formats.
+//! - `characters`: what the character jobs share (texel baking, alpha,
+//!   texture animation, the material audit).
+//! - `audio`: the PS2 sound driver (`sqseq`) on a model of the SPU2 (`spu2`).
 
-pub mod bake;
-pub mod bgjob;
+pub mod audio;
 pub mod build;
-pub mod chralpha;
-pub mod chrjob;
+pub mod characters;
 pub mod config;
 pub mod disc;
-pub mod dxbc;
-pub mod eventlight;
-pub mod fontjob;
-pub mod fsb5;
-pub mod fxjob;
-pub mod glb;
-pub mod gsmem;
+pub mod formats;
 pub mod jobs;
-pub mod livejob;
-pub mod mapjob;
-pub mod mataudit;
-pub mod models;
 pub mod mods;
-pub mod moviejob;
-pub mod musicjob;
-pub mod phyretex;
-pub mod ps2chr;
-pub mod ps2fx;
-pub mod ps2map;
-pub mod ps2mesh;
-pub mod ps2movie;
-pub mod sgjob;
-pub mod shaderjob;
-pub mod spu2;
-pub mod sqseq;
-pub mod texanim;
-pub mod uijob;
+
+pub use audio::{spu2, sqseq};
+pub use jobs::music as musicjob;

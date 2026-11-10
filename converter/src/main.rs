@@ -1,4 +1,7 @@
-use demaster::{bgjob, build, chralpha, chrjob, config, disc, fxjob, jobs, mapjob, mataudit, models, moviejob, musicjob, ps2fx, ps2movie, texanim, uijob};
+use demaster::characters::{alpha, material_audit, texanim};
+use demaster::formats::{ps2fx, ps2movie};
+use demaster::jobs::{self, backgrounds, character_meshes, character_textures, effects, interface, maps, movies, music};
+use demaster::{build, config, disc};
 
 use std::path::{Path, PathBuf};
 
@@ -66,14 +69,14 @@ fn main() -> Result<()> {
             let out = PathBuf::from(&a[4]);
             let mut specs: Vec<String> = a[5..].to_vec();
             if specs == ["all"] {
-                specs = chrjob::models(&d)
+                specs = character_textures::models(&d)
                     .into_iter()
                     .map(|(kind, name)| format!("{kind}/{name}"))
                     .collect();
             }
             for spec in &specs {
                 let (kind, name) = spec.split_once('/').context("kind/name")?;
-                let r = match chrjob::bake(&mut d, &pc, kind, name) {
+                let r = match character_textures::bake(&mut d, &pc, kind, name) {
                     Ok(r) => r,
                     Err(e) => {
                         println!("{spec}: error: {e:#}");
@@ -144,7 +147,7 @@ fn main() -> Result<()> {
             let (kind, name) = a[4].split_once('/').context("kind/name")?;
             let p = format!("ffx_data/gamedata/ps3data/chr/{kind}/{name}/mdl/d3d11/{name}.dae.phyre");
             let hd = pc.read(pc.find(&p).context("no HD model")?)?;
-            models::debug(&chr, &hd)?;
+            character_meshes::debug(&chr, &hd)?;
         }
         "materials-debug" => {
             if a.len() < 4 {
@@ -184,7 +187,7 @@ fn main() -> Result<()> {
             }
             if a[3] == "--variants" {
                 // every character shader variant: switches and render passes
-                for (p, v) in chralpha::Variants::get(&pc)?.iter() {
+                for (p, v) in alpha::Variants::get(&pc)?.iter() {
                     let sw: Vec<&str> = v.switches.iter().filter(|x| x.1 == "1").map(|x| x.0.as_str()).collect();
                     println!("{}\t{:?}\t{}", p.rsplit('/').next().unwrap_or(p), v.passes, sw.join(" "));
                 }
@@ -200,7 +203,7 @@ fn main() -> Result<()> {
                 Ok(b) => b,
                 Err(_) => pc.read(pc.find(&p).context("no HD model")?)?,
             };
-            chralpha::debug(&hd, |q| pc.find(q).map(|e| pc.read(e)).transpose().map_err(Into::into))?;
+            alpha::debug(&hd, |q| pc.find(q).map(|e| pc.read(e)).transpose().map_err(Into::into))?;
         }
         "materials-audit" => {
             if a.len() < 4 {
@@ -219,7 +222,7 @@ fn main() -> Result<()> {
                     specs.push(x.clone());
                 }
             }
-            print!("{}", mataudit::run(&pc, Path::new(&a[3]), &specs, &known)?);
+            print!("{}", material_audit::run(&pc, Path::new(&a[3]), &specs, &known)?);
         }
         "texanim-debug" => {
             if a.len() < 5 {
@@ -241,7 +244,7 @@ fn main() -> Result<()> {
             let mut d = disc::Disc::open(Path::new(&a[2]), &pc)?;
             eprintln!("disc: region {}, {} files", d.region, d.file_count());
             let out = PathBuf::from(&a[4]);
-            let (done, notes) = uijob::convert(&mut d, &pc, uijob::Parts::all())?;
+            let (done, notes) = interface::convert(&mut d, &pc, interface::Parts::all())?;
             for t in &done {
                 println!("{}", t.note);
                 write(&out.join("efl/x").join(&t.path), &t.file)?;
@@ -271,7 +274,7 @@ fn main() -> Result<()> {
             let only: Vec<String> = a[5..].iter().filter(|s| *s != "all").cloned().collect();
             // DEMASTER_ASPECT=hd: as with render.aspect = "hd" (re-framed rooms stay HD)
             let four_three = std::env::var("DEMASTER_ASPECT").map_or(true, |v| v != "hd");
-            let (done, notes) = bgjob::convert(&mut d, &pc, &only, four_three)?;
+            let (done, notes) = backgrounds::convert(&mut d, &pc, &only, four_three)?;
             for t in &done {
                 println!("{}", t.note);
                 write(&out.join("efl/x").join(&t.path), &t.file)?;
@@ -298,19 +301,19 @@ fn main() -> Result<()> {
             ctx.tools_dir = Some(Path::new(&a[4]).join("tools"));
             let out = jobs::Output::new(Path::new(&a[4]));
             let only: Vec<String> = a[5..].iter().filter(|s| *s != "all").cloned().collect();
-            println!("{}", moviejob::run(&ctx, &out, &only)?);
+            println!("{}", movies::run(&ctx, &out, &only)?);
         }
         "music" => {
             if a.len() < 6 {
                 usage();
             }
-            musicjob::debug(Path::new(&a[2]), &a[3], Path::new(&a[4]), &a[5..])?;
+            music::debug(Path::new(&a[2]), &a[3], Path::new(&a[4]), &a[5..])?;
         }
         "music-bank" => {
             if a.len() < 4 {
                 usage();
             }
-            musicjob::bank_debug(Path::new(&a[2]), Path::new(&a[3]), &a[4..])?;
+            music::bank_debug(Path::new(&a[2]), Path::new(&a[3]), &a[4..])?;
         }
         "movie-debug" => {
             if a.len() < 6 {
@@ -324,7 +327,7 @@ fn main() -> Result<()> {
 }
 
 fn maps(d: &mut disc::Disc, pc: &ffx_vbf::Archive, out: &Path, specs: &[String]) -> Result<()> {
-    let all = mapjob::hd_maps(pc);
+    let all = maps::hd_maps(pc);
     let chosen: Vec<_> = all
         .iter()
         .filter(|(id, _)| {
@@ -339,7 +342,7 @@ fn maps(d: &mut disc::Disc, pc: &ffx_vbf::Archive, out: &Path, specs: &[String])
     let mut log = String::from("map\ttexture\tresult\terror\tsecond\thow\n");
     let (mut conv, mut hd_only, mut failed, mut guessed) = (0, 0, 0, 0);
     for (id, paths) in chosen {
-        let r = match mapjob::convert(d, pc, id, paths, true) {
+        let r = match maps::convert(d, pc, id, paths, true) {
             Ok(r) => r,
             Err(e) => {
                 println!("{}/{}: error: {e:#}", id.kind, id.name);
@@ -414,7 +417,7 @@ fn fx(iso: &str, vbf: &str, out: &Path, specs: &[String]) -> Result<()> {
     let pc = ffx_vbf::Archive::open(vbf)?;
     let mut d = disc::Disc::open(Path::new(iso), &pc)?;
     eprintln!("disc: region {}, {} files", d.region, d.file_count());
-    let hd = fxjob::HdIndex::new(&pc);
+    let hd = effects::HdIndex::new(&pc);
     let sources = if specs == ["all"] {
         let s = hd.sources(&d);
         let missing = hd.without_ps2(&d);
@@ -428,7 +431,7 @@ fn fx(iso: &str, vbf: &str, out: &Path, specs: &[String]) -> Result<()> {
     } else {
         specs
             .iter()
-            .map(|s| fxjob::Source::parse(s).with_context(|| format!("bad id {s}")))
+            .map(|s| effects::Source::parse(s).with_context(|| format!("bad id {s}")))
             .collect::<Result<_>>()?
     };
     let mut gs = ps2fx::Gs::default();
@@ -436,7 +439,7 @@ fn fx(iso: &str, vbf: &str, out: &Path, specs: &[String]) -> Result<()> {
     let (mut done, mut hd_only, mut other, mut unused, mut failed, mut nopal) = (0, 0, 0, 0, 0, 0);
     let mut runtime = 0;
     for src in &sources {
-        let r = match fxjob::convert(&mut d, &pc, &hd, src, &mut gs) {
+        let r = match effects::convert(&mut d, &pc, &hd, src, &mut gs) {
             Ok(r) => r,
             Err(e) => {
                 println!("{}: error: {e:#}", src.id);
@@ -519,11 +522,11 @@ fn models_cmd(iso: &str, vbf: &str, out: &Path, specs: &[String]) -> Result<()> 
     let mut specs: Vec<String> = specs.to_vec();
     if specs == ["all"] {
         specs.clear();
-        for (kind, name) in chrjob::models(&d) {
+        for (kind, name) in character_textures::models(&d) {
             let Some(chr) = d.read(&format!("jppc/chr/{kind}/{name}/mdl/{name}.chr"))? else {
                 continue;
             };
-            if models::remodelled(&chr, &pc, &kind, &name).unwrap_or(false) {
+            if character_meshes::remodelled(&chr, &pc, &kind, &name).unwrap_or(false) {
                 specs.push(format!("{kind}/{name}"));
             }
         }
@@ -532,7 +535,7 @@ fn models_cmd(iso: &str, vbf: &str, out: &Path, specs: &[String]) -> Result<()> 
     let (mut ok, mut failed) = (0, 0);
     for spec in &specs {
         let (kind, name) = spec.split_once('/').context("kind/name")?;
-        let c = match models::convert(&mut d, &pc, kind, name) {
+        let c = match character_meshes::convert(&mut d, &pc, kind, name) {
             Ok(Some(c)) => c,
             Ok(None) => {
                 println!("{spec}: no PS2 or HD model");

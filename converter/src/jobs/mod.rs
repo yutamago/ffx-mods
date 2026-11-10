@@ -5,6 +5,20 @@
 //! [`registry`]. `build.rs` does the rest (skipping unchanged jobs, the file
 //! manifest, removing files of jobs that are off, the build stamp).
 
+pub mod backgrounds;
+pub mod character_meshes;
+pub mod character_textures;
+pub mod effects;
+pub mod event_lights;
+pub mod font;
+pub mod interface;
+pub mod lighting_shaders;
+pub mod live_music;
+pub mod maps;
+pub mod movies;
+pub mod music;
+pub mod sphere_grid;
+
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
@@ -16,22 +30,22 @@ use crate::disc::Disc;
 /// Every job, in the order they run.
 pub fn registry() -> Vec<Box<dyn Job>> {
     let mut jobs: Vec<Box<dyn Job>> = Vec::new();
-    jobs.extend(crate::chrjob::jobs());
-    jobs.extend(crate::mapjob::jobs());
-    jobs.extend(crate::bgjob::jobs());
-    jobs.extend(crate::fxjob::jobs());
-    jobs.extend(crate::uijob::jobs());
-    jobs.extend(crate::models::jobs());
-    jobs.extend(crate::moviejob::jobs());
-    jobs.extend(crate::musicjob::jobs());
-    jobs.extend(crate::livejob::jobs());
-    jobs.extend(crate::shaderjob::jobs());
-    jobs.extend(crate::eventlight::jobs());
+    jobs.extend(crate::jobs::character_textures::jobs());
+    jobs.extend(crate::jobs::maps::jobs());
+    jobs.extend(crate::jobs::backgrounds::jobs());
+    jobs.extend(crate::jobs::effects::jobs());
+    jobs.extend(crate::jobs::interface::jobs());
+    jobs.extend(crate::jobs::character_meshes::jobs());
+    jobs.extend(crate::jobs::movies::jobs());
+    jobs.extend(crate::jobs::music::jobs());
+    jobs.extend(crate::jobs::live_music::jobs());
+    jobs.extend(crate::jobs::lighting_shaders::jobs());
+    jobs.extend(crate::jobs::event_lights::jobs());
     jobs
 }
 
 /// Folders of the mod (besides `efl/x`) that jobs write: `music/` holds the
-/// live music engine's PS2 files (`livejob.rs`).
+/// live music engine's PS2 files (`jobs/live_music.rs`).
 pub const MOD_DIRS: &[&str] = &["music/"];
 
 pub trait Job: Sync {
@@ -74,7 +88,7 @@ pub struct Ctx<'a> {
     /// Print per-item details.
     pub verbose: bool,
     /// ffmpeg, from `--ffmpeg` or `source.ffmpeg`; `None`: look for it
-    /// (`moviejob::find_ffmpeg`).
+    /// (`movies::find_ffmpeg`).
     pub ffmpeg: Option<PathBuf>,
     /// Where a downloaded ffmpeg goes (`<mod>/tools`); `None`: no download.
     pub tools_dir: Option<PathBuf>,

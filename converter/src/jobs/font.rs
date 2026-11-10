@@ -25,8 +25,8 @@
 use anyhow::{Context, Result, ensure};
 
 use crate::disc::Disc;
-use crate::phyretex::{self, Rgba};
-use crate::uijob::{Done, load_hd, side_by_side};
+use crate::formats::phyretex::{self, Rgba};
+use crate::jobs::interface::{Done, load_hd, side_by_side};
 
 const PS3: &str = "ffx_data/gamedata/ps3data";
 /// The European width table (`TODVDFileLoad(4, 0)` in `TOInit`).

@@ -1,5 +1,5 @@
 //! `movies`: the PS2 FMVs (`jppc/movie/adpcm/*.dat`, decoded by
-//! [`crate::ps2movie`]) encoded as the WebM files the PC plays
+//! [`crate::formats::ps2movie`]) encoded as the WebM files the PC plays
 //! (`docs/movies.md`).
 //!
 //! The PC player takes VP8 + Vorbis WebM, shows one frame per game update
@@ -22,7 +22,7 @@ use anyhow::{Context, Result, bail};
 
 use crate::config::Config;
 use crate::jobs::{Ctx, Job, Output};
-use crate::ps2movie;
+use crate::formats::ps2movie;
 
 const VIDEO_DIR: &str = "ffx_data/gamedata/ps3data/video";
 /// The list the game reads for the English/European versions (the JP one

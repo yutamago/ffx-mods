@@ -7,7 +7,7 @@
 //! The *data* block holds the offsets of the pixels and palettes. The files
 //! carry no index of their oef2s, so [`tables`] finds them by structure.
 
-use crate::phyretex::Rgba;
+use crate::formats::phyretex::Rgba;
 
 fn u16_at(b: &[u8], o: usize) -> u16 {
     u16::from_le_bytes([b[o], b[o + 1]])

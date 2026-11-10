@@ -6,7 +6,7 @@
 //! Every event that plays gets its own song and its own SPU2 (the PC plays
 //! a field song paused under the battle music and resumes it; on the PS2
 //! the driver kept the field song too). The mix is the converter's output
-//! stage (`musicjob::Master`: +9 dB, limiter at -1 dBFS) over the sum of
+//! stage (`music::Master`: +9 dB, limiter at -1 dBFS) over the sum of
 //! the songs, each times its event's volume (the game's: fades, the music
 //! volume setting) and the PC event's own volume (`EVENT_DB`), so a song
 //! started and left alone is the offline bank's sample for sample.
@@ -16,9 +16,9 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
-use demaster::musicjob::Master;
-use demaster::spu2::Spu2;
-use demaster::sqseq::{self, Bgm, Song, Tables, Wd};
+use demaster::jobs::music::Master;
+use demaster::audio::spu2::Spu2;
+use demaster::audio::sqseq::{self, Bgm, Song, Tables, Wd};
 
 /// FMOD event states as the game tests them (`audio-platform.md`).
 pub const STATE_READY: u32 = 1;
@@ -225,7 +225,7 @@ impl Engine {
             song.tempo_direct(self.tempo);
         }
         let info = *self.info(event);
-        let plan = demaster::musicjob::plan(&self.lib.song(id).expect("loaded").0);
+        let plan = demaster::jobs::music::plan(&self.lib.song(id).expect("loaded").0);
         self.slots.push(Slot {
             event,
             id,
@@ -239,7 +239,7 @@ impl Engine {
             target: info.volume,
             step: 0.0,
             gain: if self.event_volumes { event_gain(id) } else { 1.0 },
-            tail_max: (plan.tail_seconds * f64::from(demaster::spu2::RATE)) as u32,
+            tail_max: (plan.tail_seconds * f64::from(demaster::audio::spu2::RATE)) as u32,
         });
         true
     }

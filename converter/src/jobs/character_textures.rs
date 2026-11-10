@@ -6,13 +6,13 @@ use std::collections::BTreeMap;
 use anyhow::{Context, Result};
 use rayon::prelude::*;
 
-use crate::bake;
+use crate::characters::bake;
 use crate::config::Config;
 use crate::disc::Disc;
 use crate::jobs::{Ctx, Job, Output};
-use crate::phyretex::{self, Rgba};
-use crate::ps2chr::Chr;
-use crate::texanim::{self, TexAnim};
+use crate::formats::phyretex::{self, Rgba};
+use crate::formats::ps2chr::Chr;
+use crate::characters::texanim::{self, TexAnim};
 
 /// The share of an HD page's triangles that must have a PS2 twin; pages
 /// below it belong to remodelled meshes and are left alone. Above it, the
@@ -128,7 +128,7 @@ fn bake_chr_with(
             if std::env::var_os("DM_ALPHA").is_some() {
                 eprintln!("{name} seg {s}: {} tris, see-through {n} of {all} texels ({:.2}%)", jobs.len(), share * 100.0);
             }
-            if share >= crate::chralpha::MIN_SHARE {
+            if share >= crate::characters::alpha::MIN_SHARE {
                 see_through.push((s, tex.archive_path()));
             }
         }
@@ -239,7 +239,7 @@ fn bake_chr_with(
     }
     // The PS2 drew those texels see-through (`chralpha`); where the HD
     // material does not blend, it gets its blended twin. A remodelled
-    // model is the model converter's (`models::remodelled`).
+    // model is the model converter's (`character_meshes::remodelled`).
     let remodelled = !report.skipped.is_empty() && report.frame_share < 0.6;
     let painted: std::collections::BTreeSet<&str> = report.pages.iter().map(|p| p.path.as_str()).collect();
     let segs: Vec<u32> = see_through
@@ -248,16 +248,16 @@ fn bake_chr_with(
         .map(|&(s, _)| u32::try_from(s))
         .collect::<Result<_, _>>()?;
     if !remodelled && !segs.is_empty() {
-        let variants = crate::chralpha::Variants::get(pc)?;
+        let variants = crate::characters::alpha::Variants::get(pc)?;
         let mut edit = ffx_phyre::edit::ClusterEdit::parse(&hd_bytes).context("edit")?;
-        let note = crate::chralpha::blend_in_place(&mut edit, &segs, variants)?;
+        let note = crate::characters::alpha::blend_in_place(&mut edit, &segs, variants)?;
         if note.switched + note.lowered > 0 {
             let mut files = vec![(hd_path.clone(), edit.write().context("writing")?)];
             if note.switched > 0 {
                 let list_path = format!("ffx_data/gamedata/ps3data/chr/{kind}/{name}/{name}.ahwin32");
                 let list = pc.read(pc.find(&list_path).with_context(|| format!("no {list_path}"))?)?;
-                let entries = crate::chralpha::list_entries(&edit)?;
-                files.push((list_path, crate::texanim::insert_files(&list, &entries)?));
+                let entries = crate::characters::alpha::list_entries(&edit)?;
+                files.push((list_path, crate::characters::texanim::insert_files(&list, &entries)?));
             }
             report.model = Some((files, note.text));
         }
@@ -269,7 +269,7 @@ fn bake_chr_with(
 /// see-through.
 fn see_through_job(chr: &Chr, job: &bake::Job) -> (usize, usize) {
     let uv = job.ps2_uv.map(|[u, v]| [f64::from(u) / 16.0, f64::from(v) / 16.0]);
-    crate::chralpha::coverage(uv, |x, y| {
+    crate::characters::alpha::coverage(uv, |x, y| {
         chr.sample(job.material, (x * 16 + 8) as f32, (y * 16 + 8) as f32).map_or(255, |c| c[3])
     })
 }
@@ -277,7 +277,7 @@ fn see_through_job(chr: &Chr, job: &bake::Job) -> (usize, usize) {
 /// The animation textures of a kept mesh whose animated material
 /// (`AnimSampler`) draws over `page`: each HD frame painted like the page,
 /// from the PS2 image with the frame's PS2 patch put in, and cut to the
-/// rectangle the shader shows it in (`texanim.rs`). The HD `.ags` stays.
+/// rectangle the shader shows it in (`characters/texanim.rs`). The HD `.ags` stays.
 #[allow(clippy::too_many_arguments)]
 fn anim_frames(
     raw: &[u8],
@@ -425,7 +425,7 @@ pub fn jobs() -> Vec<Box<dyn Job>> {
 
 impl Job for ChrJob {
     /// 2: textures with mip chains (phyretex::mip_chain). 3: see-through
-    /// materials get the blended twin (`chralpha::Draw::BlendKept`) instead
+    /// materials get the blended twin (`alpha::Draw::BlendKept`) instead
     /// of the alpha-to-coverage one, which is a plain alpha test without
     /// MSAA. 4: the remaster's added triangles painted from the PS2 page
     /// through a matched neighbour's UV map (`bake::third_pass`). 5: a

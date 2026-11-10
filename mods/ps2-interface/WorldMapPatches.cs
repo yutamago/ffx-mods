@@ -14,7 +14,7 @@ namespace Yuta.FfxMods.Interface;
 /// where the PS2 drew the main menu's location plates (meswin 0xd2/0xd3 at rect_placesubplt,
 /// 0xd8/0xd9 at rect_placeplt, the "Location" label 0xef = layout entry 39 = 0x27, the name in
 /// the 16x12 font), the whole group centred on the screen. The converter writes the PS2 picture
-/// (sgjob.rs). Evidence: docs/ui.md ("The world map").
+/// (jobs/sphere_grid.rs). Evidence: docs/ui.md ("The world map").
 /// </summary>
 internal static unsafe class WorldMapPatches {
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] public delegate int Draw(nint window);

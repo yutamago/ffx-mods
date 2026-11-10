@@ -5,7 +5,7 @@
 //! <layer>_<part>_<w>_<h>_<frame>.dds.phyre`, full-screen quads in PS2
 //! units (512 x 448). The PS2 pictures are in the disc's
 //! `jppc/map/<area>/<map>/bin/mapout.vpa`, section 0 (`YNSC`): one PSMT8
-//! image transfer per part with its CLUT after it ([`uijob::bg_layers`]),
+//! image transfer per part with its CLUT after it ([`interface::bg_layers`]),
 //! zeroed in the PC's copy. The parts come in the same order as the HD
 //! names sorted by (layer, part), with sizes a few pixels apart (the PS2
 //! pads them). Parts with several frames (texture animation) stay HD: the
@@ -16,8 +16,8 @@ use anyhow::Result;
 use crate::config::Config;
 use crate::disc::Disc;
 use crate::jobs::{Ctx, Job, Output};
-use crate::phyretex::{self, Rgba};
-use crate::uijob::{self, Done};
+use crate::formats::phyretex::{self, Rgba};
+use crate::jobs::interface::{self, Done};
 
 const PS3: &str = "ffx_data/gamedata/ps3data";
 
@@ -103,7 +103,7 @@ pub fn convert(
             notes.push(format!("{room}: no PS2 map"));
             continue;
         };
-        let layers = uijob::bg_layers(&vpa);
+        let layers = interface::bg_layers(&vpa);
         // HD parts in (layer, part) order, with their frames.
         let mut parts: Vec<([u32; 2], u32, u32, Vec<String>)> = Vec::new();
         let mut named: Vec<([u32; 5], String)> = paths
@@ -139,10 +139,10 @@ pub fn convert(
         let mut framing = 1.0f32;
         for (k, (_, w, h, frames)) in parts.iter().enumerate() {
             if *w == 512 && *h == 448 && frames.len() == 1 {
-                if let Some((_, hd)) = uijob::load_hd(pc, &frames[0])? {
+                if let Some((_, hd)) = interface::load_hd(pc, &frames[0])? {
                     let img = &layers[k];
-                    let small = crate::mapjob::resize(&hd, img.width, img.height);
-                    framing = framing.min(crate::mapjob::correlation(&small, img));
+                    let small = crate::jobs::maps::resize(&hd, img.width, img.height);
+                    framing = framing.min(crate::jobs::maps::correlation(&small, img));
                 }
             }
         }
@@ -165,10 +165,10 @@ pub fn convert(
                 continue;
             }
             for path in frames {
-                let Some((template, hd)) = uijob::load_hd(pc, path)? else { continue };
+                let Some((template, hd)) = interface::load_hd(pc, path)? else { continue };
                 let img = &layers[k];
-                let small = crate::mapjob::resize(&hd, img.width, img.height);
-                let c = crate::mapjob::correlation(&small, img);
+                let small = crate::jobs::maps::resize(&hd, img.width, img.height);
+                let c = crate::jobs::maps::correlation(&small, img);
                 if c < 0.5 && !reframed {
                     notes.push(format!("{path}: PS2 picture {k} looks different (correlation {c:.2}), kept HD"));
                     continue;
@@ -176,7 +176,7 @@ pub fn convert(
                 let img = alpha_like(img, &hd);
                 done.push(Done {
                     file: phyretex::argb8_one_level(&template, &img, None)?,
-                    preview: uijob::side_by_side(&hd, &img),
+                    preview: interface::side_by_side(&hd, &img),
                     note: format!("{path}: PS2 picture {k} (correlation {c:.2})"),
                     path: path.clone(),
                 });
@@ -189,5 +189,5 @@ pub fn convert(
 /// The PS2 picture with the HD layer's opacity where the HD is fully
 /// opaque (the base layer); otherwise the PS2 alpha.
 fn alpha_like(img: &Rgba, hd: &Rgba) -> Rgba {
-    crate::mapjob::opaque_like(img.clone(), hd)
+    crate::jobs::maps::opaque_like(img.clone(), hd)
 }

@@ -1,8 +1,8 @@
 //! `audio.music = "ps2"` (mod `ps2-soundtrack`): every track of the PC's "Original"
 //! soundtrack bank (`sound_pc/music_ps2/ffx_music_ps2_bank00.fsb`) rendered
 //! again from the PS2 disc's sequences and instruments by our driver
-//! (`sqseq.rs`) and SPU2 (`spu2.rs`), and written as a replacement bank
-//! with the same names, order and format (`fsb5.rs`). `docs/music.md`.
+//! (`audio/sqseq.rs`) and SPU2 (`audio/spu2.rs`), and written as a replacement bank
+//! with the same names, order and format (`formats/fsb5.rs`). `docs/music.md`.
 
 use std::io::{Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
@@ -12,8 +12,8 @@ use anyhow::{Context, Result, bail, ensure};
 use crate::config::Config;
 use crate::disc::Disc;
 use crate::jobs::{Ctx, Job, Output};
-use crate::fsb5;
-use crate::sqseq::{self, Bgm, RenderPlan, Tables, Wd};
+use crate::formats::fsb5;
+use crate::audio::sqseq::{self, Bgm, RenderPlan, Tables, Wd};
 
 pub const BANK: &str = "ffx_data/gamedata/ps3data/sound_pc/music_ps2/ffx_music_ps2_bank00.fsb";
 
@@ -331,8 +331,8 @@ pub fn debug(iso: &Path, vbf: &str, out: &Path, specs: &[String]) -> Result<()> 
         let t0 = std::time::Instant::now();
         let (bgm, wd) = src.song(&mut disc, id)?;
         let path: PathBuf = out.join(format!("{name}.wav"));
-        let mut w = WavWriter::create(&path, crate::spu2::RATE)?;
-        let raw = crate::spu2::knob("DEMASTER_RAW") != 0.0;
+        let mut w = WavWriter::create(&path, crate::audio::spu2::RATE)?;
+        let raw = crate::audio::spu2::knob("DEMASTER_RAW") != 0.0;
         let mut master = Master::new();
         let mut buf = Vec::new();
         let marks = sqseq::render(&src.tables, &bgm, &wd, plan(&bgm), |s| {
@@ -512,7 +512,7 @@ fn render_part(src: &Sources, ctx: &Ctx, id: u16, part: &Path) -> Result<Part> {
     };
     Ok(Part {
         part: part.to_path_buf(),
-        rate: crate::spu2::RATE,
+        rate: crate::audio::spu2::RATE,
         frames: u32::try_from(frames)?,
         looped: Some(looped),
         bytes: std::fs::metadata(part)?.len(),

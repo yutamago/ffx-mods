@@ -10,8 +10,8 @@
 
 use std::collections::HashMap;
 
-use crate::phyretex::Rgba;
-use crate::ps2chr::{Chr, Triangle};
+use crate::formats::phyretex::Rgba;
+use crate::formats::ps2chr::{Chr, Triangle};
 
 type P = [i32; 3];
 

@@ -1,6 +1,6 @@
 //! FFX's PS2 music driver: the Square sequencer of `iopsound.irx` (the IOP
 //! sound module) playing a `musicNNN.bgm` with the instruments of a
-//! `wave_wd.dat` bank on the SPU2 (`spu2.rs`). The commands, the 240 Hz
+//! `wave_wd.dat` bank on the SPU2 (`audio/spu2.rs`). The commands, the 240 Hz
 //! timer, the voice allocation, the volume, pan and pitch formulas follow
 //! the module's code (`docs/music.md`, "The driver"); the tables it needs
 //! (pan law, the pitch steps' random table, the reverb presets of
@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 use anyhow::{Context, Result, bail, ensure};
 
-use crate::spu2::{self, ReverbPreset, Spu2};
+use crate::audio::spu2::{self, ReverbPreset, Spu2};
 
 fn u16_at(b: &[u8], o: usize) -> u16 {
     u16::from_le_bytes([b[o], b[o + 1]])

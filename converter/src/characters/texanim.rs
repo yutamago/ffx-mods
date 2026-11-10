@@ -25,7 +25,7 @@
 use anyhow::{Context, Result, bail, ensure};
 use ffx_phyre::edit::ClusterEdit;
 
-use crate::phyretex::Rgba;
+use crate::formats::phyretex::Rgba;
 
 fn u16_(b: &[u8], o: usize) -> Result<u16> {
     Ok(u16::from_le_bytes(b.get(o..o + 2).context("texanim: past the end")?.try_into()?))

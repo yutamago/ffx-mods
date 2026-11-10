@@ -27,7 +27,7 @@ const FUNC_FACC: u8 = 0x58;
 /// `pushimm`: a 16-bit immediate.
 const PUSHIMM: u8 = 0x2e;
 const EVENTS: &str = "ffx_ps2/ffx/master/";
-/// Written by the `ui.title` job (`uijob::memochek_with_logo`); it sets no
+/// Written by the `ui.title` job (`interface::memochek_with_logo`); it sets no
 /// light.
 const SKIP: &[&str] = &["ffx_ps2/ffx/master/jppc/event/obj/me/memochek/memochek.ebp"];
 

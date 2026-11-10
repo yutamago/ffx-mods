@@ -24,21 +24,21 @@ writes the same files plus `<out>/preview/<name>-atlas.png` and the
 generated `<name>.glb`. `demaster models-debug <chr file> <vbf>
 <kind/name>` prints a PS2 mesh against its HD model.
 
-Code: `converter/src/ps2mesh.rs` (PS2 mesh reader), `models.rs`
-(conversion and jobs), `glb.rs` (glb for `ffx_phyre::import_into_cluster`),
-`phyretex.rs` (`argb8_as`).
+Code: `converter/src/formats/ps2mesh.rs` (PS2 mesh reader), `jobs/character_meshes.rs`
+(conversion and jobs), `formats/glb.rs` (glb for `ffx_phyre::import_into_cluster`),
+`formats/phyretex.rs` (`argb8_as`).
 
 ## What gets converted
 
 A character is converted when the texture bake skips at least one of its
 HD pages *and* under 60 % of its HD vertices sit on a PS2 vertex
-(`bake::find_frame`; `models::remodelled`). Against the survey's classes
+(`bake::find_frame`; `character_meshes::remodelled`). Against the survey's classes
 (`scratch/chr-classes.txt`): all 147 class E (remodelled), the 18 class D
 (edited) models with the lowest share, and the class B monster m114
 (0.51). m049 (0.74), m130 and m132 (0.98) keep their HD mesh and get the
 texture swap. An older build converted them too: `find_frame` settled
 ties between offsets by HashMap order, so the choice changed from run to
-run (fixed in the config commit; the template colour's tie in `models.rs`
+run (fixed in the config commit; the template colour's tie in `jobs/character_meshes.rs`
 too). Two builds of all `chr.*` and `models.*` jobs now write the same
 bytes. The other 20 class D models (60-100 % PS2 vertices) keep the HD
 mesh with PS2 textures from `chr`.
@@ -77,7 +77,7 @@ Layout as in ffx-rust `docs/formats/chara.md`, plus what this needed:
   normal with bit 15 set repeats an earlier halfword: vertex
   `p[-(k*4/3)]`, normal `p[-1-(k*4/3)]` with `k = value & 0x7fff` and `p`
   the point's first halfword (`Ch_EffectPacketCreateMain` `0x00842c80`,
-  `FUN_00844370`). `ps2chr.rs` (texture bake) masks bit 15 off instead,
+  `FUN_00844370`). `formats/ps2chr.rs` (texture bake) masks bit 15 off instead,
   which gives a wrong vertex for those points.
 - Strip winding (`FUN_00844370`): point k ≥ 2 makes (k-2, k-1, k) for odd
   k and (k-1, k-2, k) for even k. Triangle groups: 24 bytes, three points.
@@ -301,7 +301,7 @@ moving vertices in the bind pose); not kept.
 
 ## Texture animation (eyes, mouths)
 
-Code: `converter/src/texanim.rs`; `models.rs` (`plan_face`); `chrjob.rs`
+Code: `converter/src/characters/texanim.rs`; `jobs/character_meshes.rs` (`plan_face`); `jobs/character_textures.rs`
 (`anim_frames`, kept meshes). `demaster texanim-debug <chr> <vbf>
 <kind/name>` prints a character's PS2 entries against its HD `.ags`.
 
@@ -401,7 +401,7 @@ x 416 picture shows it pixel-rough.
 
 ## Alpha (see-through texels)
 
-Code: `converter/src/chralpha.rs`; `demaster materials-debug <vbf>
+Code: `converter/src/characters/alpha.rs`; `demaster materials-debug <vbf>
 <kind/name>|<.dae.phyre>` prints each segment's texture, material, shader
 variant switches and `AlphaThreshold`.
 
@@ -447,11 +447,11 @@ use alpha at all.
 
 **What the converter does.** Two ways, by job:
 
-- **Remodelled models (`models.*`): the blended twin** (`chralpha::Draw::Blend`,
+- **Remodelled models (`models.*`): the blended twin** (`alpha::Draw::Blend`,
   job version 4). Segments with see-through texels get the
   `ALPHA_ENABLED` twin of their material's variant (same switches,
   `UATFOPQ` off; the lookup below) and `AlphaThreshold` 1/128, the PS2's
-  `NOTEQUAL 0` (`chralpha::PS2_ALPHA_TEST`); HD materials that blend
+  `NOTEQUAL 0` (`alpha::PS2_ALPHA_TEST`); HD materials that blend
   already (the cloth ones) keep their variant with that threshold. Drawn in
   the `Transparent` pass, after the opaque body, depth tested and written,
   in the PS2 strip order within the segment: what the PS2 did.
@@ -483,7 +483,7 @@ use alpha at all.
   his HD model imports, did). The same id written over an existing
   import's `m_id` is found. So the converter now points each hidden HD
   segment at a drawn material of the same switch set (cloth on cloth;
-  `chralpha::free_hidden_materials`), and a twin the model does not import
+  `alpha::free_hidden_materials`), and a twin the model does not import
   takes over an import that only materials no segment uses refer to
   (`spare_imports`); kept meshes, whose materials change in place, rename
   the material's own import when no other material uses it. Without one
@@ -496,7 +496,7 @@ use alpha at all.
   degenerate triangle).
 - **Kept-mesh models (`chr.*`): the blended twin at 0.1**
   (`Draw::BlendKept`, chr job version 3): the same twin as the remodelled
-  models, `AlphaThreshold` 0.1 (`chralpha::THRESHOLD`; 1/128 brings back
+  models, `AlphaThreshold` 0.1 (`alpha::THRESHOLD`; 1/128 brings back
   the pale outlines on the Condor's overlapping feathers, below). Until
   version 3 the `UATFOPQ` twin (`Draw::Coverage`, described next).
   `tools/replays/battle-besaid.txt` in the harness without MSAA (as
@@ -522,7 +522,7 @@ use alpha at all.
   rest of the body; without MSAA it is an alpha test at the threshold.
   `AlphaThreshold` becomes at most 0.1. A variant the model did not use
   before is added to the character's `.ahwin32` (the list loads the shader
-  variants; `chralpha::list_entries`).
+  variants; `alpha::list_entries`).
 - **Not the blended twin** (kept meshes; the history of the remodelled
   ones too, until job version 4). `ALPHA_ENABLED` twins were tried first. In cut
   scenes they look right (Tidus's hair, Wakka's crest), but in battle the
@@ -697,7 +697,7 @@ parameter of every material), `DM_DUMP=<class>` with `materials-debug
 path), `DM_DEBUG=1` with `models` (which import a twin took over).
 
 **Auditing the output** (`demaster materials-audit <FFX_Data.vbf> <efl/x
-dir> [--known <file>] [kind/name...]`, `converter/src/mataudit.rs`). It
+dir> [--known <file>] [kind/name...]`, `converter/src/characters/material_audit.rs`). It
 reads the written models, the textures their materials bind (the output's,
 else the HD's), the asset lists and the HD originals, not the converter's
 decisions, and checks every drawn segment (one with a triangle of non-zero
@@ -746,7 +746,7 @@ characters, 4,013 drawn segments, 19-42 s wall; report in
   count) and f079 (material 2, 3.0 %) are leftovers the converter does not
   report: their variant's import is shared with other drawn materials
   (m129 import 3 by materials 4, 6, 7; f079 import 1 by 2, 3), so there is
-  no import to spare. `chrjob::bake` keeps the model, and so the note,
+  no import to spare. `character_textures::bake` keeps the model, and so the note,
   only when a material was switched or lowered. m339 (material 5, one
   island of alpha 0 at 0.47 % in the converter's count), n085 (0.94 %),
   m042 and s026 (a few edge texels, 0 % in the converter's count) are under

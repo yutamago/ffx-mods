@@ -8,8 +8,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use anyhow::{Context, Result};
 
 use crate::disc::Disc;
-use crate::phyretex::{self, Rgba};
-use crate::ps2fx::{self, Gs};
+use crate::formats::phyretex::{self, Rgba};
+use crate::formats::ps2fx::{self, Gs};
 
 const HD: &str = "ffx_data/gamedata/ps3data";
 const EUROPEAN: [&str; 5] = ["tex_de/", "tex_fr/", "tex_it/", "tex_es/", "tex_us/"];

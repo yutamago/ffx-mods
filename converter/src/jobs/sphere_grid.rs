@@ -1,5 +1,5 @@
 //! The sphere grid's textures and the world map picture (`ui.menus`, written
-//! by `uijob::convert`; notes and evidence: `docs/ui.md`, "The sphere grid"
+//! by `interface::convert`; notes and evidence: `docs/ui.md`, "The sphere grid"
 //! and "The world map").
 //!
 //! **Sphere grid.** `jppc/menu/abmap/dat00.dat` (standard grid) and
@@ -28,10 +28,10 @@
 use anyhow::Result;
 
 use crate::disc::Disc;
-use crate::gsmem;
-use crate::mapjob::{self, resize};
-use crate::phyretex::{self, Rgba};
-use crate::uijob::{load_hd, side_by_side, Done};
+use crate::formats::gsmem;
+use crate::jobs::maps::{self, resize};
+use crate::formats::phyretex::{self, Rgba};
+use crate::jobs::interface::{load_hd, side_by_side, Done};
 
 const PS3: &str = "ffx_data/gamedata/ps3data";
 
@@ -184,7 +184,7 @@ pub fn sphere_grid(disc: &mut Disc, pc: &ffx_vbf::Archive, region: &str, done: &
             let scored: Vec<(f32, &(String, Rgba))> = cands
                 .iter()
                 .filter(|c| u64::from(c.1.width) * u64::from(hd.height) == u64::from(c.1.height) * u64::from(hd.width))
-                .map(|c| (mapjob::correlation(&resize(&hd, c.1.width, c.1.height), &c.1), c))
+                .map(|c| (maps::correlation(&resize(&hd, c.1.width, c.1.height), &c.1), c))
                 .collect();
             let pick = |own_only: bool| {
                 scored
@@ -204,7 +204,7 @@ pub fn sphere_grid(disc: &mut Disc, pc: &ffx_vbf::Archive, region: &str, done: &
                 pages_by_tbp.push((tbp, img.clone()));
             }
             let glow = additive(&hd, img);
-            let img = if glow { crate::fxjob::brightness_to_alpha(img) } else { img.clone() };
+            let img = if glow { crate::jobs::effects::brightness_to_alpha(img) } else { img.clone() };
             done.push(Done {
                 file: phyretex::argb8_from(&template, &img)?,
                 preview: side_by_side(&hd, &resize(&img, hd.width, hd.height)),
@@ -249,7 +249,7 @@ pub fn sphere_grid(disc: &mut Disc, pc: &ffx_vbf::Archive, region: &str, done: &
 /// Whether a PS2 page was drawn additively: most of its opaque dark texels
 /// (the black around glows and rings, which an additive draw leaves out) are
 /// transparent in the HD redraw. Such pages get their brightness as alpha
-/// (`fxjob::brightness_to_alpha`), so the PC's alpha blend shows what the
+/// (`effects::brightness_to_alpha`), so the PC's alpha blend shows what the
 /// PS2's additive draw did instead of black boxes.
 fn additive(hd: &Rgba, ps2: &Rgba) -> bool {
     let h = resize(hd, ps2.width, ps2.height);
@@ -329,7 +329,7 @@ pub fn world_map(
     for folder in folders {
         let path = format!("{PS3}/{folder}/d3d11/worldmap.dds.phyre");
         let Some((template, hd)) = load_hd(pc, &path)? else { continue };
-        let img = mapjob::opaque_like(img.clone(), &hd);
+        let img = maps::opaque_like(img.clone(), &hd);
         done.push(Done {
             file: phyretex::argb8_one_level(&template, &img, None)?,
             preview: side_by_side(&hd, &resize(&img, hd.width, hd.height)),

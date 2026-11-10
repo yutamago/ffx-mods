@@ -3,7 +3,7 @@
 //! envelope, the 4-tap interpolation, per-voice volumes and the reverb, at
 //! 48 kHz. Written from the hardware's documented behaviour (PCSX2's SPU2
 //! and the PS1 SPU it extends were the reference for the facts); the driver
-//! (`sqseq.rs`) programs it through the same registers `libsd` would.
+//! (`audio/sqseq.rs`) programs it through the same registers `libsd` would.
 //!
 //! What is left out because the music never uses it: noise, pitch
 //! modulation, the IRQ, sound data input and the voice streams.

@@ -4,7 +4,7 @@ Status: `render.aspect = "ps2"` **done** (below, "How 4:3 is made"): the
 picture is the PS2's 4:3, pillarboxed, with the PS2 projection, the
 PS2-placed 2D where the PS2 had it, the Flash screens squeezed into the
 4:3, 4:3 movies, and the PS2 paintings in every fixed-camera room
-(`maps.backgrounds`, `converter/src/bgjob.rs`). What is left: "Not done".
+(`maps.backgrounds`, `converter/src/jobs/backgrounds.rs`). What is left: "Not done".
 
 ## The 3D projection: the PS2 view is the middle 4:3 of the HD's
 
@@ -260,7 +260,7 @@ PC: `map/<area>/<map>/2d/tex/d3d11/<layer>_<part>_<w>_<h>_<frame>.dds.phyre`
 PS2 units (ffx-debug-revival `docs/research/old-backgrounds.md`). PS2:
 `mapout.vpa` section 0 (`YNSC`), one PSMT8 image transfer per part with
 its 16 x 16 CT32 CLUT after it, zeroed on the PC
-(`research/ps2-textures.md`; decoder `uijob::bg_layers`, shared with the
+(`research/ps2-textures.md`; decoder `interface::bg_layers`, shared with the
 title screen).
 
 The job pairs the HD parts sorted by (layer, part) with the PS2 transfers

@@ -6,8 +6,8 @@ pick them up later. Status 2026-11-09: none started. A first agent run
 edits that were never run (below, "Where it stopped").
 
 Everything here goes into the **ps2-interface** mod (`mods/ps2-interface`,
-settings `ui.*`; the converter's `ui.menus` job, `converter/src/uijob.rs`,
-`sgjob.rs`). Read first: `docs/ui.md` (each item's section, named below),
+settings `ui.*`; the converter's `ui.menus` job, `converter/src/jobs/interface.rs`,
+`jobs/sphere_grid.rs`). Read first: `docs/ui.md` (each item's section, named below),
 `docs/compare.md` (how screens are compared with the PS2 and the numbers so
 far), `docs/debugger.md` (PCSX2 with the debug server), `docs/plan.md` (row
 "PS2-drawn menu textures..." and its Todo).

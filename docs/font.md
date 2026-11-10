@@ -2,8 +2,8 @@
 
 Status: **done for English, French, Italian, German and Spanish**
 (`ui.font`). It is a swap of four textures and one width table (job
-`ui.font`, `converter/src/fontjob.rs`), plus the PS2 damage digits in the
-battle atlas (job `ui.menus`, `uijob.rs`). There are no code changes. Japanese,
+`ui.font`, `converter/src/jobs/font.rs`), plus the PS2 damage digits in the
+battle atlas (job `ui.menus`, `jobs/interface.rs`). There are no code changes. Japanese,
 Chinese and Korean keep the HD font.
 
 ```bash
@@ -104,7 +104,7 @@ font is narrower than the HD typeface. Sample widths (texels, PS2 / HD):
 narrower: `TOGetMessageWH` sums these widths, so the dialogue windows
 shrink to the PS2 width.
 
-## The conversion (`fontjob.rs`)
+## The conversion (`jobs/font.rs`)
 
 1. Read the disc's `jppc/menu/base.ftc`, falling back to `uspc/menu/base.ftc` if
    that one is not a type-4 font with a bitmap (a Japanese disc). Split the

@@ -3,9 +3,9 @@
 The code patches behind `render.glow`, `render.lighting`, `render.shadows`
 and `render.texture_filter`: hooks in `mods/ps2-lighting/LightingPatches.cs` and `mods/ps2-characters/TexturePatches.cs`, and for
 `render.lighting` also patched character shaders (converter job
-`render.lighting`, `converter/src/shaderjob.rs`) and the PS2's light
+`render.lighting`, `converter/src/jobs/lighting_shaders.rs`) and the PS2's light
 colours in the event scripts (job `render.lighting.events`,
-`converter/src/eventlight.rs`).
+`converter/src/jobs/event_lights.rs`).
 Addresses are ffx-rust's `symbols/ffx.sym` (FFX.exe image base
 `0x00400000`); the post-process chain is ffx-rust's
 `docs/formats/postfx.md`, the shadow solutions `docs/formats/scene-maps.md`
@@ -201,8 +201,8 @@ at x 1/128.
   `fadd 0.15` of `Ch_DrawMain` (12 bytes at `0x0082f652`) become NOPs.
   `patch_code` checks the original bytes (with the relocated addresses) and
   logs a warning instead of patching another build.
-- **Converter job `render.lighting`** (`converter/src/shaderjob.rs`,
-  `dxbc.rs`): in each lit character pixel shader, every light's
+- **Converter job `render.lighting`** (`converter/src/jobs/lighting_shaders.rs`,
+  `formats/dxbc.rs`): in each lit character pixel shader, every light's
   `mad rA.c, rA.c, l(0.5), l(0.5)` (fed by a `dp3` with `Light_i.m_direction`)
   becomes `mad_sat rA.c, rA.c, l(1.0), l(0.0)` = max(0, N.L) and the
   following square `mul rA.c, rA.c, rA.c` becomes `max rA.c, rA.c, rA.c` (a
@@ -221,7 +221,7 @@ at x 1/128.
   like the PS2 does, except on triangles that cross a terminator (the PS2
   clamps each vertex at 0 before interpolating) and past the PS2's 255
   vertex clamp. The chain is followed back from each light's `dp3`
-  (`shaderjob::normalisation`); the test checks that all 1854 lit shaders
+  (`lighting_shaders::normalisation`); the test checks that all 1854 lit shaders
   have it once.
 
 ### Tests
@@ -428,7 +428,7 @@ about 4 frames/s), so a frame within about 0.1 s of the dump's pose exists.
 
 1. **Texels: identical.** All eight c101 pages the PS2 draws (TBP
    `0x3c00`/`0x3e00`, PSMT8, CLUTs `0x2ee0`..`0x2ef4` as uploaded that
-   frame) are bit-exact in our `p101` atlas (`ps2chr.rs` colour
+   frame) are bit-exact in our `p101` atlas (`formats/ps2chr.rs` colour
    conversion, CSM1, CLUT choice), and our face triangles use page 9
    (CLUT `0x2ee0`) like the PS2's. The dump's texel x vertex colour / 128
    reproduces the PS2 frame.
@@ -543,7 +543,7 @@ lights than the PS2. Not the normals, not the light directions.
   entry per vertex skin entry (same bone, model, base bone and kind), read
   by the envelope `0x00107ec8` (SCES_504.92) with the vertex entry's
   matrix; `0x00124058` (kind 0) and `0x00124260` (weighted) rotate them,
-  `0x001243e8` renormalises. Parsed now (`ps2mesh.rs`,
+  `0x001243e8` renormalises. Parsed now (`formats/ps2mesh.rs`,
   `Model::normal_influences`; `demaster models-debug` prints both checks):
   in the bind pose they give the normal array that the conversion uses
   (at most 0.2 degrees apart), and every corner's normal has exactly its

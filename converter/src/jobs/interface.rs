@@ -13,10 +13,10 @@ use anyhow::{Context, Result};
 
 use crate::config::Config;
 use crate::disc::Disc;
-use crate::gsmem;
+use crate::formats::gsmem;
 use crate::jobs::{Ctx, Job, Output};
-use crate::mapjob::{self, resize};
-use crate::phyretex::{self, Rgba};
+use crate::jobs::maps::{self, resize};
+use crate::formats::phyretex::{self, Rgba};
 
 const PS3: &str = "ffx_data/gamedata/ps3data";
 
@@ -41,7 +41,7 @@ pub struct Parts {
     /// The PS2 damage digits in the battle atlas (`ui.font`, written with
     /// the atlases by the `ui.menus` job).
     pub font: bool,
-    /// The PS2 font's pages and widths (`fontjob.rs`).
+    /// The PS2 font's pages and widths (`jobs/font.rs`).
     pub font_files: bool,
     /// The "SQUARESOFT presents" screen at boot (`ui.boot_logo`).
     pub boot_logo: bool,
@@ -99,7 +99,7 @@ fn boot_logo(disc: &mut Disc, pc: &ffx_vbf::Archive, done: &mut Vec<Done>, notes
             notes.push(format!("{path}: PS2 layer {k} is not the white logo screen, kept HD"));
             continue;
         }
-        let img = title_placed(&mapjob::opaque_like(img.clone(), &hd));
+        let img = title_placed(&maps::opaque_like(img.clone(), &hd));
         if k == 4 {
             preview = Some(img.clone());
         }
@@ -1218,9 +1218,9 @@ pub fn convert(disc: &mut Disc, pc: &ffx_vbf::Archive, parts: Parts) -> Result<(
                 }
             }
         }
-        // the world map picture and the sphere grid's pages (sgjob.rs)
-        crate::sgjob::world_map(disc, pc, clp_palette, &ALL_MENU_FOLDERS, &mut done, &mut notes)?;
-        crate::sgjob::sphere_grid(disc, pc, &region, &mut done, &mut notes)?;
+        // the world map picture and the sphere grid's pages (jobs/sphere_grid.rs)
+        crate::jobs::sphere_grid::world_map(disc, pc, clp_palette, &ALL_MENU_FOLDERS, &mut done, &mut notes)?;
+        crate::jobs::sphere_grid::sphere_grid(disc, pc, &region, &mut done, &mut notes)?;
     }
 
     if parts.portraits {
@@ -1274,7 +1274,7 @@ pub fn convert(disc: &mut Disc, pc: &ffx_vbf::Archive, parts: Parts) -> Result<(
                 // (lower half only: above it the HD layers are black where
                 // the PS2 ones hold the water strip and the web site banner)
                 let small = resize(&hd, img.width, img.height);
-                let c = mapjob::correlation(&lower_half(&small), &lower_half(img));
+                let c = maps::correlation(&lower_half(&small), &lower_half(img));
                 // titl00's layers are paired by language (`title_layer`);
                 // titl02's boot logo (1, 5: the HD redrew the emblem and the
                 // text, 0.54) by place; titl01 ("Fine") only where the HD
@@ -1289,7 +1289,7 @@ pub fn convert(disc: &mut Disc, pc: &ffx_vbf::Archive, parts: Parts) -> Result<(
                     notes.push(format!("{path}: PS2 layer {k} looks different (correlation {c:.2}), kept HD"));
                     continue;
                 }
-                let mut img = mapjob::opaque_like(img.clone(), &hd);
+                let mut img = maps::opaque_like(img.clone(), &hd);
                 if map != "titl01" && img.height == 448 {
                     img = title_placed(&img);
                 }
@@ -1366,7 +1366,7 @@ pub fn convert(disc: &mut Disc, pc: &ffx_vbf::Archive, parts: Parts) -> Result<(
         }
     }
     if parts.font_files {
-        let (d, n) = crate::fontjob::convert(disc, pc)?;
+        let (d, n) = crate::jobs::font::convert(disc, pc)?;
         done.extend(d);
         notes.extend(n);
     }
@@ -1450,7 +1450,7 @@ impl Job for UiJob {
     /// icons and battle words (`icon`), `strtex`. 5: `ps2fnt`, the PS2 fonts
     /// M and S. 6: the disc's `menu_script.bin` (the PAL menu layout).
     /// 7: the title layers at the PS2's place (`title_placed`). 8: the PS2
-    /// world map picture and the sphere grid's pages (`sgjob.rs`, ui.menus).
+    /// world map picture and the sphere grid's pages (`jobs/sphere_grid.rs`, ui.menus).
     /// 9: one mip level (`phyretex::argb8_one_level`) for everything drawn
     /// on the screen (not the sphere grid's pages): the game's texture
     /// quality shrinks no one-level texture (`docs/render.md`). 10: the

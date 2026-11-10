@@ -80,7 +80,7 @@ one; Virtuos cut the regions per draw, so each region has one. The
 converter colours the region with **every CLUT a TEX0 binds to that page**
 and keeps the one whose colours are closest to the HD texture (both reduced
 to at most 32 texels a side, so the HD repaint's extra detail does not
-count; `mapjob::distance`). Only CLUTs the map's own TEX0 writes name are
+count; `maps::distance`). Only CLUTs the map's own TEX0 writes name are
 candidates. Results: 12,740 regions.
 
 Things that did not work: switching CLUTs per 16 or 32 texel tile inside one

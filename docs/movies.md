@@ -1,8 +1,8 @@
 # Movies (rows 15, 21)
 
 `movies = "ps2"` replaces the PC's FMVs with the PS2 ones from the disc.
-Job `movies` (`converter/src/moviejob.rs`); decoder
-`converter/src/ps2movie.rs`. Debug commands:
+Job `movies` (`converter/src/jobs/movies.rs`); decoder
+`converter/src/formats/ps2movie.rs`. Debug commands:
 `demaster movie-debug <iso> <vbf> <out> <name> [frame]...` (statistics,
 PNGs of frames, the sound as WAV) and `demaster movies <iso> <vbf> <mod>
 all|<name>...` (the job for some movies).
@@ -130,7 +130,7 @@ The converter runs an external ffmpeg: `--ffmpeg`, `[source] ffmpeg` in
 `<mod>/tools`, else `ffmpeg` on the PATH. On Windows, when none is found,
 it downloads BtbN's LGPL (v3) build of FFmpeg 8.1.3
 (`autobuild-2026-11-01-12-49`, 168 MB, pinned by URL and SHA-256 in
-`moviejob.rs`) with Windows' own `curl.exe`, unpacks only `ffmpeg.exe` and
+`jobs/movies.rs`) with Windows' own `curl.exe`, unpacks only `ffmpeg.exe` and
 its licence with `tar.exe` into `<mod>/tools`, and says so. Offline, the
 job fails with a message, the movies stay HD, everything else builds, and
 the next build tries again. BtbN deletes old autobuilds after a while: when

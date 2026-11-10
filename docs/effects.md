@@ -1,7 +1,7 @@
 # Effect textures (spells, summons, overdrives, particles)
 
 Row 9 of [`differences.md`](differences.md). Converter: `demaster fx`
-(`converter/src/ps2fx.rs` reads the PS2 data, `converter/src/fxjob.rs`
+(`converter/src/formats/ps2fx.rs` reads the PS2 data, `converter/src/jobs/effects.rs`
 matches it to the HD textures).
 
 ```bash
@@ -231,7 +231,7 @@ is. The HD's is an alpha blend: dark colour with the darkness in alpha
 (colour about 255 - 1.2 x alpha, alpha up to 213, 0 off the logo). Written
 from the PS2 (correlation -0.17), the PC drew the opaque field as a
 lavender-white rectangle over three quarters of the picture while the logo
-formed (it faded with the effect). `fxjob::inverted` recognises such a pair
+formed (it faded with the effect). `effects::inverted` recognises such a pair
 (negative correlation upright, 0.8 or more with the PS2 image inverted;
 0.85 here) and writes the HD's file: the same picture, already in the PC's
 blend (job version 4). Of the 7357 converted textures only this one

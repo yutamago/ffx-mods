@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 
 use anyhow::{Result, ensure};
 
-use crate::gsmem::{self, Gs};
+use crate::formats::gsmem::{self, Gs};
 
 fn u32_at(b: &[u8], o: usize) -> u32 {
     b.get(o..o + 4)

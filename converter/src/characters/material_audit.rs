@@ -4,7 +4,7 @@
 //!
 //! It reads only the written files (models, the textures their materials
 //! bind, asset lists) and the HD originals, and does not call the
-//! converter's decisions (`chralpha::blend`, `coverage`), so it checks
+//! converter's decisions (`alpha::blend`, `coverage`), so it checks
 //! them instead of repeating them. Per drawn segment (one with a triangle
 //! of non-zero area: hidden HD segments keep one degenerate triangle):
 //!
@@ -30,7 +30,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 use ffx_phyre::edit::ClusterEdit;
 
-use crate::chralpha::{self, Variants};
+use crate::characters::alpha::{self, Variants};
 
 /// A texel counts as opaque from this alpha up (PS2 `0x78` of `0x80`).
 pub const OPAQUE: u8 = 240;
@@ -353,10 +353,10 @@ fn audit_one(ctx: &Ctx, spec: &str, writers: &BTreeMap<String, String>) -> Resul
         .transpose()
         .context("HD model cluster")?;
 
-    let ids = chralpha::imports(&edit)?;
-    let idx = chralpha::material_variant_indices(&edit)?;
+    let ids = alpha::imports(&edit)?;
+    let idx = alpha::material_variant_indices(&edit)?;
     let (hd_ids, hd_vars) = match &hd_edit {
-        Some(h) => (chralpha::imports(h)?, chralpha::material_variants(h)?),
+        Some(h) => (alpha::imports(h)?, alpha::material_variants(h)?),
         None => (Vec::new(), Vec::new()),
     };
     let hd_set: BTreeSet<&str> = hd_vars.iter().map(String::as_str).collect();
@@ -594,7 +594,7 @@ fn audit_one(ctx: &Ctx, spec: &str, writers: &BTreeMap<String, String>) -> Resul
         }
         if !id.is_empty()
             && ctx.variants.of(&id).is_none()
-            && ctx.read(&chralpha::variant_path(&id))?.is_none()
+            && ctx.read(&alpha::variant_path(&id))?.is_none()
         {
             why.push("variant not in the archive".into());
         }
@@ -832,8 +832,8 @@ mod tests {
         let path = "ffx_data/gamedata/ps3data/chr/pc/c001/mdl/d3d11/c001.dae.phyre";
         let hd = pc.read(pc.find(path).expect("c001")).expect("read");
         let mut edit = ClusterEdit::parse(&hd).expect("parse");
-        let ids = chralpha::imports(&edit).expect("imports");
-        let vars = chralpha::material_variants(&edit).expect("variants");
+        let ids = alpha::imports(&edit).expect("imports");
+        let vars = alpha::material_variants(&edit).expect("variants");
         let variants = Variants::get(&pc).expect("variants");
         // a character variant the model does not import
         let other = variants
@@ -852,7 +852,7 @@ mod tests {
         let like = ids.iter().position(|i| *i == vars[0]).expect("import") as u32;
         let i = edit.add_import(like, &id).expect("append");
         assert_eq!(
-            chralpha::set_material_variant(&mut edit, 0, &id, &mut vec![i]).expect("set"),
+            alpha::set_material_variant(&mut edit, 0, &id, &mut vec![i]).expect("set"),
             Ok(())
         );
         let dir = std::env::temp_dir().join(format!("mataudit-{}", std::process::id()));

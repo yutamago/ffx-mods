@@ -22,15 +22,15 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use anyhow::{Context, Result, bail, ensure};
 
-use crate::chralpha;
+use crate::characters::alpha;
 use crate::config::Config;
 use crate::disc::Disc;
 use crate::jobs::{Ctx, Job, Output};
-use crate::glb::{Glb, Primitive};
-use crate::phyretex::{self, Rgba};
-use crate::ps2chr::Chr;
-use crate::ps2mesh::{self, Corner, Mesh};
-use crate::texanim::{self, Rect, TexAnim};
+use crate::formats::glb::{Glb, Primitive};
+use crate::formats::phyretex::{self, Rgba};
+use crate::formats::ps2chr::Chr;
+use crate::formats::ps2mesh::{self, Corner, Mesh};
+use crate::characters::texanim::{self, Rect, TexAnim};
 
 /// Most bones one new segment's palette may name (the HD models go up to
 /// 75).
@@ -144,7 +144,7 @@ struct Vert {
 /// HD vertices sit on a PS2 vertex (`docs/models.md`, "What gets
 /// converted").
 pub fn remodelled(chr: &[u8], pc: &ffx_vbf::Archive, kind: &str, name: &str) -> Result<bool> {
-    Ok(crate::chrjob::skipped_chr(chr, pc, kind, name)?
+    Ok(crate::jobs::character_textures::skipped_chr(chr, pc, kind, name)?
         .is_some_and(|r| !r.skipped.is_empty() && r.frame_share < 0.6))
 }
 
@@ -209,7 +209,7 @@ impl Job for ModelsJob {
     fn run(&self, ctx: &Ctx, out: &Output) -> Result<String> {
         use rayon::prelude::*;
         let names: Vec<(String, String)> = ctx.disc(|d| {
-            Ok(crate::chrjob::models(d)
+            Ok(crate::jobs::character_textures::models(d)
                 .into_iter()
                 .filter(|(k, _)| self.kinds.contains(&k.as_str()))
                 .collect())
@@ -231,7 +231,7 @@ impl Job for ModelsJob {
                     let hd_path =
                         format!("ffx_data/gamedata/ps3data/chr/{kind}/{name}/mdl/d3d11/{name}.dae.phyre");
                     let original = ctx.pc.read(ctx.pc.find(&hd_path).context("no HD model")?)?;
-                    let variants = chralpha::Variants::get(ctx.pc)?;
+                    let variants = alpha::Variants::get(ctx.pc)?;
                     convert_bytes(&chr, &original, &hd_path, variants, |p| {
                         ctx.pc.find(p).map(|e| ctx.pc.read(e)).transpose().map_err(Into::into)
                     })
@@ -272,7 +272,7 @@ pub fn convert(disc: &mut Disc, pc: &ffx_vbf::Archive, kind: &str, name: &str) -
         return Ok(None);
     };
     let original = pc.read(entry)?;
-    let variants = chralpha::Variants::get(pc)?;
+    let variants = alpha::Variants::get(pc)?;
     convert_bytes(&chr_bytes, &original, &hd_path, variants, |p| {
         pc.find(p).map(|e| pc.read(e)).transpose().map_err(Into::into)
     })
@@ -281,7 +281,7 @@ pub fn convert(disc: &mut Disc, pc: &ffx_vbf::Archive, kind: &str, name: &str) -
 
 /// The face of a character with texture animation: its triangles go into
 /// the HD's animated material (`Mat_CTA_…`), which shows the PS2 patches
-/// over the rectangles the PS2 blits them into (`texanim.rs`).
+/// over the rectangles the PS2 blits them into (`characters/texanim.rs`).
 struct Face {
     /// HD instance and segment of the animated material, and the material.
     instance: usize,
@@ -598,7 +598,7 @@ pub fn convert_bytes(
     chr_bytes: &[u8],
     original: &[u8],
     hd_path: &str,
-    variants: &chralpha::Variants,
+    variants: &alpha::Variants,
     read: impl Fn(&str) -> Result<Option<Vec<u8>>>,
 ) -> Result<Converted> {
     let mut report = String::new();
@@ -684,7 +684,7 @@ pub fn convert_bytes(
     // order: `segment_material` resolves it).
     let blended: Vec<bool> = {
         let edit = ffx_phyre::edit::ClusterEdit::parse(original).context("HD model")?;
-        let ids = chralpha::material_variants(&edit)?;
+        let ids = alpha::material_variants(&edit)?;
         (0..model.segments.len())
             .map(|s| {
                 let m = u32::try_from(s).ok().and_then(|s| edit.segment_material(s).ok());
@@ -873,7 +873,7 @@ pub fn convert_bytes(
     report += &format!("  atlas {aw}x{ah}: textures {:?}\n", used_tex);
 
     // Texture animation (eyes, mouths): the face triangles go into the HD's
-    // animated material (`texanim.rs`).
+    // animated material (`characters/texanim.rs`).
     let face = plan_face(&mesh, &tex, chr_bytes, &model, original, &target, &pages, &page_of, (aw, ah), &mut report)?;
 
     // Winding: the PS2 strips against the HD convention.
@@ -1183,7 +1183,7 @@ pub fn convert_bytes(
         let slot = &slots[&k.0];
         let cov = {
             let img = page_image[&t.texture];
-            chralpha::coverage(t.corners.map(|c| c.uv.map(|x| f64::from(x) / 16.0)), |x, y| {
+            alpha::coverage(t.corners.map(|c| c.uv.map(|x| f64::from(x) / 16.0)), |x, y| {
                 img.get(x.clamp(0, i64::from(img.width) - 1) as u32, y.clamp(0, i64::from(img.height) - 1) as u32)[3]
             })
         };
@@ -1321,7 +1321,7 @@ pub fn convert_bytes(
         // piece with any see-through texel, a face with 1 % or more
         let b = *b
             || (k.1 >= 2 && c.0 > 0)
-            || (k.1 == 1 && c.0 as f32 >= chralpha::MIN_SHARE * c.1 as f32 && c.0 > 0);
+            || (k.1 == 1 && c.0 as f32 >= alpha::MIN_SHARE * c.1 as f32 && c.0 > 0);
         meshes.entry(k.0).or_default().push((p, k.1, b));
     }
     // (vertices, indices, kind, blended) per primitive: to find the segment each became
@@ -1450,10 +1450,10 @@ pub fn convert_bytes(
     // takes over an import that only materials no segment uses any more
     // refer to (the hidden segments take drawn materials of their kind).
     let drawn: BTreeSet<u32> = imported.segments.iter().map(|&s| u32::try_from(s)).collect::<Result<_, _>>()?;
-    let spare_materials = chralpha::free_hidden_materials(&mut edit, &drawn, variants)?;
-    let mut spare = chralpha::spare_imports(&edit, &spare_materials)?;
-    report += &chralpha::blend_segments(&mut edit, &blended, variants, chralpha::Draw::Blend, &mut spare)?;
-    let shader_entries = chralpha::list_entries(&edit)?;
+    let spare_materials = alpha::free_hidden_materials(&mut edit, &drawn, variants)?;
+    let mut spare = alpha::spare_imports(&edit, &spare_materials)?;
+    report += &alpha::blend_segments(&mut edit, &blended, variants, alpha::Draw::Blend, &mut spare)?;
+    let shader_entries = alpha::list_entries(&edit)?;
     let bytes = edit.write().context("writing")?;
     let check = ffx_phyre::Model::parse(&bytes).context("re-reading")?;
     for &s in &imported.segments {
@@ -1697,7 +1697,7 @@ pub fn debug(chr: &[u8], hd: &[u8]) -> Result<()> {
                     for &v in run {
                         let Some(p) = m.vertices.get(usize::from(v)) else { continue };
                         let p = p.map(f64::from);
-                        let w = base.map_or(p, |b| crate::ps2mesh::transform(&b, p));
+                        let w = base.map_or(p, |b| crate::formats::ps2mesh::transform(&b, p));
                         for k in 0..3 {
                             lo[k] = lo[k].min(w[k]);
                             hi[k] = hi[k].max(w[k]);

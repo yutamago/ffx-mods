@@ -32,7 +32,7 @@ tracks, `u8` reverb mode (libsd mode: 5 hall, 4 studio C, 0xff none),
 before the next event). Then per track `u32` length and its events: a
 variable-length delta (MIDI style), then `command, arguments, delta`
 repeated. The command set is the driver's table at `0x17500` of the
-module (128 handlers; `converter/src/sqseq.rs` lists the argument layout).
+module (128 handlers; `converter/src/audio/sqseq.rs` lists the argument layout).
 
 **WD bank**: `WD`, `u16` id, `u32` sample data size, `u32` instruments,
 `u32` regions, `u32` SPU address (set by the driver), then at `0x20`
@@ -47,11 +47,11 @@ sample data follows the regions.
 
 The music id table of FFX.exe (`0x00b4f1c8`, ffx-rust `sound.md`) maps the
 game's music ids to the PC bank's events; the PS2 file number is the music
-id, so `musicjob::TRACKS` lists the PS2 sequence of every PC sample. Where
+id, so `music::TRACKS` lists the PS2 sequence of every PC sample. Where
 two ids share an event, the one whose render matches the recording is used
 (hum of the fayth: 160 rather than 149).
 
-## The driver (`sqseq.rs`)
+## The driver (`audio/sqseq.rs`)
 
 `iopsound.irx` was decompiled with Ghidra (relocated to `0x100000`, its
 command and LFO tables added as functions); the port keeps its arithmetic:
@@ -92,7 +92,7 @@ volume LFO (`0x48`), noise and pitch modulation (`0x64`, `0x68`),
 random variation (`0x78`), other banks (`0x21`), the tempo slide (`0x09`,
 which the driver itself never applies).
 
-## The SPU2 (`spu2.rs`)
+## The SPU2 (`audio/spu2.rs`)
 
 48 kHz, two cores: 4-bit ADPCM with the five filters and the block flags
 (loop start, loop end, repeat; an end without repeat stops the voice), the
@@ -105,7 +105,7 @@ through a 39-tap half-band resampler, with `libsd`'s preset registers and
 work-area sizes read from the disc (addresses x4 on the SPU2). Core 1 mixes
 core 0's output dry (`MMIX` 0xfc0 / 0xfcc as the driver sets them).
 
-## The bank (`fsb5.rs`, `musicjob.rs`)
+## The bank (`formats/fsb5.rs`, `jobs/music.rs`)
 
 The job reads the PC bank's head (only its first blocks: the bank is 672
 MB) for the names, order and the 32 bytes of flags/hash the `.fev` refers
@@ -209,7 +209,7 @@ The names come from the PC: FFX.exe's music id table (`0x00b4f1c8`, 182
 entries) maps each music id to an event of `ffx_music_ps2.fev`, whose
 sample in `ffx_music_ps2_bank00.fsb` is named after the soundtrack
 ("1_09_battle_theme", disc 1 track 9; "m_NN" for the sphere theater's
-numbers); `musicjob::TRACKS` keeps one PS2 sequence per sample. Where two
+numbers); `music::TRACKS` keeps one PS2 sequence per sample. Where two
 ids share an event (149/160, 157/179, 166/181) only one carried the name.
 FFX Music Studio (its own repository now) shows a name for every sequence, the unofficial ones marked
 "(proposed)" (`library::PROPOSED`).
@@ -272,11 +272,11 @@ song's real state when a script pauses, fades or resumes it.
 | The game's logic stays | `FmodMusic`'s own logic decides when to start, stop, pause and fade: cross-fades (`crossPlay`), the replay point (a field song paused under a battle and resumed with a fade-in), `releaseOldMusic`'s fade-outs, the music volume setting (multiplied into each event's volume by the game), the soundtrack switch (`switchBGM`). The engine only replaces the sound the events would have made | |
 | Tempo | Commands 0x1d `iMusicTempoTranslate(frames, tempo)` and 0x1e `iMusicTempoDirect(tempo)`, empty on PC: their entries in the handler table `0x00c3a368` go to the engine, which applies the driver's tempo modifier (IRX `0x00222450`, below) | `hook.rs`, `sqseq::Song::tempo_direct/translate` |
 | Sound | One FMOD user stream on the game's `System` (`createSound(NULL, OPENUSER \| CREATESTREAM \| SOFTWARE \| 2D \| LOOP_NORMAL)`, 48 kHz stereo PCM16, decode buffer 0x1000 frames, as the game's movie player makes one), started at the first music start, channel volume 1, priority 0. Its read callback renders the engine. So the music goes through FMOD's mixer and output like everything else (same device, the harness's WAV capture sees it) | `hook.rs` `start_stream`, `pcm_read` |
-| Songs | Every event that plays gets its own `Song` and its own `Spu2` (the PC keeps a paused field song under the battle music; the PS2 driver also had a second song slot). Each is mixed times its event's volume (ramped over 1600 frames, one FMOD tick, except before its first output, where FMOD takes it at once) and the PC event's own volume from `ffx_music_ps2.fev` (`engine::EVENT_DB`, -3 to -14 dB), then through the converter's output stage (`musicjob::Master`: +9 dB, limiter at -1 dBFS). A song left alone is the bank's render sample for sample | `engine.rs` |
+| Songs | Every event that plays gets its own `Song` and its own `Spu2` (the PC keeps a paused field song under the battle music; the PS2 driver also had a second song slot). Each is mixed times its event's volume (ramped over 1600 frames, one FMOD tick, except before its first output, where FMOD takes it at once) and the PC event's own volume from `ffx_music_ps2.fev` (`engine::EVENT_DB`, -3 to -14 dB), then through the converter's output stage (`music::Master`: +9 dB, limiter at -1 dBFS). A song left alone is the bank's render sample for sample | `engine.rs` |
 | Stop, end | `stop` is the driver's stop: every voice keyed off, the release and reverb tails play out; the event is ready again at once. A one-shot whose sequence ended plays its tail out (until silent, at most 8 s, as the bank's render), then the event's callback runs with `EVENTFINISHED` (4) from the `EventSystem::update` wrapper on the FMOD thread, as FMOD calls it (the game's `eventcallback` `0x00707a50` clears the record's play state) | |
 | State | `getState` answers 0x18 (playing) while a song plays or is paused for the event, else 1 (ready); `getPaused`/`getVolume` what the game set | |
 | Pause | `setPaused(true)` freezes the song and its chip (the FMOD semantics the PC's replay point relies on): `setPaused(false)` goes on from the same sample | |
-| Data | Job `audio.live` (`converter/src/livejob.rs`) copies from the disc into `<mod>/music/`: `iopsound.irx`, `libsd.irx` (for their tables), the 112 `musicNNN.bgm` and the 100 banks they name (`waveNNNN.wd`), 58 MB. Never in git. The offline bank (`audio.music`) is built as well: it is the fallback and plays the three tracks below | `livejob.rs`, `jobs::MOD_DIRS` |
+| Data | Job `audio.live` (`converter/src/jobs/live_music.rs`) copies from the disc into `<mod>/music/`: `iopsound.irx`, `libsd.irx` (for their tables), the 112 `musicNNN.bgm` and the 100 banks they name (`waveNNNN.wd`), 58 MB. Never in git. The offline bank (`audio.music`) is built as well: it is the fallback and plays the three tracks below | `jobs/live_music.rs`, `jobs::MOD_DIRS` |
 | Left to the bank | Otherworld (49), Confrontation (35), Jecht's theme (51): their guitar and vocals were streamed from the disc (below). Also any music whose files are missing (the ten sequences without a bank, which the game never plays) | `engine::KEEP_BANK` |
 | Log | `<mod>/music/live.log`: each start, stop, pause, volume step of 0.1 or more, end, tempo command. `DEMASTER_LIVE_WAV=<file>` also writes the engine's output to a WAV and logs a heartbeat every 5 s; `DEMASTER_LIVE_TEST=<id>` queues `iMuiscSetBgmType(1)`, `iMusicRead(id)`, `iMusicStart(id)` once FMOD runs and `iMusicStop(id)` 20 s later (a test where no scene plays music) | `hook.rs` |
 
