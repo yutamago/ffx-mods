@@ -146,6 +146,9 @@ public class HookSitesInTheGameTests {
     [InlineData(0x0065b5f0u, 0x00ccba09u, "0f b6 05")] // PhyreScene_drawMainMenuWaveEffect: movzx eax, byte [frame]
     [InlineData(0x0065b6d0u, 0x00ccba0au, "fe 05")]    // inc byte [count]
     [InlineData(0x0063e2bfu, 0x00ccb46cu, "66 a1")]    // graphicDrawDream: mov ax, word [cycle]
+    [InlineData(0x0091d2aau, 0x0193bf74u, "a1")]       // Guide_FadeStep: mov eax, [fade level]
+    [InlineData(0x0091d2bfu, 0x0193bf78u, "a3")]       // Guide_FadeStep: mov [g_GuideFade], eax
+    [InlineData(0x00919d04u, 0x0193bf80u, "a1")]       // Yn_GuideMapProcEx: mov eax, [guide system] (the guide record at +4, its blink counter at +0x74)
     public void The_draw_counters_are_the_game_s_own_operands(uint operand, uint address, string opcode) {
         Image img = Load()!;
         uint rva = operand - 0x00400000;

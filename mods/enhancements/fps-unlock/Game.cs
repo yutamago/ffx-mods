@@ -117,22 +117,52 @@ internal sealed unsafe class Game(nint moduleBase) {
     public ref int CalmFrames => ref *At<int>(0x012fb7c0);
 
     /// <summary>The bytes <see cref="ReadDrawCounters"/> takes.</summary>
-    public const int DrawCountersSize = 4;
+    public const int DrawCountersSize = 4 + GuideFadeSize + 4;
+
+    /// <summary>
+    ///     The field minimap's fade (<c>0x0193bf6c</c>..<c>0x0193bf7b</c>): the state, the frames since the map was
+    ///     asked to show or hide, the fade level (of <c>g_GuideFadeSteps</c>, 6) and <c>g_GuideFade</c> (the alpha,
+    ///     0..128), the four words <c>Guide_FadeStep</c> steps on every <c>rcbgGuideUpdateEx</c>.
+    /// </summary>
+    public const uint GuideFade = 0x0193bf6c;
+    public const int GuideFadeSize = 0x10;
 
     /// <summary>
     ///     The counters the draw steps per call (<see cref="DrawCounters"/>): the title water's frame and count (bytes
-    ///     <c>0x00ccba09</c>, <c>0x00ccba0a</c>) and <c>graphicDrawDream</c>'s cycle (<c>0x00ccb46c</c>, 16 bits: <c>mov ax, [0x00ccb46c]</c> at <c>0x0063e2bd</c>).
+    ///     <c>0x00ccba09</c>, <c>0x00ccba0a</c>), <c>graphicDrawDream</c>'s cycle (<c>0x00ccb46c</c>, 16 bits: <c>mov ax, [0x00ccb46c]</c> at <c>0x0063e2bd</c>),
+    ///     the field minimap's fade (<see cref="GuideFade"/>) and its blink counter: the pulsing circle over the player
+    ///     arrow and the blinking markers draw from <c>guide + 0x74</c>, which <c>rcbgGuideUpdateEx</c> steps at its
+    ///     end (<c>inc dword ptr [esi+0x74]</c> at <c>0x0091ec86</c>), once per drawn frame.
     /// </summary>
     public void ReadDrawCounters(Span<byte> into) {
         into[0] = *At<byte>(0x00ccba09);
         into[1] = *At<byte>(0x00ccba0a);
         new ReadOnlySpan<byte>(At<byte>(0x00ccb46c), 2).CopyTo(into[2..]);
+        new ReadOnlySpan<byte>(At<byte>(GuideFade), GuideFadeSize).CopyTo(into[4..]);
+        if (GuideBlink(out int* blink)) new ReadOnlySpan<byte>(blink, 4).CopyTo(into[(4 + GuideFadeSize)..]);
     }
 
     public void WriteDrawCounters(ReadOnlySpan<byte> from) {
         *At<byte>(0x00ccba09) = from[0];
         *At<byte>(0x00ccba0a) = from[1];
-        from[2..DrawCountersSize].CopyTo(new Span<byte>(At<byte>(0x00ccb46c), 2));
+        from[2..4].CopyTo(new Span<byte>(At<byte>(0x00ccb46c), 2));
+        from[4..(4 + GuideFadeSize)].CopyTo(new Span<byte>(At<byte>(GuideFade), GuideFadeSize));
+        if (GuideBlink(out int* blink)) from[(4 + GuideFadeSize)..DrawCountersSize].CopyTo(new Span<byte>(blink, 4));
+    }
+
+    /// <summary>
+    ///     The field minimap's blink counter: the guide record <c>*(0x0193bf80 + 4)</c> as <c>Yn_GuideMapProcEx</c>
+    ///     reads it (<c>0x00919d03</c>: <c>mov eax, [0x0193bf80]</c>, <c>mov eax, [eax+4]</c>), its <c>+0x74</c>.
+    ///     False while no map system or guide record exists (the title, a load): nothing is read or written then.
+    /// </summary>
+    private bool GuideBlink(out int* counter) {
+        counter = null;
+        nint guide = *At<nint>(0x0193bf80);
+        if (guide == 0) return false;
+        guide = *(nint*)(guide + 4);
+        if (guide == 0) return false;
+        counter = (int*)(guide + 0x74);
+        return true;
     }
 
     // ---- Effects (EffectReplay; docs/mods/fps-unlock.md, "Effects between ticks"). ----

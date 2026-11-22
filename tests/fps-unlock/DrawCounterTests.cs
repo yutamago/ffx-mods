@@ -123,4 +123,93 @@ public class DrawCounterTests {
         c.Clear();
         Assert.False(c.HaveTick);
     }
+
+    /// <summary>
+    ///     The field minimap, modelled as <c>rcbgGuideUpdateEx</c> steps it once per drawn frame: the fade level walks
+    ///     0..6 (after a delay of 2 frames) with <c>g_GuideFade</c> = level * 128 / 6, and the blink counter's remainder
+    ///     over 30 ping-pongs 0..15..0 — the pulsing circle over the player arrow.
+    /// </summary>
+    private sealed class GuideModel {
+        /// <summary>The bytes as the mod holds them: the fade words (<c>0x0193bf6c</c>..<c>0x0193bf7b</c>) then the blink counter.</summary>
+        public readonly byte[] Memory = new byte[20];
+
+        /// <summary>One <c>rcbgGuideUpdateEx</c>: what the minimap showed (the pulse level 0..15, the fade alpha).</summary>
+        public (int Pulse, int Alpha) Draw() {
+            int delay = BitConverter.ToInt32(Memory, 4);
+            int level = BitConverter.ToInt32(Memory, 8);
+            int counter = BitConverter.ToInt32(Memory, 16);
+            int pulse = counter % 30;
+            if (pulse > 15) pulse = 30 - pulse;
+            if (delay < 2) BitConverter.GetBytes(delay + 1).CopyTo(Memory, 4);
+            else if (level < 6) {
+                BitConverter.GetBytes(level + 1).CopyTo(Memory, 8);
+                BitConverter.GetBytes((level + 1) * 128 / 6).CopyTo(Memory, 12);
+            }
+            BitConverter.GetBytes(counter + 1).CopyTo(Memory, 16);
+            return (pulse, BitConverter.ToInt32(Memory, 12));
+        }
+    }
+
+    /// <summary>The field at <paramref name="fps"/> (30 Hz world, Redraw between ticks), for <paramref name="seconds"/>.</summary>
+    private static List<(FrameKind Kind, int Pulse, int Alpha)> Field(double fps, double seconds, bool hold) {
+        GuideModel game = new();
+        DrawCounters counters = new(game.Memory.Length);
+        FrameDirector d = new();
+        List<(FrameKind, int, int)> drawn = [];
+        for (int i = 0; i < (int)(fps * seconds); i++) {
+            FrameDecision f = d.Next(new FrameInput(1 / fps, 2, true, false, false), new FrameSettings());
+            int updates = f.Kind == FrameKind.Tick ? f.Plan.Loops : 1;
+            for (int u = 0; u < updates; u++) {
+                if (hold && f.Kind == FrameKind.Redraw) counters.BeginRedraw(game.Memory);
+                else if (hold) counters.BeginTick(game.Memory);
+                (int pulse, int alpha) = game.Draw();
+                if (hold && f.Kind == FrameKind.Redraw) counters.EndRedraw(game.Memory);
+                if (u == updates - 1) drawn.Add((f.Kind, pulse, alpha));
+            }
+        }
+        return drawn;
+    }
+
+    [Fact]
+    public void Without_the_hold_the_minimap_pulse_runs_at_the_frame_rate() {
+        // What the game did: at 120 fps the circle over the player arrow pulsed 4 times a second instead of once.
+        var drawn = Field(120, 1, hold: false);
+        Assert.Equal(4, drawn.Count(x => x.Pulse == 0));   // 120 steps of the 30-count cycle in one second
+    }
+
+    [Theory]
+    [InlineData(60)]
+    [InlineData(144)]
+    [InlineData(200)]
+    [InlineData(1000)]
+    public void The_minimap_pulse_steps_once_a_tick_whatever_the_frame_rate(double fps) {
+        var drawn = Field(fps, 2, hold: true);
+        int ticks = drawn.Count(x => x.Kind == FrameKind.Tick);
+        Assert.InRange(ticks, 59, 61);
+        int last = -1;
+        int steps = 0;
+        foreach ((FrameKind kind, int pulse, _) in drawn) {
+            if (kind == FrameKind.Tick) {
+                if (last >= 0 && pulse != last) steps++;
+                last = pulse;
+            }
+            else if (last >= 0) Assert.Equal(last, pulse);   // a Redraw shows the tick's circle
+        }
+        Assert.Equal(ticks - 1, steps);                      // one count per tick: 30 a second
+    }
+
+    [Fact]
+    public void The_minimap_fade_completes_over_the_same_ticks_at_any_frame_rate() {
+        foreach (double fps in new[] {30.0, 200.0}) {
+            var drawn = Field(fps, 1, hold: true);
+            int ticks = drawn.Count(x => x.Kind == FrameKind.Tick);
+            Assert.InRange(ticks, 29, 31);
+            int tick = 0, shownAt = -1;
+            foreach ((FrameKind kind, _, int alpha) in drawn) {
+                if (kind == FrameKind.Tick) tick++;
+                if (alpha >= 128 && shownAt < 0) shownAt = tick;
+            }
+            Assert.InRange(shownAt, 8, 9);   // 2 delay frames and the 6 levels of g_GuideFadeSteps, in ticks
+        }
+    }
 }

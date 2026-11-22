@@ -11,7 +11,7 @@ namespace Yuta.FfxMods.FpsUnlock;
 ///     back after it.
 /// </summary>
 /// <remarks>
-///     The counters, both on <c>Sg_MainLoop</c>'s world draw path (<c>Game.ReadDrawCounters</c>):
+///     The counters, all on <c>Sg_MainLoop</c>'s world draw path (<c>Game.ReadDrawCounters</c>):
 ///     <list type="bullet">
 ///         <item>The title's water (<c>PhyreScene_drawMainMenuWaveEffect</c>, <c>0x0065b5b0</c>, from
 ///         <c>graphicDrawMainMenuWaterEffect</c> while <c>0x025d5ebc</c> is set): a flipbook of 70 textures
@@ -19,6 +19,11 @@ namespace Yuta.FfxMods.FpsUnlock;
 ///         <item>The dream and recall scenes' noise (<c>graphicDrawDream</c>, <c>0x0063df70</c>, from
 ///         <c>recallSceneEffect</c>/<c>recallSceneEffect2</c> in <c>drawDreamEffect</c>): <c>0x00ccb46c</c> (16 bits) cycles 0, 1, 2 and
 ///         the speckles are drawn when it is 0.</item>
+///         <item>The field minimap's pulse and fade (<c>rcbgGuideUpdateEx</c>, <c>0x0091da80</c>, from
+///         <c>AtelDrawSemiTrans</c> in <c>Sg_MainLoop</c>'s draw path): the blink counter <c>guide + 0x74</c> (the guide
+///         record <c>*(0x0193bf80 + 4)</c>), whose remainder over 30 ping-pongs 0..15..0 for the pulsing circle over
+///         the player arrow and the blinking markers, and <c>Guide_FadeStep</c>'s words
+///         <c>0x0193bf6c</c>..<c>0x0193bf7b</c> (the fade's state, delay frames, level and <c>g_GuideFade</c>).</item>
 ///     </list>
 /// </remarks>
 public sealed class DrawCounters {
